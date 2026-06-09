@@ -1,14 +1,10 @@
 package com.smartflow.smestocksensebackend.entity;
 
 /**
- * Enum đại diện cho các trạng thái hoạt động của kho hàng (Warehouse).
- * ACTIVE: Đang hoạt động.
- * INACTIVE: Ngừng hoạt động.
+ * Trạng thái hoạt động của kho hàng.
+ * Hệ thống không xóa vật lý kho để bảo toàn lịch sử nhập/xuất/tồn kho — chỉ đổi trạng thái.
  */
 public enum WarehouseStatus {
-    // Trạng thái kho hàng đang hoạt động bình thường, cho phép nhập xuất và lưu kho
-    ACTIVE,
-    
-    // Trạng thái kho hàng ngưng hoạt động, tạm ngưng các giao dịch nhập xuất
-    INACTIVE
+    HOAT_DONG,       // Kho đang hoạt động, cho phép nhập xuất và lưu trữ hàng hóa
+    NGUNG_HOAT_DONG  // Kho tạm ngừng hoạt động, không cho phép tạo giao dịch mới
 }

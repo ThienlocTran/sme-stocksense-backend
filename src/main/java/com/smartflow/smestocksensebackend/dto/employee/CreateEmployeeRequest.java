@@ -1,6 +1,5 @@
 package com.smartflow.smestocksensebackend.dto.employee;
 
-import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
@@ -9,7 +8,6 @@ public record CreateEmployeeRequest(
         String fullName,
 
         @NotBlank(message = "Email khong duoc de trong.")
-        @Email(message = "Email khong hop le.")
         String email,
 
         String phoneNumber,

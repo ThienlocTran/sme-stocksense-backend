@@ -8,6 +8,7 @@ import com.smartflow.smestocksensebackend.entity.EmployeeStatus;
 import com.smartflow.smestocksensebackend.entity.Role;
 import com.smartflow.smestocksensebackend.entity.RoleCode;
 import com.smartflow.smestocksensebackend.exception.BadRequestException;
+import com.smartflow.smestocksensebackend.exception.FieldValidationException;
 import com.smartflow.smestocksensebackend.repository.EmployeeRepository;
 import com.smartflow.smestocksensebackend.repository.RoleRepository;
 import jakarta.persistence.criteria.Predicate;
@@ -22,12 +23,21 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.regex.Pattern;
 
 @Service
 @RequiredArgsConstructor
 public class EmployeeService {
 
     private static final int MAX_PAGE_SIZE = 100;
+    private static final Pattern EMAIL_PATTERN = Pattern.compile(
+            "^[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}$",
+            Pattern.CASE_INSENSITIVE
+    );
+    private static final String EMAIL_UNIQUE_CONSTRAINT = "nhan_vien_email_key";
+    private static final String DUPLICATE_EMAIL_MESSAGE = "Email đã tồn tại.";
 
     private final EmployeeRepository employeeRepository;
     private final RoleRepository roleRepository;
@@ -35,9 +45,11 @@ public class EmployeeService {
 
     @Transactional
     public EmployeeListItemResponse createEmployee(CreateEmployeeRequest request) {
-        String email = request.email().trim();
+        String email = normalizeEmail(request.email());
+        validateEmail(email);
+
         if (employeeRepository.existsByEmailIgnoreCase(email)) {
-            throw new BadRequestException("Email da ton tai.");
+            throw duplicateEmailException();
         }
 
         RoleCode roleCode = parseRequiredEnum(RoleCode.class, request.roleCode(), "roleCode");
@@ -56,7 +68,10 @@ public class EmployeeService {
         try {
             return EmployeeListItemResponse.from(employeeRepository.saveAndFlush(employee));
         } catch (DataIntegrityViolationException exception) {
-            throw new BadRequestException("Email da ton tai.");
+            if (isDuplicateEmailException(exception)) {
+                throw duplicateEmailException();
+            }
+            throw exception;
         }
     }
 
@@ -128,6 +143,32 @@ public class EmployeeService {
             return null;
         }
         return "%" + keyword.trim().toLowerCase() + "%";
+    }
+
+    private String normalizeEmail(String email) {
+        if (email == null) {
+            return null;
+        }
+        return email.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private void validateEmail(String email) {
+        if (email == null || email.isBlank()) {
+            throw new FieldValidationException(Map.of("email", "Email không được để trống."));
+        }
+        if (!EMAIL_PATTERN.matcher(email).matches()) {
+            throw new FieldValidationException(Map.of("email", "Email không hợp lệ."));
+        }
+    }
+
+    private FieldValidationException duplicateEmailException() {
+        return new FieldValidationException(Map.of("email", DUPLICATE_EMAIL_MESSAGE));
+    }
+
+    private boolean isDuplicateEmailException(DataIntegrityViolationException exception) {
+        Throwable cause = exception.getMostSpecificCause();
+        String message = cause == null ? exception.getMessage() : cause.getMessage();
+        return message != null && message.contains(EMAIL_UNIQUE_CONSTRAINT);
     }
 
     private String normalizeOptional(String value) {

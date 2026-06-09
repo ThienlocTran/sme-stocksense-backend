@@ -37,6 +37,12 @@ public class ApiExceptionHandler {
         return new ApiErrorResponse(exception.getMessage());
     }
 
+    @ExceptionHandler(FieldValidationException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ApiErrorResponse handleFieldValidation(FieldValidationException exception) {
+        return new ApiErrorResponse(exception.getMessage(), exception.getErrors());
+    }
+
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ApiErrorResponse handleTypeMismatch(MethodArgumentTypeMismatchException exception) {

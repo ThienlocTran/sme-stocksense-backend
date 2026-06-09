@@ -8,21 +8,21 @@ import jakarta.validation.constraints.Size;
  * Định nghĩa các quy tắc xác thực dữ liệu đầu vào cơ bản cho các trường thông tin.
  */
 public record CreateWarehouseRequest(
-        // Mã kho hàng: bắt buộc nhập, không trống, độ dài tối đa 50 ký tự
+        // Mã kho hàng là định danh nghiệp vụ nên không được trùng, bắt buộc nhập, tối đa 50 ký tự
         @NotBlank(message = "Mã kho không được để trống.")
         @Size(max = 50, message = "Mã kho không được vượt quá 50 ký tự.")
-        String code,
+        String maKho,
 
-        // Tên kho hàng: bắt buộc nhập, không trống, độ dài tối đa 150 ký tự
+        // Tên kho hàng: bắt buộc nhập, tối đa 150 ký tự
         @NotBlank(message = "Tên kho không được để trống.")
         @Size(max = 150, message = "Tên kho không được vượt quá 150 ký tự.")
-        String name,
+        String tenKho,
 
-        // Địa chỉ kho hàng: tùy chọn, độ dài tối đa 255 ký tự
+        // Địa chỉ kho hàng: tùy chọn, tối đa 255 ký tự
         @Size(max = 255, message = "Địa chỉ không được vượt quá 255 ký tự.")
-        String address,
+        String diaChi,
 
-        // Trạng thái kho hàng: tùy chọn, nếu không truyền sẽ mặc định là ACTIVE ở tầng Service
-        String status
+        // Trạng thái kho hàng: tùy chọn, mặc định là HOAT_DONG ở tầng Service nếu không truyền
+        String trangThai
 ) {
 }

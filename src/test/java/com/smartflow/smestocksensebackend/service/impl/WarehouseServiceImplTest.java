@@ -22,7 +22,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 
 /**
- * Lớp Unit Test kiểm thử logic nghiệp vụ của WarehouseServiceImpl bằng JUnit 5 và Mockito.
+ * Unit Test kiểm thử logic nghiệp vụ của WarehouseServiceImpl.
  */
 @ExtendWith(MockitoExtension.class)
 class WarehouseServiceImplTest {
@@ -43,17 +43,17 @@ class WarehouseServiceImplTest {
     void setUp() {
         warehouse1 = new Warehouse();
         warehouse1.setId(1L);
-        warehouse1.setCode("WH001");
+        warehouse1.setCode("KHO001");
         warehouse1.setName("Kho Hà Nội");
         warehouse1.setAddress("123 Cầu Giấy");
-        warehouse1.setStatus(WarehouseStatus.ACTIVE);
+        warehouse1.setStatus(WarehouseStatus.HOAT_DONG);
 
         warehouse2 = new Warehouse();
         warehouse2.setId(2L);
-        warehouse2.setCode("WH002");
+        warehouse2.setCode("KHO002");
         warehouse2.setName("Kho Sài Gòn");
         warehouse2.setAddress("456 Quận 1");
-        warehouse2.setStatus(WarehouseStatus.INACTIVE);
+        warehouse2.setStatus(WarehouseStatus.NGUNG_HOAT_DONG);
     }
 
     /**
@@ -68,10 +68,10 @@ class WarehouseServiceImplTest {
 
         assertNotNull(result);
         assertEquals(2, result.size());
-        assertEquals("WH001", result.get(0).code());
-        assertEquals("ACTIVE", result.get(0).status());
-        assertEquals("WH002", result.get(1).code());
-        assertEquals("INACTIVE", result.get(1).status());
+        assertEquals("KHO001", result.get(0).maKho());
+        assertEquals("HOAT_DONG", result.get(0).trangThai());
+        assertEquals("KHO002", result.get(1).maKho());
+        assertEquals("NGUNG_HOAT_DONG", result.get(1).trangThai());
     }
 
     /**
@@ -90,30 +90,30 @@ class WarehouseServiceImplTest {
     @Test
     void createWarehouse_shouldCreateAndReturnWarehouse() {
         CreateWarehouseRequest request = new CreateWarehouseRequest(
-                "WH003",
+                "KHO003",
                 "Kho Đà Nẵng",
                 "789 Liên Chiểu",
-                "ACTIVE"
+                "HOAT_DONG"
         );
 
         Warehouse savedWarehouse = new Warehouse();
         savedWarehouse.setId(3L);
-        savedWarehouse.setCode("WH003");
+        savedWarehouse.setCode("KHO003");
         savedWarehouse.setName("Kho Đà Nẵng");
         savedWarehouse.setAddress("789 Liên Chiểu");
-        savedWarehouse.setStatus(WarehouseStatus.ACTIVE);
+        savedWarehouse.setStatus(WarehouseStatus.HOAT_DONG);
 
-        Mockito.when(warehouseRepository.existsByCodeIgnoreCase("WH003")).thenReturn(false);
+        Mockito.when(warehouseRepository.existsByCodeIgnoreCase("KHO003")).thenReturn(false);
         Mockito.when(warehouseRepository.saveAndFlush(any(Warehouse.class))).thenReturn(savedWarehouse);
 
         WarehouseResponse response = warehouseService.createWarehouse(request);
 
         assertNotNull(response);
         assertEquals(3L, response.id());
-        assertEquals("WH003", response.code());
-        assertEquals("Kho Đà Nẵng", response.name());
-        assertEquals("789 Liên Chiểu", response.address());
-        assertEquals("ACTIVE", response.status());
+        assertEquals("KHO003", response.maKho());
+        assertEquals("Kho Đà Nẵng", response.tenKho());
+        assertEquals("789 Liên Chiểu", response.diaChi());
+        assertEquals("HOAT_DONG", response.trangThai());
     }
 
     /**
@@ -122,13 +122,13 @@ class WarehouseServiceImplTest {
     @Test
     void createWarehouse_withDuplicateCode_shouldThrowFieldValidationException() {
         CreateWarehouseRequest request = new CreateWarehouseRequest(
-                "WH001",
+                "KHO001",
                 "Kho Mới Trùng Mã",
                 "Địa chỉ ngẫu nhiên",
-                "ACTIVE"
+                "HOAT_DONG"
         );
 
-        Mockito.when(warehouseRepository.existsByCodeIgnoreCase("WH001")).thenReturn(true);
+        Mockito.when(warehouseRepository.existsByCodeIgnoreCase("KHO001")).thenReturn(true);
 
         FieldValidationException exception = assertThrows(FieldValidationException.class, () -> 
                 warehouseService.createWarehouse(request)
@@ -139,12 +139,12 @@ class WarehouseServiceImplTest {
     }
 
     /**
-     * Kiểm thử luồng: Thêm mới kho hàng khi không truyền trạng thái (mặc định ACTIVE).
+     * Kiểm thử luồng: Thêm mới kho hàng khi không truyền trạng thái (mặc định HOAT_DONG).
      */
     @Test
     void createWarehouse_withNullStatus_shouldDefaultToActive() {
         CreateWarehouseRequest request = new CreateWarehouseRequest(
-                "WH004",
+                "KHO004",
                 "Kho Cần Thơ",
                 "101 Ninh Kiều",
                 null
@@ -152,18 +152,18 @@ class WarehouseServiceImplTest {
 
         Warehouse savedWarehouse = new Warehouse();
         savedWarehouse.setId(4L);
-        savedWarehouse.setCode("WH004");
+        savedWarehouse.setCode("KHO004");
         savedWarehouse.setName("Kho Cần Thơ");
         savedWarehouse.setAddress("101 Ninh Kiều");
-        savedWarehouse.setStatus(WarehouseStatus.ACTIVE);
+        savedWarehouse.setStatus(WarehouseStatus.HOAT_DONG);
 
-        Mockito.when(warehouseRepository.existsByCodeIgnoreCase("WH004")).thenReturn(false);
+        Mockito.when(warehouseRepository.existsByCodeIgnoreCase("KHO004")).thenReturn(false);
         Mockito.when(warehouseRepository.saveAndFlush(any(Warehouse.class))).thenReturn(savedWarehouse);
 
         WarehouseResponse response = warehouseService.createWarehouse(request);
 
         assertNotNull(response);
-        assertEquals("ACTIVE", response.status());
+        assertEquals("HOAT_DONG", response.trangThai());
     }
 
     /**
@@ -172,13 +172,13 @@ class WarehouseServiceImplTest {
     @Test
     void createWarehouse_withInvalidStatus_shouldThrowBadRequestException() {
         CreateWarehouseRequest request = new CreateWarehouseRequest(
-                "WH005",
+                "KHO005",
                 "Kho Hải Phòng",
                 "202 Lê Chân",
                 "INVALID_STATUS"
-                );
+        );
 
-        Mockito.when(warehouseRepository.existsByCodeIgnoreCase("WH005")).thenReturn(false);
+        Mockito.when(warehouseRepository.existsByCodeIgnoreCase("KHO005")).thenReturn(false);
 
         assertThrows(BadRequestException.class, () -> 
                 warehouseService.createWarehouse(request)

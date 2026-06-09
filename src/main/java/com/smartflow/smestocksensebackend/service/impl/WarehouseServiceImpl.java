@@ -29,6 +29,7 @@ public class WarehouseServiceImpl implements WarehouseService {
 
     /**
      * Lấy danh sách kho hàng có hỗ trợ tìm kiếm động và lọc trạng thái.
+     * API này chỉ đọc danh sách kho, không thay đổi dữ liệu.
      */
     @Override
     @Transactional(readOnly = true)
@@ -45,28 +46,24 @@ public class WarehouseServiceImpl implements WarehouseService {
     /**
      * Nghiệp vụ thêm mới kho hàng vào hệ thống:
      * - Chuẩn hóa mã kho (loại bỏ khoảng trắng, chuyển chữ in hoa).
-     * - Kiểm tra trùng mã kho hàng trong hệ thống (không phân biệt hoa/thường).
-     * - Thiết lập trạng thái mặc định là ACTIVE nếu không truyền.
+     * - Mã kho là định danh nghiệp vụ duy nhất nên không được trùng.
+     * - Thiết lập trạng thái mặc định là HOAT_DONG nếu không truyền.
      */
     @Override
     @Transactional
     public WarehouseResponse createWarehouse(CreateWarehouseRequest request) {
-        // Chuẩn hóa mã kho
-        String code = request.code().trim().toUpperCase();
+        String code = request.maKho().trim().toUpperCase();
 
-        // Kiểm tra trùng mã kho hàng trong hệ thống
         if (warehouseRepository.existsByCodeIgnoreCase(code)) {
             throw new FieldValidationException(Map.of("code", "Mã kho đã tồn tại."));
         }
 
-        // Tạo mới thực thể Warehouse và thiết lập thông tin
         Warehouse warehouse = new Warehouse();
         warehouse.setCode(code);
-        warehouse.setName(request.name().trim());
-        warehouse.setAddress(normalizeOptional(request.address()));
-        warehouse.setStatus(parseStatusOrDefault(request.status()));
+        warehouse.setName(request.tenKho().trim());
+        warehouse.setAddress(normalizeOptional(request.diaChi()));
+        warehouse.setStatus(parseStatusOrDefault(request.trangThai()));
 
-        // Lưu vào CSDL và chuyển đổi sang DTO phản hồi
         Warehouse savedWarehouse = warehouseRepository.saveAndFlush(warehouse);
         return WarehouseResponse.from(savedWarehouse);
     }
@@ -82,12 +79,12 @@ public class WarehouseServiceImpl implements WarehouseService {
     }
 
     /**
-     * Phân tích chuỗi trạng thái hoặc trả về giá trị mặc định là ACTIVE nếu không truyền trạng thái.
+     * Phân tích chuỗi trạng thái hoặc trả về giá trị mặc định là HOAT_DONG nếu không truyền trạng thái.
      * Ném ra ngoại lệ BadRequestException nếu giá trị không hợp lệ.
      */
     private WarehouseStatus parseStatusOrDefault(String status) {
         if (status == null || status.isBlank()) {
-            return WarehouseStatus.ACTIVE;
+            return WarehouseStatus.HOAT_DONG;
         }
         try {
             return WarehouseStatus.valueOf(status.trim().toUpperCase());

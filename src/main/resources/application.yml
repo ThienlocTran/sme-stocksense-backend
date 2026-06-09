@@ -1,6 +1,11 @@
 spring:
   application:
     name: sme-stocksense-backend
+  datasource:
+    url: ${DATABASE_URL}
+    username: ${DATABASE_USERNAME}
+    password: ${DATABASE_PASSWORD}
+    driver-class-name: org.postgresql.Driver
 
 server:
   port: 8080

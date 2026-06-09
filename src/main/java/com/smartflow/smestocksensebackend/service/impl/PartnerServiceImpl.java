@@ -73,8 +73,11 @@ public class PartnerServiceImpl implements PartnerService {
         Partner partner = new Partner();
         partner.setCode(code);
         partner.setName(request.tenDoiTac().trim());
-        // loaiDoiTac bị giới hạn trong NHA_CUNG_CAP, KHACH_HANG hoặc CA_HAI để tránh dữ liệu sai nghiệp vụ
-        partner.setType(PartnerType.valueOf(request.loaiDoiTac().trim().toUpperCase()));
+        PartnerType type = parseType(request.loaiDoiTac());
+        if (type == null) {
+            throw new BadRequestException("Loại đối tác không được để trống.");
+        }
+        partner.setType(type);
         partner.setContactPerson(normalizeOptional(request.nguoiLienHe()));
         partner.setPhoneNumber(normalizeOptional(request.soDienThoai()));
         partner.setEmail(normalizeOptional(request.email()));
@@ -97,12 +100,21 @@ public class PartnerServiceImpl implements PartnerService {
 
         partner.setName(request.tenDoiTac().trim());
         // loaiDoiTac bị giới hạn trong NHA_CUNG_CAP, KHACH_HANG hoặc CA_HAI để tránh dữ liệu sai nghiệp vụ
-        partner.setType(PartnerType.valueOf(request.loaiDoiTac().trim().toUpperCase()));
+        PartnerType type = parseType(request.loaiDoiTac());
+        if (type == null) {
+            throw new BadRequestException("Loại đối tác không được để trống.");
+        }
+        partner.setType(type);
         partner.setContactPerson(normalizeOptional(request.nguoiLienHe()));
         partner.setPhoneNumber(normalizeOptional(request.soDienThoai()));
         partner.setEmail(normalizeOptional(request.email()));
         partner.setAddress(normalizeOptional(request.diaChi()));
-        partner.setStatus(PartnerStatus.valueOf(request.trangThai().trim().toUpperCase()));
+        
+        PartnerStatus parsedStatus = parseStatus(request.trangThai());
+        if (parsedStatus == null) {
+            throw new BadRequestException("Trạng thái không được để trống.");
+        }
+        partner.setStatus(parsedStatus);
 
         Partner savedPartner = partnerRepository.saveAndFlush(partner);
         return PartnerResponse.from(savedPartner);

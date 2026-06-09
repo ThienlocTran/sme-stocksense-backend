@@ -17,6 +17,7 @@ public record CreatePartnerRequest(
         @Size(max = 150, message = "Tên đối tác không được vượt quá 150 ký tự.")
         String tenDoiTac,
 
+        // Ghi chú nghiệp vụ: validate loại đối tác để tránh phát sinh dữ liệu sai trong nghiệp vụ nhập/xuất kho sau này.
         @NotBlank(message = "Loại đối tác không được để trống.")
         @Pattern(regexp = "NHA_CUNG_CAP|KHACH_HANG|CA_HAI", message = "Loại đối tác chỉ nhận NHA_CUNG_CAP, KHACH_HANG hoặc CA_HAI.")
         String loaiDoiTac,

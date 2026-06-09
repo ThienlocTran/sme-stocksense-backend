@@ -74,6 +74,7 @@ public class SecurityConfig {
                 )
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
+                        .requestMatchers(HttpMethod.PATCH, "/api/auth/change-password").authenticated()
                         .requestMatchers(HttpMethod.POST, "/api/employees").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.PUT, "/api/employees/*").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.PATCH, "/api/employees/*/reset-password").hasRole("ADMIN")

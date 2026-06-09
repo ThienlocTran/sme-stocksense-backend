@@ -43,6 +43,12 @@ public class ApiExceptionHandler {
         return new ApiErrorResponse(exception.getMessage(), exception.getErrors());
     }
 
+    @ExceptionHandler(NotFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public ApiErrorResponse handleNotFound(NotFoundException exception) {
+        return new ApiErrorResponse(exception.getMessage());
+    }
+
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ApiErrorResponse handleTypeMismatch(MethodArgumentTypeMismatchException exception) {

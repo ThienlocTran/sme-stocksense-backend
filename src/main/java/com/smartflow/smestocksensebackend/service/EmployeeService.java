@@ -3,12 +3,14 @@ package com.smartflow.smestocksensebackend.service;
 import com.smartflow.smestocksensebackend.dto.employee.CreateEmployeeRequest;
 import com.smartflow.smestocksensebackend.dto.employee.EmployeeListItemResponse;
 import com.smartflow.smestocksensebackend.dto.employee.EmployeePageResponse;
+import com.smartflow.smestocksensebackend.dto.employee.UpdateEmployeeRequest;
 import com.smartflow.smestocksensebackend.entity.Employee;
 import com.smartflow.smestocksensebackend.entity.EmployeeStatus;
 import com.smartflow.smestocksensebackend.entity.Role;
 import com.smartflow.smestocksensebackend.entity.RoleCode;
 import com.smartflow.smestocksensebackend.exception.BadRequestException;
 import com.smartflow.smestocksensebackend.exception.FieldValidationException;
+import com.smartflow.smestocksensebackend.exception.NotFoundException;
 import com.smartflow.smestocksensebackend.repository.EmployeeRepository;
 import com.smartflow.smestocksensebackend.repository.RoleRepository;
 import jakarta.persistence.criteria.Predicate;
@@ -42,6 +44,39 @@ public class EmployeeService {
     private final EmployeeRepository employeeRepository;
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
+
+    @Transactional
+    public EmployeeListItemResponse updateEmployee(Long id, UpdateEmployeeRequest request) {
+        Employee employee = employeeRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException("Nhân viên không tồn tại."));
+
+        String email = normalizeEmail(request.email());
+        validateEmail(email);
+
+        if (employeeRepository.existsByEmailIgnoreCaseAndIdNot(email, id)) {
+            throw duplicateEmailException();
+        }
+
+        RoleCode roleCode = parseRequiredEnum(RoleCode.class, request.roleCode(), "roleCode");
+        EmployeeStatus status = parseRequiredEnum(EmployeeStatus.class, request.status(), "status");
+        Role role = roleRepository.findByCode(roleCode)
+                .orElseThrow(() -> new BadRequestException("roleCode khong hop le."));
+
+        employee.setFullName(request.fullName().trim());
+        employee.setEmail(email);
+        employee.setPhone(normalizeOptional(request.phoneNumber()));
+        employee.setRole(role);
+        employee.setStatus(status);
+
+        try {
+            return EmployeeListItemResponse.from(employeeRepository.saveAndFlush(employee));
+        } catch (DataIntegrityViolationException exception) {
+            if (isDuplicateEmailException(exception)) {
+                throw duplicateEmailException();
+            }
+            throw exception;
+        }
+    }
 
     @Transactional
     public EmployeeListItemResponse createEmployee(CreateEmployeeRequest request) {

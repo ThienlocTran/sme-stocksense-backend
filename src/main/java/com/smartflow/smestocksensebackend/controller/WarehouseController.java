@@ -1,13 +1,16 @@
 package com.smartflow.smestocksensebackend.controller;
 
 import com.smartflow.smestocksensebackend.dto.request.CreateWarehouseRequest;
+import com.smartflow.smestocksensebackend.dto.request.UpdateWarehouseRequest;
 import com.smartflow.smestocksensebackend.dto.response.WarehouseResponse;
 import com.smartflow.smestocksensebackend.service.WarehouseService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -52,5 +55,22 @@ public class WarehouseController {
     @ResponseStatus(HttpStatus.CREATED)
     public WarehouseResponse createWarehouse(@Valid @RequestBody CreateWarehouseRequest request) {
         return warehouseService.createWarehouse(request);
+    }
+
+    /**
+     * API: PUT /api/warehouses/{id}
+     * Cập nhật thông tin tên, địa chỉ và trạng thái của một kho hàng dựa trên ID.
+     * Không cho phép thay đổi mã kho để tránh ảnh hưởng dữ liệu nhập/xuất/tồn sau này.
+     *
+     * @param id      ID của kho hàng cần cập nhật
+     * @param request DTO chứa thông tin cập nhật (tenKho, diaChi, trangThai)
+     * @return DTO chứa thông tin chi tiết của kho hàng sau khi cập nhật thành công
+     */
+    @PutMapping("/{id}")
+    public WarehouseResponse updateWarehouse(
+            @PathVariable Long id,
+            @Valid @RequestBody UpdateWarehouseRequest request
+    ) {
+        return warehouseService.updateWarehouse(id, request);
     }
 }

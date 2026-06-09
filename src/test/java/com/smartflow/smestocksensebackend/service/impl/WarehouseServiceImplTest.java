@@ -1,11 +1,13 @@
 package com.smartflow.smestocksensebackend.service.impl;
 
 import com.smartflow.smestocksensebackend.dto.request.CreateWarehouseRequest;
+import com.smartflow.smestocksensebackend.dto.request.UpdateWarehouseRequest;
 import com.smartflow.smestocksensebackend.dto.response.WarehouseResponse;
 import com.smartflow.smestocksensebackend.entity.Warehouse;
 import com.smartflow.smestocksensebackend.entity.WarehouseStatus;
 import com.smartflow.smestocksensebackend.exception.BadRequestException;
 import com.smartflow.smestocksensebackend.exception.FieldValidationException;
+import com.smartflow.smestocksensebackend.exception.NotFoundException;
 import com.smartflow.smestocksensebackend.repository.WarehouseRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -182,6 +184,87 @@ class WarehouseServiceImplTest {
 
         assertThrows(BadRequestException.class, () -> 
                 warehouseService.createWarehouse(request)
+        );
+    }
+
+    /**
+     * Kiểm thử luồng: Cập nhật kho hàng thành công.
+     */
+    @Test
+    void updateWarehouse_shouldUpdateAndReturnWarehouse() {
+        UpdateWarehouseRequest request = new UpdateWarehouseRequest(
+                "Kho Hà Nội Mới",
+                "456 Cầu Giấy Mới",
+                "NGUNG_HOAT_DONG"
+        );
+
+        Warehouse existingWarehouse = new Warehouse();
+        existingWarehouse.setId(1L);
+        existingWarehouse.setCode("KHO001");
+        existingWarehouse.setName("Kho Hà Nội");
+        existingWarehouse.setAddress("123 Cầu Giấy");
+        existingWarehouse.setStatus(WarehouseStatus.HOAT_DONG);
+
+        Warehouse updatedWarehouse = new Warehouse();
+        updatedWarehouse.setId(1L);
+        updatedWarehouse.setCode("KHO001"); // Code must remain unchanged
+        updatedWarehouse.setName("Kho Hà Nội Mới");
+        updatedWarehouse.setAddress("456 Cầu Giấy Mới");
+        updatedWarehouse.setStatus(WarehouseStatus.NGUNG_HOAT_DONG);
+
+        Mockito.when(warehouseRepository.findById(1L)).thenReturn(java.util.Optional.of(existingWarehouse));
+        Mockito.when(warehouseRepository.saveAndFlush(any(Warehouse.class))).thenReturn(updatedWarehouse);
+
+        WarehouseResponse response = warehouseService.updateWarehouse(1L, request);
+
+        assertNotNull(response);
+        assertEquals(1L, response.id());
+        assertEquals("KHO001", response.maKho());
+        assertEquals("Kho Hà Nội Mới", response.tenKho());
+        assertEquals("456 Cầu Giấy Mới", response.diaChi());
+        assertEquals("NGUNG_HOAT_DONG", response.trangThai());
+    }
+
+    /**
+     * Kiểm thử ngoại lệ: Cập nhật kho hàng với ID không tồn tại.
+     */
+    @Test
+    void updateWarehouse_withNonExistingId_shouldThrowNotFoundException() {
+        UpdateWarehouseRequest request = new UpdateWarehouseRequest(
+                "Kho Cập Nhật",
+                "Địa chỉ mới",
+                "HOAT_DONG"
+        );
+
+        Mockito.when(warehouseRepository.findById(99L)).thenReturn(java.util.Optional.empty());
+
+        assertThrows(NotFoundException.class, () ->
+                warehouseService.updateWarehouse(99L, request)
+        );
+    }
+
+    /**
+     * Kiểm thử ngoại lệ: Cập nhật kho hàng với trạng thái không hợp lệ.
+     */
+    @Test
+    void updateWarehouse_withInvalidStatus_shouldThrowBadRequestException() {
+        UpdateWarehouseRequest request = new UpdateWarehouseRequest(
+                "Kho Cập Nhật",
+                "Địa chỉ mới",
+                "INVALID_STATUS"
+        );
+
+        Warehouse existingWarehouse = new Warehouse();
+        existingWarehouse.setId(1L);
+        existingWarehouse.setCode("KHO001");
+        existingWarehouse.setName("Kho Hà Nội");
+        existingWarehouse.setAddress("123 Cầu Giấy");
+        existingWarehouse.setStatus(WarehouseStatus.HOAT_DONG);
+
+        Mockito.when(warehouseRepository.findById(1L)).thenReturn(java.util.Optional.of(existingWarehouse));
+
+        assertThrows(BadRequestException.class, () ->
+                warehouseService.updateWarehouse(1L, request)
         );
     }
 }

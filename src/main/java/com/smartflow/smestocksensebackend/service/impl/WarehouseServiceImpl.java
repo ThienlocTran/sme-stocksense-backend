@@ -1,11 +1,13 @@
 package com.smartflow.smestocksensebackend.service.impl;
 
 import com.smartflow.smestocksensebackend.dto.request.CreateWarehouseRequest;
+import com.smartflow.smestocksensebackend.dto.request.UpdateWarehouseRequest;
 import com.smartflow.smestocksensebackend.dto.response.WarehouseResponse;
 import com.smartflow.smestocksensebackend.entity.Warehouse;
 import com.smartflow.smestocksensebackend.entity.WarehouseStatus;
 import com.smartflow.smestocksensebackend.exception.BadRequestException;
 import com.smartflow.smestocksensebackend.exception.FieldValidationException;
+import com.smartflow.smestocksensebackend.exception.NotFoundException;
 import com.smartflow.smestocksensebackend.repository.WarehouseRepository;
 import com.smartflow.smestocksensebackend.service.WarehouseService;
 import jakarta.persistence.criteria.Predicate;
@@ -63,6 +65,34 @@ public class WarehouseServiceImpl implements WarehouseService {
         warehouse.setName(request.tenKho().trim());
         warehouse.setAddress(normalizeOptional(request.diaChi()));
         warehouse.setStatus(parseStatusOrDefault(request.trangThai()));
+
+        Warehouse savedWarehouse = warehouseRepository.saveAndFlush(warehouse);
+        return WarehouseResponse.from(savedWarehouse);
+    }
+
+    /**
+     * Nghiệp vụ cập nhật thông tin kho hàng.
+     * Chỉ cho phép sửa tên kho, địa chỉ và trạng thái. Không cho phép sửa mã kho.
+     * Ghi chú: không cho đổi mã kho để tránh ảnh hưởng dữ liệu nhập/xuất/tồn sau này.
+     */
+    @Override
+    @Transactional
+    public WarehouseResponse updateWarehouse(Long id, UpdateWarehouseRequest request) {
+        Warehouse warehouse = warehouseRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException("Kho hàng không tồn tại."));
+
+        // Ghi chú: không cho đổi mã kho để tránh ảnh hưởng dữ liệu nhập/xuất/tồn sau này.
+        warehouse.setName(request.tenKho().trim());
+        warehouse.setAddress(normalizeOptional(request.diaChi()));
+
+        // Validate trạng thái hoạt động: chỉ nhận HOAT_DONG hoặc NGUNG_HOAT_DONG
+        WarehouseStatus parsedStatus;
+        try {
+            parsedStatus = WarehouseStatus.valueOf(request.trangThai().trim().toUpperCase());
+        } catch (IllegalArgumentException | NullPointerException e) {
+            throw new BadRequestException("Trạng thái chỉ nhận HOAT_DONG hoặc NGUNG_HOAT_DONG.");
+        }
+        warehouse.setStatus(parsedStatus);
 
         Warehouse savedWarehouse = warehouseRepository.saveAndFlush(warehouse);
         return WarehouseResponse.from(savedWarehouse);

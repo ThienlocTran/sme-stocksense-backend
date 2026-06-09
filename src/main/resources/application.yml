@@ -21,3 +21,9 @@ spring:
 
 server:
   port: 8080
+
+app:
+  jwt:
+    # Local fallback only. Set JWT_SECRET in production.
+    secret: ${JWT_SECRET:dev-only-change-me-dev-only-change-me-dev-only-change-me}
+    expiration-seconds: ${JWT_EXPIRATION_SECONDS:86400}

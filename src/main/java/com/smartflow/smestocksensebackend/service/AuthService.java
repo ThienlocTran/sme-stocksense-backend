@@ -19,6 +19,7 @@ public class AuthService {
 
     private final EmployeeRepository employeeRepository;
     private final PasswordEncoder passwordEncoder;
+    private final JwtService jwtService;
 
     @Transactional(readOnly = true)
     public LoginResponse login(LoginRequest request) {
@@ -38,7 +39,12 @@ public class AuthService {
             throw new MissingRoleException();
         }
 
+        String accessToken = jwtService.generateAccessToken(employee);
+
         return new LoginResponse(
+                accessToken,
+                "Bearer",
+                jwtService.getExpirationSeconds(),
                 employee.getId(),
                 employee.getFullName(),
                 employee.getEmail(),

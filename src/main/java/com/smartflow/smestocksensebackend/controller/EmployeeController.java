@@ -3,6 +3,8 @@ package com.smartflow.smestocksensebackend.controller;
 import com.smartflow.smestocksensebackend.dto.employee.CreateEmployeeRequest;
 import com.smartflow.smestocksensebackend.dto.employee.EmployeeListItemResponse;
 import com.smartflow.smestocksensebackend.dto.employee.EmployeePageResponse;
+import com.smartflow.smestocksensebackend.dto.employee.ResetPasswordRequest;
+import com.smartflow.smestocksensebackend.dto.employee.ResetPasswordResponse;
 import com.smartflow.smestocksensebackend.dto.employee.UpdateEmployeeRequest;
 import com.smartflow.smestocksensebackend.service.EmployeeService;
 import jakarta.validation.Valid;
@@ -41,6 +43,14 @@ public class EmployeeController {
             @Valid @RequestBody UpdateEmployeeRequest request
     ) {
         return employeeService.updateEmployee(id, request);
+    }
+
+    @PatchMapping("/{id}/reset-password")
+    public ResetPasswordResponse resetEmployeePassword(
+            @PathVariable Long id,
+            @Valid @RequestBody ResetPasswordRequest request
+    ) {
+        return employeeService.resetEmployeePassword(id, request);
     }
 
     @PatchMapping("/{id}/lock")

@@ -3,6 +3,8 @@ package com.smartflow.smestocksensebackend.service;
 import com.smartflow.smestocksensebackend.dto.employee.CreateEmployeeRequest;
 import com.smartflow.smestocksensebackend.dto.employee.EmployeeListItemResponse;
 import com.smartflow.smestocksensebackend.dto.employee.EmployeePageResponse;
+import com.smartflow.smestocksensebackend.dto.employee.ResetPasswordRequest;
+import com.smartflow.smestocksensebackend.dto.employee.ResetPasswordResponse;
 import com.smartflow.smestocksensebackend.dto.employee.UpdateEmployeeRequest;
 import com.smartflow.smestocksensebackend.entity.Employee;
 import com.smartflow.smestocksensebackend.entity.EmployeeStatus;
@@ -46,6 +48,17 @@ public class EmployeeService {
     private final EmployeeRepository employeeRepository;
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
+
+    @Transactional
+    public ResetPasswordResponse resetEmployeePassword(Long id, ResetPasswordRequest request) {
+        Employee employee = employeeRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException("Nhân viên không tồn tại."));
+
+        employee.setPasswordHash(passwordEncoder.encode(request.newPassword()));
+        employeeRepository.saveAndFlush(employee);
+
+        return new ResetPasswordResponse("Đặt lại mật khẩu thành công.");
+    }
 
     @Transactional
     public EmployeeListItemResponse lockEmployee(Long id) {

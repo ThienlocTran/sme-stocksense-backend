@@ -77,6 +77,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/employees").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.PUT, "/api/employees/*").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.PATCH, "/api/employees/*/reset-password").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.PATCH, "/api/employees/*/lock").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.PATCH, "/api/employees/*/unlock").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.GET, "/api/employees").hasAnyRole("ADMIN", "MANAGER")
                         .anyRequest().permitAll()
                 )

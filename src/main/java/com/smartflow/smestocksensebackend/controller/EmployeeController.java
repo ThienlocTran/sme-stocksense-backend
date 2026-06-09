@@ -53,6 +53,16 @@ public class EmployeeController {
         return employeeService.resetEmployeePassword(id, request);
     }
 
+    @PatchMapping("/{id}/lock")
+    public EmployeeListItemResponse lockEmployee(@PathVariable Long id) {
+        return employeeService.lockEmployee(id);
+    }
+
+    @PatchMapping("/{id}/unlock")
+    public EmployeeListItemResponse unlockEmployee(@PathVariable Long id) {
+        return employeeService.unlockEmployee(id);
+    }
+
     @GetMapping
     public EmployeePageResponse listEmployees(
             @RequestParam(defaultValue = "0") int page,

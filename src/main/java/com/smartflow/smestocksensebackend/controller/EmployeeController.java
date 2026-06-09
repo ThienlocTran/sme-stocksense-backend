@@ -3,13 +3,16 @@ package com.smartflow.smestocksensebackend.controller;
 import com.smartflow.smestocksensebackend.dto.employee.CreateEmployeeRequest;
 import com.smartflow.smestocksensebackend.dto.employee.EmployeeListItemResponse;
 import com.smartflow.smestocksensebackend.dto.employee.EmployeePageResponse;
+import com.smartflow.smestocksensebackend.dto.employee.UpdateEmployeeRequest;
 import com.smartflow.smestocksensebackend.service.EmployeeService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -29,6 +32,14 @@ public class EmployeeController {
         return ResponseEntity
                 .status(HttpStatus.CREATED)
                 .body(employeeService.createEmployee(request));
+    }
+
+    @PutMapping("/{id}")
+    public EmployeeListItemResponse updateEmployee(
+            @PathVariable Long id,
+            @Valid @RequestBody UpdateEmployeeRequest request
+    ) {
+        return employeeService.updateEmployee(id, request);
     }
 
     @GetMapping

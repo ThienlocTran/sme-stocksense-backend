@@ -267,4 +267,45 @@ class WarehouseServiceImplTest {
                 warehouseService.updateWarehouse(1L, request)
         );
     }
+
+    /**
+     * Kiểm thử luồng: Ngừng hoạt động kho hàng thành công.
+     */
+    @Test
+    void deactivateWarehouse_shouldDeactivateAndReturnWarehouse() {
+        Warehouse existingWarehouse = new Warehouse();
+        existingWarehouse.setId(1L);
+        existingWarehouse.setCode("KHO001");
+        existingWarehouse.setName("Kho Hà Nội");
+        existingWarehouse.setAddress("123 Cầu Giấy");
+        existingWarehouse.setStatus(WarehouseStatus.HOAT_DONG);
+
+        Warehouse deactivatedWarehouse = new Warehouse();
+        deactivatedWarehouse.setId(1L);
+        deactivatedWarehouse.setCode("KHO001");
+        deactivatedWarehouse.setName("Kho Hà Nội");
+        deactivatedWarehouse.setAddress("123 Cầu Giấy");
+        deactivatedWarehouse.setStatus(WarehouseStatus.NGUNG_HOAT_DONG);
+
+        Mockito.when(warehouseRepository.findById(1L)).thenReturn(java.util.Optional.of(existingWarehouse));
+        Mockito.when(warehouseRepository.saveAndFlush(any(Warehouse.class))).thenReturn(deactivatedWarehouse);
+
+        WarehouseResponse response = warehouseService.deactivateWarehouse(1L);
+
+        assertNotNull(response);
+        assertEquals(1L, response.id());
+        assertEquals("NGUNG_HOAT_DONG", response.trangThai());
+    }
+
+    /**
+     * Kiểm thử ngoại lệ: Ngừng hoạt động kho hàng với ID không tồn tại.
+     */
+    @Test
+    void deactivateWarehouse_withNonExistingId_shouldThrowNotFoundException() {
+        Mockito.when(warehouseRepository.findById(99L)).thenReturn(java.util.Optional.empty());
+
+        assertThrows(NotFoundException.class, () ->
+                warehouseService.deactivateWarehouse(99L)
+        );
+    }
 }

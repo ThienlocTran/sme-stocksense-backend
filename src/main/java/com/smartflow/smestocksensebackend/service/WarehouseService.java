@@ -38,4 +38,14 @@ public interface WarehouseService {
      * @return DTO WarehouseResponse đại diện cho kho hàng sau khi cập nhật thành công
      */
     WarehouseResponse updateWarehouse(Long id, UpdateWarehouseRequest request);
+
+    /**
+     * Ngừng hoạt động kho hàng (soft delete).
+     * Thay đổi trạng thái kho hàng sang NGUNG_HOAT_DONG, không xóa vật lý record khỏi DB
+     * để bảo toàn lịch sử dữ liệu nhập/xuất/tồn kho.
+     *
+     * @param id ID của kho hàng cần ngừng hoạt động
+     * @return DTO WarehouseResponse đại diện cho kho hàng sau khi cập nhật trạng thái
+     */
+    WarehouseResponse deactivateWarehouse(Long id);
 }

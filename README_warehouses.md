@@ -1,9 +1,10 @@
-# Tổng Hợp Tính Năng API Warehouse (Task T40, T41 & T42)
+# Tổng Hợp Tính Năng API Warehouse (Task T40, T41, T42 & T43)
 
 Tài liệu này tổng hợp ngắn gọn các thông tin về chức năng liên quan đến quản lý kho hàng, bao gồm:
 1. **T40 - Tạo API danh sách kho** (Lấy danh sách, lọc, tìm kiếm).
 2. **T41 - Tạo API thêm kho** (Thêm mới kho hàng, validate mã kho không trùng).
 3. **T42 - Tạo API cập nhật kho** (Sửa thông tin tên, địa chỉ, trạng thái và cấm sửa mã kho).
+4. **T43 - Tạo API ngừng hoạt động kho** (Soft delete chuyển trạng thái kho sang ngừng hoạt động).
 
 Chi tiết giải thích từng dòng code đã được viết trực tiếp dưới dạng chú thích (inline comments) trong từng file mã nguồn.
 
@@ -22,17 +23,18 @@ Chi tiết giải thích từng dòng code đã được viết trực tiếp d�
   - `src/main/java/com/smartflow/smestocksensebackend/dto/request/UpdateWarehouseRequest.java`: DTO nhận yêu cầu cập nhật kho hàng với các ràng buộc xác thực: `tenKho`, `diaChi`, `trangThai`.
   - `src/main/java/com/smartflow/smestocksensebackend/dto/response/WarehouseResponse.java`: Đóng gói dữ liệu trả về cho Frontend với các trường: `id`, `maKho`, `tenKho`, `diaChi`, `trangThai`.
 - **Nghiệp vụ (Service)**:
-  - `src/main/java/com/smartflow/smestocksensebackend/service/WarehouseService.java`: Định nghĩa interface dịch vụ bao gồm `getWarehouses`, `createWarehouse` và `updateWarehouse`.
-  - `src/main/java/com/smartflow/smestocksensebackend/service/impl/WarehouseServiceImpl.java`: Logic tìm kiếm động, xử lý tạo mới, cập nhật kho hàng, validate không đổi mã kho, và kiểm tra tính hợp lệ của trạng thái.
+  - `src/main/java/com/smartflow/smestocksensebackend/service/WarehouseService.java`: Định nghĩa interface dịch vụ bao gồm `getWarehouses`, `createWarehouse`, `updateWarehouse` và `deactivateWarehouse`.
+  - `src/main/java/com/smartflow/smestocksensebackend/service/impl/WarehouseServiceImpl.java`: Logic tìm kiếm động, xử lý tạo mới, cập nhật kho hàng, và ngừng hoạt động kho hàng (soft delete).
 - **Điều phối (Controller)**:
-  - `src/main/java/com/smartflow/smestocksensebackend/controller/WarehouseController.java`: API Endpoint đón nhận request `GET /api/warehouses`, `POST /api/warehouses` và `PUT /api/warehouses/{id}`.
+  - `src/main/java/com/smartflow/smestocksensebackend/controller/WarehouseController.java`: API Endpoint đón nhận request `GET /api/warehouses`, `POST /api/warehouses`, `PUT /api/warehouses/{id}` và `DELETE /api/warehouses/{id}`.
 - **Cấu hình Bảo mật (Security)**:
   - `src/main/java/com/smartflow/smestocksensebackend/config/SecurityConfig.java`: Phân quyền cho endpoint:
     - `GET /api/warehouses`: ADMIN, MANAGER, EMPLOYEE
     - `POST /api/warehouses`: ADMIN, MANAGER
     - `PUT /api/warehouses/*`: ADMIN, MANAGER
+    - `DELETE /api/warehouses/*`: ADMIN, MANAGER
 - **Kiểm thử (Unit Test)**:
-  - `src/test/java/com/smartflow/smestocksensebackend/service/impl/WarehouseServiceImplTest.java`: Bổ sung kiểm thử đơn vị cho cả luồng lấy danh sách, tạo mới và cập nhật kho hàng.
+  - `src/test/java/com/smartflow/smestocksensebackend/service/impl/WarehouseServiceImplTest.java`: Bổ sung kiểm thử đơn vị cho cả luồng lấy danh sách, tạo mới, cập nhật và ngừng hoạt động kho hàng.
 
 ---
 
@@ -101,3 +103,10 @@ Chi tiết giải thích từng dòng code đã được viết trực tiếp d�
     - Gửi request với `trangThai` không hợp lệ (ví dụ: `TAM_DUNG`), hệ thống trả về lỗi 400 Bad Request.
   - **Cập nhật kho với ID không tồn tại**:
     - Gửi request đến ID không tồn tại trong hệ thống, hệ thống trả về lỗi 404 Not Found kèm thông báo `Kho hàng không tồn tại.`.
+  - **Ngừng hoạt động kho hàng (Soft Delete)**:
+    - URL: `DELETE http://localhost:8080/api/warehouses/{id}`
+    - Quyền hạn: ADMIN, MANAGER
+    - Response trả về mã 200 OK cùng thông tin chi tiết kho hàng có trạng thái được đổi thành `NGUNG_HOAT_DONG`.
+    - Ghi chú: Hệ thống thực hiện soft delete (chuyển đổi trạng thái), bản ghi kho hàng trong database không bị xóa vật lý để bảo toàn dữ liệu lịch sử nhập/xuất/tồn kho.
+  - **Ngừng hoạt động kho với ID không tồn tại**:
+    - Gửi yêu cầu DELETE đến ID không tồn tại trong hệ thống, hệ thống trả về lỗi 404 Not Found kèm thông báo `Kho hàng không tồn tại.`.

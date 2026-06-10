@@ -3,6 +3,8 @@ package com.smartflow.smestocksensebackend.service;
 import com.smartflow.smestocksensebackend.dto.employee.CreateEmployeeRequest;
 import com.smartflow.smestocksensebackend.dto.employee.EmployeeListItemResponse;
 import com.smartflow.smestocksensebackend.dto.employee.EmployeePageResponse;
+import com.smartflow.smestocksensebackend.dto.employee.ResetPasswordRequest;
+import com.smartflow.smestocksensebackend.dto.employee.ResetPasswordResponse;
 import com.smartflow.smestocksensebackend.dto.employee.UpdateEmployeeRequest;
 import com.smartflow.smestocksensebackend.entity.Employee;
 import com.smartflow.smestocksensebackend.entity.EmployeeStatus;
@@ -19,6 +21,8 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -46,9 +50,41 @@ public class EmployeeService {
     private final PasswordEncoder passwordEncoder;
 
     @Transactional
-    public EmployeeListItemResponse updateEmployee(Long id, UpdateEmployeeRequest request) {
+    public ResetPasswordResponse resetEmployeePassword(Long id, ResetPasswordRequest request) {
         Employee employee = employeeRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Nhân viên không tồn tại."));
+
+        employee.setPasswordHash(passwordEncoder.encode(request.newPassword()));
+        employeeRepository.saveAndFlush(employee);
+
+        return new ResetPasswordResponse("Đặt lại mật khẩu thành công.");
+    }
+
+    @Transactional
+    public EmployeeListItemResponse lockEmployee(Long id) {
+        if (id.equals(getCurrentEmployeeId())) {
+            throw new BadRequestException("Không thể khóa tài khoản đang đăng nhập.");
+        }
+
+        Employee employee = findEmployeeById(id);
+        employee.setStatus(EmployeeStatus.TAM_KHOA);
+        return EmployeeListItemResponse.from(employeeRepository.saveAndFlush(employee));
+    }
+
+    @Transactional
+    public EmployeeListItemResponse unlockEmployee(Long id) {
+        Employee employee = findEmployeeById(id);
+        if (employee.getStatus() == EmployeeStatus.NGUNG_HOAT_DONG) {
+            throw new BadRequestException("Không thể mở khóa nhân viên đã ngừng hoạt động.");
+        }
+
+        employee.setStatus(EmployeeStatus.HOAT_DONG);
+        return EmployeeListItemResponse.from(employeeRepository.saveAndFlush(employee));
+    }
+
+    @Transactional
+    public EmployeeListItemResponse updateEmployee(Long id, UpdateEmployeeRequest request) {
+        Employee employee = findEmployeeById(id);
 
         String email = normalizeEmail(request.email());
         validateEmail(email);
@@ -204,6 +240,19 @@ public class EmployeeService {
         Throwable cause = exception.getMostSpecificCause();
         String message = cause == null ? exception.getMessage() : cause.getMessage();
         return message != null && message.contains(EMAIL_UNIQUE_CONSTRAINT);
+    }
+
+    private Employee findEmployeeById(Long id) {
+        return employeeRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException("Nhân viên không tồn tại."));
+    }
+
+    private Long getCurrentEmployeeId() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !(authentication.getPrincipal() instanceof Employee employee)) {
+            return null;
+        }
+        return employee.getId();
     }
 
     private String normalizeOptional(String value) {

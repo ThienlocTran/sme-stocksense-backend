@@ -3,6 +3,8 @@ package com.smartflow.smestocksensebackend.controller;
 import com.smartflow.smestocksensebackend.dto.employee.CreateEmployeeRequest;
 import com.smartflow.smestocksensebackend.dto.employee.EmployeeListItemResponse;
 import com.smartflow.smestocksensebackend.dto.employee.EmployeePageResponse;
+import com.smartflow.smestocksensebackend.dto.employee.ResetPasswordRequest;
+import com.smartflow.smestocksensebackend.dto.employee.ResetPasswordResponse;
 import com.smartflow.smestocksensebackend.dto.employee.UpdateEmployeeRequest;
 import com.smartflow.smestocksensebackend.service.EmployeeService;
 import jakarta.validation.Valid;
@@ -11,6 +13,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -40,6 +43,24 @@ public class EmployeeController {
             @Valid @RequestBody UpdateEmployeeRequest request
     ) {
         return employeeService.updateEmployee(id, request);
+    }
+
+    @PatchMapping("/{id}/reset-password")
+    public ResetPasswordResponse resetEmployeePassword(
+            @PathVariable Long id,
+            @Valid @RequestBody ResetPasswordRequest request
+    ) {
+        return employeeService.resetEmployeePassword(id, request);
+    }
+
+    @PatchMapping("/{id}/lock")
+    public EmployeeListItemResponse lockEmployee(@PathVariable Long id) {
+        return employeeService.lockEmployee(id);
+    }
+
+    @PatchMapping("/{id}/unlock")
+    public EmployeeListItemResponse unlockEmployee(@PathVariable Long id) {
+        return employeeService.unlockEmployee(id);
     }
 
     @GetMapping

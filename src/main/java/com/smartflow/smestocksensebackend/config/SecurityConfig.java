@@ -47,41 +47,49 @@ public class SecurityConfig {
                 return source;
         }
 
-        @Bean
-        public SecurityFilterChain securityFilterChain(
-                        HttpSecurity http,
-                        JwtAuthenticationFilter jwtAuthenticationFilter,
-                        CorsConfigurationSource corsConfigurationSource) throws Exception {
-                return http
-                                .cors(cors -> cors.configurationSource(corsConfigurationSource))
-                                .csrf(AbstractHttpConfigurer::disable)
-                                .formLogin(AbstractHttpConfigurer::disable)
-                                .httpBasic(AbstractHttpConfigurer::disable)
-                                .sessionManagement(session -> session
-                                                .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                                .exceptionHandling(exception -> exception
-                                                .authenticationEntryPoint(
-                                                                (request, response, authException) -> writeError(
-                                                                                response,
-                                                                                HttpStatus.UNAUTHORIZED,
-                                                                                "Chưa xác thực."))
-                                                .accessDeniedHandler((request, response,
-                                                                accessDeniedException) -> writeError(
-                                                                                response,
-                                                                                HttpStatus.FORBIDDEN,
-                                                                                "Không có quyền truy cập.")))
-                                .authorizeHttpRequests(authorize -> authorize
-                                                .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
-                                                .requestMatchers(HttpMethod.POST, "/api/employees").hasRole("ADMIN")
-                                                .requestMatchers(HttpMethod.PUT, "/api/employees/*").hasRole("ADMIN")
-                                                .requestMatchers(HttpMethod.GET, "/api/employees")
-                                                .hasAnyRole("ADMIN", "MANAGER")
-                                                .requestMatchers(HttpMethod.GET, "/api/warehouses")
-                                                .hasAnyRole("ADMIN", "MANAGER", "EMPLOYEE")
-                                                .anyRequest().permitAll())
-                                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
-                                .build();
-        }
+    @Bean
+    public SecurityFilterChain securityFilterChain(
+            HttpSecurity http,
+            JwtAuthenticationFilter jwtAuthenticationFilter,
+            CorsConfigurationSource corsConfigurationSource
+    ) throws Exception {
+        return http
+                .cors(cors -> cors.configurationSource(corsConfigurationSource))
+                .csrf(AbstractHttpConfigurer::disable)
+                .formLogin(AbstractHttpConfigurer::disable)
+                .httpBasic(AbstractHttpConfigurer::disable)
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .exceptionHandling(exception -> exception
+                        .authenticationEntryPoint((request, response, authException) -> writeError(
+                                response,
+                                HttpStatus.UNAUTHORIZED,
+                                "Chưa xác thực."
+                        ))
+                        .accessDeniedHandler((request, response, accessDeniedException) -> writeError(
+                                response,
+                                HttpStatus.FORBIDDEN,
+                                "Không có quyền truy cập."
+                        ))
+                )
+                .authorizeHttpRequests(authorize -> authorize
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
+                        .requestMatchers(HttpMethod.PATCH, "/api/auth/change-password").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/employees").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.PUT, "/api/employees/*").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.PATCH, "/api/employees/*/reset-password").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.PATCH, "/api/employees/*/lock").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.PATCH, "/api/employees/*/unlock").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/api/employees").hasAnyRole("ADMIN", "MANAGER")
+                        .requestMatchers(HttpMethod.POST, "/api/categories").hasAnyRole("ADMIN", "MANAGER")
+                        .requestMatchers(HttpMethod.PUT, "/api/categories/*").hasAnyRole("ADMIN", "MANAGER")
+                        .requestMatchers(HttpMethod.PATCH, "/api/categories/*/disable").hasAnyRole("ADMIN", "MANAGER")
+                        .requestMatchers(HttpMethod.GET, "/api/categories").hasAnyRole("ADMIN", "MANAGER", "EMPLOYEE")
+                        .anyRequest().permitAll()
+                )
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+                .build();
+    }
 
         private static void writeError(HttpServletResponse response, HttpStatus status, String message)
                         throws IOException {

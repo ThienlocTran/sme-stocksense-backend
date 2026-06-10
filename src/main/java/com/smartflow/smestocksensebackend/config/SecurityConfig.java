@@ -24,29 +24,28 @@ import java.util.List;
 @Configuration
 public class SecurityConfig {
 
-    @Bean
-    public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
-    }
+        @Bean
+        public PasswordEncoder passwordEncoder() {
+                return new BCryptPasswordEncoder();
+        }
 
-    @Bean
-    public CorsConfigurationSource corsConfigurationSource(
-            @Value("${app.cors.allowed-origins}") String allowedOrigins
-    ) {
-        CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(Arrays.stream(allowedOrigins.split(","))
-                .map(String::trim)
-                .filter(origin -> !origin.isBlank())
-                .toList());
-        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept"));
-        configuration.setExposedHeaders(List.of("Authorization"));
-        configuration.setAllowCredentials(false);
+        @Bean
+        public CorsConfigurationSource corsConfigurationSource(
+                        @Value("${app.cors.allowed-origins}") String allowedOrigins) {
+                CorsConfiguration configuration = new CorsConfiguration();
+                configuration.setAllowedOrigins(Arrays.stream(allowedOrigins.split(","))
+                                .map(String::trim)
+                                .filter(origin -> !origin.isBlank())
+                                .toList());
+                configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+                configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept"));
+                configuration.setExposedHeaders(List.of("Authorization"));
+                configuration.setAllowCredentials(false);
 
-        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", configuration);
-        return source;
-    }
+                UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+                source.registerCorsConfiguration("/**", configuration);
+                return source;
+        }
 
     @Bean
     public SecurityFilterChain securityFilterChain(
@@ -92,9 +91,10 @@ public class SecurityConfig {
                 .build();
     }
 
-    private static void writeError(HttpServletResponse response, HttpStatus status, String message) throws IOException {
-        response.setStatus(status.value());
-        response.setContentType("application/json;charset=UTF-8");
-        response.getWriter().write("{\"message\":\"" + message + "\",\"errors\":{}}");
-    }
+        private static void writeError(HttpServletResponse response, HttpStatus status, String message)
+                        throws IOException {
+                response.setStatus(status.value());
+                response.setContentType("application/json;charset=UTF-8");
+                response.getWriter().write("{\"message\":\"" + message + "\",\"errors\":{}}");
+        }
 }

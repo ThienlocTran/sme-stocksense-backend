@@ -35,6 +35,17 @@ public class CategoryService {
     private final CategoryRepository categoryRepository;
 
     @Transactional
+    public CategoryListItemResponse disableCategory(Long id) {
+        Category category = findCategoryById(id);
+        if (category.getStatus() != CategoryStatus.NGUNG_HOAT_DONG) {
+            category.setStatus(CategoryStatus.NGUNG_HOAT_DONG);
+            category = categoryRepository.saveAndFlush(category);
+        }
+
+        return CategoryListItemResponse.from(category);
+    }
+
+    @Transactional
     public CategoryListItemResponse updateCategory(Long id, UpdateCategoryRequest request) {
         Category category = findCategoryById(id);
         String code = normalizeCode(request.code());

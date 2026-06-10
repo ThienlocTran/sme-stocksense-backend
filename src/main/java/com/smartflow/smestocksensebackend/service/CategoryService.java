@@ -3,10 +3,12 @@ package com.smartflow.smestocksensebackend.service;
 import com.smartflow.smestocksensebackend.dto.category.CreateCategoryRequest;
 import com.smartflow.smestocksensebackend.dto.category.CategoryListItemResponse;
 import com.smartflow.smestocksensebackend.dto.category.CategoryPageResponse;
+import com.smartflow.smestocksensebackend.dto.category.UpdateCategoryRequest;
 import com.smartflow.smestocksensebackend.entity.Category;
 import com.smartflow.smestocksensebackend.entity.CategoryStatus;
 import com.smartflow.smestocksensebackend.exception.BadRequestException;
 import com.smartflow.smestocksensebackend.exception.FieldValidationException;
+import com.smartflow.smestocksensebackend.exception.NotFoundException;
 import com.smartflow.smestocksensebackend.repository.CategoryRepository;
 import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
@@ -33,12 +35,38 @@ public class CategoryService {
     private final CategoryRepository categoryRepository;
 
     @Transactional
+    public CategoryListItemResponse updateCategory(Long id, UpdateCategoryRequest request) {
+        Category category = findCategoryById(id);
+        String code = normalizeCode(request.code());
+        String name = request.name().trim();
+        CategoryStatus status = parseEnum(CategoryStatus.class, request.status(), "status");
+
+        validateUniqueCategory(code, name, id);
+
+        category.setCode(code);
+        category.setName(name);
+        category.setDescription(normalizeOptional(request.description()));
+        if (status != null) {
+            category.setStatus(status);
+        }
+
+        try {
+            return CategoryListItemResponse.from(categoryRepository.saveAndFlush(category));
+        } catch (DataIntegrityViolationException exception) {
+            if (isDuplicateCodeException(exception)) {
+                throw duplicateCodeException();
+            }
+            throw exception;
+        }
+    }
+
+    @Transactional
     public CategoryListItemResponse createCategory(CreateCategoryRequest request) {
         String code = normalizeCode(request.code());
         String name = request.name().trim();
         CategoryStatus status = parseEnum(CategoryStatus.class, request.status(), "status");
 
-        validateUniqueCategory(code, name);
+        validateUniqueCategory(code, name, null);
 
         Category category = new Category();
         category.setCode(code);
@@ -115,19 +143,31 @@ public class CategoryService {
         return "%" + keyword.trim().toLowerCase() + "%";
     }
 
-    private void validateUniqueCategory(String code, String name) {
+    private void validateUniqueCategory(String code, String name, Long excludedId) {
         Map<String, String> errors = new LinkedHashMap<>();
 
-        if (categoryRepository.existsByNormalizedCode(code)) {
+        if (existsByNormalizedCode(code, excludedId)) {
             errors.put("code", "Mã danh mục đã tồn tại.");
         }
-        if (categoryRepository.existsByNormalizedName(name)) {
+        if (existsByNormalizedName(name, excludedId)) {
             errors.put("name", "Tên danh mục đã tồn tại.");
         }
 
         if (!errors.isEmpty()) {
             throw new FieldValidationException(errors);
         }
+    }
+
+    private boolean existsByNormalizedCode(String code, Long excludedId) {
+        return excludedId == null
+                ? categoryRepository.existsByNormalizedCode(code)
+                : categoryRepository.existsByNormalizedCodeAndIdNot(code, excludedId);
+    }
+
+    private boolean existsByNormalizedName(String name, Long excludedId) {
+        return excludedId == null
+                ? categoryRepository.existsByNormalizedName(name)
+                : categoryRepository.existsByNormalizedNameAndIdNot(name, excludedId);
     }
 
     private FieldValidationException duplicateCodeException() {
@@ -138,6 +178,11 @@ public class CategoryService {
         Throwable cause = exception.getMostSpecificCause();
         String message = cause == null ? exception.getMessage() : cause.getMessage();
         return message != null && message.contains(CATEGORY_CODE_UNIQUE_CONSTRAINT);
+    }
+
+    private Category findCategoryById(Long id) {
+        return categoryRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException("Danh mục không tồn tại."));
     }
 
     private String normalizeCode(String code) {

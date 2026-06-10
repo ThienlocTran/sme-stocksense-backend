@@ -13,4 +13,20 @@ public interface CategoryRepository extends JpaRepository<Category, Long>, JpaSp
 
     @Query("select count(category) > 0 from Category category where lower(trim(category.name)) = lower(trim(:name))")
     boolean existsByNormalizedName(@Param("name") String name);
+
+    @Query("""
+            select count(category) > 0
+            from Category category
+            where category.id <> :id
+              and lower(trim(category.code)) = lower(trim(:code))
+            """)
+    boolean existsByNormalizedCodeAndIdNot(@Param("code") String code, @Param("id") Long id);
+
+    @Query("""
+            select count(category) > 0
+            from Category category
+            where category.id <> :id
+              and lower(trim(category.name)) = lower(trim(:name))
+            """)
+    boolean existsByNormalizedNameAndIdNot(@Param("name") String name, @Param("id") Long id);
 }

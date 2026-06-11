@@ -10,6 +10,15 @@ import org.springframework.stereotype.Repository;
  * Kế thừa JpaRepository để hỗ trợ các tính năng CRUD mặc định.
  * Kế thừa JpaSpecificationExecutor để hỗ trợ các câu truy vấn động nâng cao thông qua Specification.
  */
-@Repository // Đăng ký lớp này thành một Spring Bean chịu trách nhiệm kết nối dữ liệu
+@Repository
 public interface WarehouseRepository extends JpaRepository<Warehouse, Long>, JpaSpecificationExecutor<Warehouse> {
+
+    /**
+     * Kiểm tra sự tồn tại của mã kho hàng trong cơ sở dữ liệu (không phân biệt chữ hoa/thường).
+     * Phục vụ cho việc validate trùng mã kho khi tạo mới.
+     *
+     * @param code Mã kho cần kiểm tra
+     * @return true nếu đã tồn tại mã kho này, ngược lại là false
+     */
+    boolean existsByCodeIgnoreCase(String code);
 }

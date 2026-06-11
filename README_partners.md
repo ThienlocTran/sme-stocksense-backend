@@ -79,6 +79,10 @@ Tài liệu tổng hợp các thay đổi và thông số kỹ thuật cho Modul
 - **Quy tắc nghiệp vụ**:
   - Hệ thống **không xóa vật lý đối tác** để bảo toàn lịch sử giao dịch, chỉ thay đổi trạng thái sang `NGUNG_HOAT_DONG`.
   - Loại đối tác chỉ nhận 3 giá trị: `NHA_CUNG_CAP` (Nhà cung cấp), `KHACH_HANG` (Khách hàng), và `CA_HAI` (Cả hai) để phân loại luồng giao dịch nhập xuất kho.
+  - **Validate Loại đối tác (Task T50)**:
+    - Bắt buộc điền loại đối tác (`loaiDoiTac`), không được để trống hoặc `null`. Nếu gửi trống/null, hệ thống trả về lỗi: `"Loại đối tác không được để trống."` (HTTP Status 400).
+    - Chỉ chấp nhận 3 giá trị: `NHA_CUNG_CAP`, `KHACH_HANG`, `CA_HAI`. Bất kỳ giá trị nào khác (ví dụ: `VENDOR`, `SUPPLIER`, `CUSTOMER`, `ABC`, `OTHER`) đều bị hệ thống từ chối và trả về lỗi: `"Loại đối tác chỉ nhận NHA_CUNG_CAP, KHACH_HANG hoặc CA_HAI."` (HTTP Status 400).
+    - Kiểm tra tính hợp lệ này được thực hiện song song cả ở mức DTO (Spring Validation) và tầng Service (Exception handling) để đảm bảo an toàn dữ liệu tuyệt đối trước khi xử lý hoặc lưu xuống DB.
 
 ---
 

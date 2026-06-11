@@ -199,4 +199,43 @@ class PartnerServiceImplTest {
 
         assertThrows(NotFoundException.class, () -> partnerService.updatePartner(99L, request));
     }
+
+    /**
+     * Kiểm thử ngoại lệ: Tạo đối tác với loại đối tác không hợp lệ.
+     */
+    @Test
+    void createPartner_withInvalidType_shouldThrowBadRequestException() {
+        CreatePartnerRequest request = new CreatePartnerRequest(
+                "NCC003",
+                "Công ty Gia Phát",
+                "INVALID_TYPE",
+                "Nguyễn Văn A",
+                "0901234567",
+                "contact@example.com",
+                "TP.HCM",
+                "HOAT_DONG"
+        );
+
+        assertThrows(BadRequestException.class, () -> partnerService.createPartner(request));
+    }
+
+    /**
+     * Kiểm thử ngoại lệ: Cập nhật đối tác với loại đối tác không hợp lệ.
+     */
+    @Test
+    void updatePartner_withInvalidType_shouldThrowBadRequestException() {
+        UpdatePartnerRequest request = new UpdatePartnerRequest(
+                "Công ty Gia Phát cập nhật",
+                "INVALID_TYPE",
+                "Nguyễn Văn B",
+                "0909999999",
+                "update@example.com",
+                "Bình Dương",
+                "NGUNG_HOAT_DONG"
+        );
+
+        Mockito.when(partnerRepository.findById(1L)).thenReturn(Optional.of(partner1));
+
+        assertThrows(BadRequestException.class, () -> partnerService.updatePartner(1L, request));
+    }
 }

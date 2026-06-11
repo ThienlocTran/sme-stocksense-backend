@@ -73,7 +73,6 @@ public class SecurityConfig {
                         ))
                 )
                 .authorizeHttpRequests(authorize -> authorize
-                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
                         .requestMatchers(HttpMethod.PATCH, "/api/auth/change-password").authenticated()
                         .requestMatchers(HttpMethod.POST, "/api/employees").hasRole("ADMIN")
@@ -87,6 +86,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.PATCH, "/api/categories/*/disable").hasAnyRole("ADMIN", "MANAGER")
                         .requestMatchers(HttpMethod.GET, "/api/categories").hasAnyRole("ADMIN", "MANAGER", "EMPLOYEE")
                         .requestMatchers(HttpMethod.GET, "/api/partners").hasAnyRole("ADMIN", "MANAGER", "EMPLOYEE")
+                        .requestMatchers(HttpMethod.POST, "/api/partners").hasAnyRole("ADMIN", "MANAGER")
+                        .requestMatchers(HttpMethod.PUT, "/api/partners/*").hasAnyRole("ADMIN", "MANAGER")
                         .anyRequest().permitAll()
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)

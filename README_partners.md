@@ -8,7 +8,7 @@ Tài liệu tổng hợp các thay đổi và thông số kỹ thuật cho Modul
   - `PartnerType` (`NHA_CUNG_CAP`, `KHACH_HANG`, `CA_HAI`) - Phân loại đối tác.
   - `PartnerStatus` (`HOAT_DONG`, `NGUNG_HOAT_DONG`) - Trạng thái hoạt động.
 - **Repository**: `PartnerRepository` kế thừa `JpaRepository` và `JpaSpecificationExecutor` để thực hiện truy vấn động.
-- **Service**: `PartnerService` & `PartnerServiceImpl` triển khai các bộ lọc tìm kiếm động bằng `Specification`.
+- **Service**: `PartnerService` & `PartnerServiceImpl` triển khai các bộ lọc tìm kiếm động bằng `Specification`, cùng các phương thức `createPartner` và `updatePartner`.
 - **Controller**: `PartnerController` tiếp nhận yêu cầu HTTP.
 
 ---
@@ -37,6 +37,40 @@ Tài liệu tổng hợp các thay đổi và thông số kỹ thuật cho Modul
   ]
   ```
 
+### POST `/api/partners`
+- **Mô tả**: Tạo đối tác mới trong hệ thống.
+- **Request Body (JSON)**:
+  ```json
+  {
+    "maDoiTac": "GP001", // Tùy chọn. Nếu rỗng, hệ thống tự sinh mã
+    "tenDoiTac": "Công ty Gia Phát", // Bắt buộc
+    "loaiDoiTac": "NHA_CUNG_CAP", // Bắt buộc (NHA_CUNG_CAP, KHACH_HANG, CA_HAI)
+    "nguoiLienHe": "Nguyễn Văn A",
+    "soDienThoai": "0901234567",
+    "email": "contact@example.com", // Phải đúng định dạng nếu truyền
+    "diaChi": "TP.HCM",
+    "trangThai": "HOAT_DONG" // Tùy chọn, mặc định HOAT_DONG
+  }
+  ```
+- **Response Format**: DDTO PartnerResponse tương tự như GET API.
+
+### PUT `/api/partners/{id}`
+- **Mô tả**: Cập nhật thông tin đối tác dựa trên ID.
+- **Quy tắc nghiệp vụ**: Không cho phép cập nhật Mã đối tác (`maDoiTac`) để bảo toàn tính toàn vẹn của dữ liệu chứng từ.
+- **Request Body (JSON)**:
+  ```json
+  {
+    "tenDoiTac": "Công ty Gia Phát cập nhật", // Bắt buộc
+    "loaiDoiTac": "CA_HAI", // Bắt buộc
+    "nguoiLienHe": "Nguyễn Văn B",
+    "soDienThoai": "0909999999",
+    "email": "update@example.com",
+    "diaChi": "Bình Dương",
+    "trangThai": "NGUNG_HOAT_DONG" // Bắt buộc
+  }
+  ```
+- **Response Format**: DTO PartnerResponse tương tự như GET API.
+
 ---
 
 ## 3. Quy tắc DB
@@ -49,6 +83,8 @@ Tài liệu tổng hợp các thay đổi và thông số kỹ thuật cho Modul
 ---
 
 ## 4. Quy tắc Security
+- **Quy tắc đọc**: `GET /api/partners` yêu cầu vai trò `ADMIN`, `MANAGER` hoặc `EMPLOYEE`.
+- **Quy tắc ghi (Tạo/Sửa)**: `POST /api/partners` và `PUT /api/partners/{id}` chỉ cho phép vai trò `ADMIN` hoặc `MANAGER`. Nhân viên thủ kho (`EMPLOYEE`) bị chặn và trả về `403 Forbidden`.
 - **Phân quyền truy cập**: Đường dẫn `GET /api/partners` yêu cầu người dùng phải đăng nhập và có một trong các vai trò:
   - `ADMIN` (Admin / IT)
   - `MANAGER` (Quản lý kho)

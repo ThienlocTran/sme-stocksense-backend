@@ -1,10 +1,14 @@
 package com.smartflow.smestocksensebackend.service.impl;
 
+import com.smartflow.smestocksensebackend.dto.request.CreatePartnerRequest;
+import com.smartflow.smestocksensebackend.dto.request.UpdatePartnerRequest;
 import com.smartflow.smestocksensebackend.dto.response.PartnerResponse;
 import com.smartflow.smestocksensebackend.entity.Partner;
 import com.smartflow.smestocksensebackend.entity.PartnerStatus;
 import com.smartflow.smestocksensebackend.entity.PartnerType;
 import com.smartflow.smestocksensebackend.exception.BadRequestException;
+import com.smartflow.smestocksensebackend.exception.FieldValidationException;
+import com.smartflow.smestocksensebackend.exception.NotFoundException;
 import com.smartflow.smestocksensebackend.repository.PartnerRepository;
 import com.smartflow.smestocksensebackend.service.PartnerService;
 import jakarta.persistence.criteria.Predicate;
@@ -15,6 +19,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 /**
  * Lớp triển khai các phương thức nghiệp vụ của PartnerService.
@@ -41,6 +47,90 @@ public class PartnerServiceImpl implements PartnerService {
         return partnerRepository.findAll(specification).stream()
                 .map(PartnerResponse::from)
                 .toList();
+    }
+
+    /**
+     * Nghiệp vụ thêm mới đối tác vào hệ thống:
+     * - Tự động phát sinh mã đối tác duy nhất nếu Client không truyền lên.
+     * - Chuẩn hóa mã đối tác (loại bỏ khoảng trắng, chuyển chữ in hoa).
+     * - Kiểm tra trùng lặp mã đối tác.
+     * - Thiết lập trạng thái mặc định là HOAT_DONG nếu không truyền.
+     */
+    @Override
+    @Transactional
+    public PartnerResponse createPartner(CreatePartnerRequest request) {
+        String code;
+        if (request.maDoiTac() == null || request.maDoiTac().isBlank()) {
+            // Tự động sinh mã đối tác duy nhất để giữ tính định danh nghiệp vụ
+            code = "DT-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+        } else {
+            code = request.maDoiTac().trim().toUpperCase();
+            if (partnerRepository.existsByCodeIgnoreCase(code)) {
+                throw new FieldValidationException(Map.of("maDoiTac", "Mã đối tác đã tồn tại."));
+            }
+        }
+
+        Partner partner = new Partner();
+        partner.setCode(code);
+        partner.setName(request.tenDoiTac().trim());
+        // loaiDoiTac bị giới hạn trong NHA_CUNG_CAP, KHACH_HANG hoặc CA_HAI để tránh dữ liệu sai nghiệp vụ
+        partner.setType(PartnerType.valueOf(request.loaiDoiTac().trim().toUpperCase()));
+        partner.setContactPerson(normalizeOptional(request.nguoiLienHe()));
+        partner.setPhoneNumber(normalizeOptional(request.soDienThoai()));
+        partner.setEmail(normalizeOptional(request.email()));
+        partner.setAddress(normalizeOptional(request.diaChi()));
+        partner.setStatus(parseStatusOrDefault(request.trangThai()));
+
+        Partner savedPartner = partnerRepository.saveAndFlush(partner);
+        return PartnerResponse.from(savedPartner);
+    }
+
+    /**
+     * Nghiệp vụ cập nhật thông tin đối tác:
+     * - Không cho phép thay đổi mã đối tác nhằm giữ tính nhất quán dữ liệu.
+     */
+    @Override
+    @Transactional
+    public PartnerResponse updatePartner(Long id, UpdatePartnerRequest request) {
+        Partner partner = partnerRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException("Đối tác không tồn tại."));
+
+        partner.setName(request.tenDoiTac().trim());
+        // loaiDoiTac bị giới hạn trong NHA_CUNG_CAP, KHACH_HANG hoặc CA_HAI để tránh dữ liệu sai nghiệp vụ
+        partner.setType(PartnerType.valueOf(request.loaiDoiTac().trim().toUpperCase()));
+        partner.setContactPerson(normalizeOptional(request.nguoiLienHe()));
+        partner.setPhoneNumber(normalizeOptional(request.soDienThoai()));
+        partner.setEmail(normalizeOptional(request.email()));
+        partner.setAddress(normalizeOptional(request.diaChi()));
+        partner.setStatus(PartnerStatus.valueOf(request.trangThai().trim().toUpperCase()));
+
+        Partner savedPartner = partnerRepository.saveAndFlush(partner);
+        return PartnerResponse.from(savedPartner);
+    }
+
+    /**
+     * Chuẩn hóa các trường thông tin tùy chọn: Trả về null nếu trống hoặc chỉ chứa khoảng trắng.
+     */
+    private String normalizeOptional(String input) {
+        if (input == null || input.isBlank()) {
+            return null;
+        }
+        return input.trim();
+    }
+
+    /**
+     * Phân tích chuỗi trạng thái hoặc trả về giá trị mặc định là HOAT_DONG nếu không truyền trạng thái.
+     * Ném ra ngoại lệ BadRequestException nếu giá trị không hợp lệ.
+     */
+    private PartnerStatus parseStatusOrDefault(String status) {
+        if (status == null || status.isBlank()) {
+            return PartnerStatus.HOAT_DONG;
+        }
+        try {
+            return PartnerStatus.valueOf(status.trim().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new BadRequestException("status không hợp lệ.");
+        }
     }
 
     /**

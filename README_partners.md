@@ -1,6 +1,6 @@
 # Module Đối Tác (Partners) - Backend API
 
-Tài liệu tổng hợp các thay đổi và thông số kỹ thuật cho Module Đối Tác được phát triển trong task **T48** và **T49**.
+Tài liệu tổng hợp các thay đổi và thông số kỹ thuật cho Module Đối Tác được phát triển trong task **T48**.
 
 ## 1. Module đã làm
 - **Entity**: `Partner` ánh xạ bảng `doi_tac` trong database.
@@ -85,10 +85,14 @@ Tài liệu tổng hợp các thay đổi và thông số kỹ thuật cho Modul
 ## 4. Quy tắc Security
 - **Quy tắc đọc**: `GET /api/partners` yêu cầu vai trò `ADMIN`, `MANAGER` hoặc `EMPLOYEE`.
 - **Quy tắc ghi (Tạo/Sửa)**: `POST /api/partners` và `PUT /api/partners/{id}` chỉ cho phép vai trò `ADMIN` hoặc `MANAGER`. Nhân viên thủ kho (`EMPLOYEE`) bị chặn và trả về `403 Forbidden`.
+- **Phân quyền truy cập**: Đường dẫn `GET /api/partners` yêu cầu người dùng phải đăng nhập và có một trong các vai trò:
+  - `ADMIN` (Admin / IT)
+  - `MANAGER` (Quản lý kho)
+  - `EMPLOYEE` (Nhân viên thủ kho)
 
 ---
 
 ## 5. Cách test
 - **Chạy ứng dụng backend**: Chạy cổng mặc định `http://localhost:8080`.
-- **Gọi endpoint**: Sử dụng Postman hoặc Curl để thực hiện request kèm header `Authorization: Bearer <token>`.
+- **Gọi endpoint**: Sử dụng Postman hoặc Curl để thực hiện request `GET http://localhost:8080/api/partners` kèm header `Authorization: Bearer <token>`.
 - **Chạy UnitTest**: Chạy test suite `PartnerServiceImplTest` trong mã nguồn.

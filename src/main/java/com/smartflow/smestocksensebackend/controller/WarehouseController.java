@@ -1,43 +1,76 @@
 package com.smartflow.smestocksensebackend.controller;
 
+import com.smartflow.smestocksensebackend.dto.request.CreateWarehouseRequest;
+import com.smartflow.smestocksensebackend.dto.request.UpdateWarehouseRequest;
 import com.smartflow.smestocksensebackend.dto.response.WarehouseResponse;
 import com.smartflow.smestocksensebackend.service.WarehouseService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
 /**
- * REST Controller tiếp nhận các yêu cầu HTTP bên ngoài liên quan đến Kho Hàng.
+ * REST Controller tiếp nhận các yêu cầu HTTP bên ngoài liên quan đến quản lý Kho Hàng.
  */
-@RestController // Đánh dấu đây là REST Controller trả về dữ liệu trực tiếp dưới dạng JSON
-@RequestMapping("/api/warehouses") // Định nghĩa tiền tố đường dẫn API cho tất cả tài nguyên kho hàng
-@RequiredArgsConstructor // Tự sinh constructor chứa tham số final để Spring thực hiện cơ chế dependency
-                         // injection
+@RestController
+@RequestMapping("/api/warehouses")
+@RequiredArgsConstructor
 public class WarehouseController {
 
-    private final WarehouseService warehouseService; // Inject lớp tầng nghiệp vụ WarehouseService
+    private final WarehouseService warehouseService;
 
     /**
-     * API Endpoint: GET /api/warehouses
-     * Trả về danh sách các kho hàng theo điều kiện tìm kiếm động và lọc trạng thái
-     * hoạt động.
-     * 
-     * @param keyword Từ khóa tìm kiếm tùy chọn gửi từ client (tìm kiếm theo mã,
-     *                tên, địa chỉ kho)
-     * @param status  Trạng thái lọc tùy chọn gửi từ client (chỉ chấp nhận ACTIVE
-     *                hoặc INACTIVE)
-     * @return Danh sách DTO WarehouseResponse chứa thông tin kho
+     * API: GET /api/warehouses
+     * Trả về danh sách kho hàng dựa trên từ khóa tìm kiếm động và trạng thái hoạt động.
+     *
+     * @param keyword Từ khóa tìm kiếm tùy chọn (mã, tên hoặc địa chỉ)
+     * @param status  Trạng thái hoạt động lọc tùy chọn (ACTIVE hoặc INACTIVE)
      */
-    @GetMapping // Map các yêu cầu HTTP GET tại endpoint /api/warehouses vào phương thức này
+    @GetMapping
     public List<WarehouseResponse> getWarehouses(
-            @RequestParam(required = false) String keyword, // Ánh xạ tham số truy vấn tùy chọn '?keyword=...'
-            @RequestParam(required = false) String status // Ánh xạ tham số truy vấn tùy chọn '?status=...'
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String status
     ) {
-        // Chuyển hướng yêu cầu tới tầng Service xử lý nghiệp vụ tìm kiếm/lọc
         return warehouseService.getWarehouses(keyword, status);
+    }
+
+    /**
+     * API: POST /api/warehouses
+     * Tiếp nhận yêu cầu thêm mới một kho hàng và thực hiện kiểm tra tính hợp lệ của dữ liệu đầu vào.
+     *
+     * @param request DTO chứa thông tin kho hàng cần tạo mới
+     * @return DTO chứa thông tin chi tiết của kho hàng vừa được tạo thành công
+     */
+    @PostMapping
+    @ResponseStatus(HttpStatus.CREATED)
+    public WarehouseResponse createWarehouse(@Valid @RequestBody CreateWarehouseRequest request) {
+        return warehouseService.createWarehouse(request);
+    }
+
+    /**
+     * API: PUT /api/warehouses/{id}
+     * Cập nhật thông tin tên, địa chỉ và trạng thái của một kho hàng dựa trên ID.
+     * Không cho phép thay đổi mã kho để tránh ảnh hưởng dữ liệu nhập/xuất/tồn sau này.
+     *
+     * @param id      ID của kho hàng cần cập nhật
+     * @param request DTO chứa thông tin cập nhật (tenKho, diaChi, trangThai)
+     * @return DTO chứa thông tin chi tiết của kho hàng sau khi cập nhật thành công
+     */
+    @PutMapping("/{id}")
+    public WarehouseResponse updateWarehouse(
+            @PathVariable Long id,
+            @Valid @RequestBody UpdateWarehouseRequest request
+    ) {
+        return warehouseService.updateWarehouse(id, request);
     }
 }

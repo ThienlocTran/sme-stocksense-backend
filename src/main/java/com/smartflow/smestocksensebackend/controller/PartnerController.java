@@ -33,6 +33,10 @@ public class PartnerController {
      * API: GET /api/partners
      * Trả về danh sách đối tác dựa trên từ khóa tìm kiếm động, loại đối tác và trạng thái hoạt động.
      * Quyền truy cập: Admin/IT (ADMIN), Quản lý kho (MANAGER) và Nhân viên thủ kho (EMPLOYEE) được phép xem.
+     *
+     * @param keyword    Từ khóa tìm kiếm tùy chọn (mã, tên, số điện thoại, email hoặc người liên hệ)
+     * @param loaiDoiTac Loại đối tác lọc tùy chọn (NHA_CUNG_CAP, KHACH_HANG, CA_HAI)
+     * @param trangThai  Trạng thái hoạt động lọc tùy chọn (HOAT_DONG, NGUNG_HOAT_DONG)
      */
     @GetMapping
     public List<PartnerResponse> getPartners(

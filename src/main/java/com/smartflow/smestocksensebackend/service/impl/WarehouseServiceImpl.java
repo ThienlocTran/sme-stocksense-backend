@@ -99,6 +99,23 @@ public class WarehouseServiceImpl implements WarehouseService {
     }
 
     /**
+     * Ngừng hoạt động kho hàng (soft delete).
+     * Ghi chú rõ: không xóa vật lý kho để bảo toàn dữ liệu lịch sử nhập/xuất/tồn.
+     */
+    @Override
+    @Transactional
+    public WarehouseResponse deactivateWarehouse(Long id) {
+        Warehouse warehouse = warehouseRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException("Kho hàng không tồn tại."));
+
+        // Ghi chú rõ: không xóa vật lý kho để bảo toàn dữ liệu lịch sử nhập/xuất/tồn.
+        warehouse.setStatus(WarehouseStatus.NGUNG_HOAT_DONG);
+
+        Warehouse savedWarehouse = warehouseRepository.saveAndFlush(warehouse);
+        return WarehouseResponse.from(savedWarehouse);
+    }
+
+    /**
      * Chuẩn hóa các trường thông tin tùy chọn: Trả về null nếu trống hoặc chỉ chứa khoảng trắng.
      */
     private String normalizeOptional(String input) {

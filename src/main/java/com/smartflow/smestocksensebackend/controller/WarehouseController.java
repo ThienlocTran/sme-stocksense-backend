@@ -7,6 +7,7 @@ import com.smartflow.smestocksensebackend.service.WarehouseService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -72,5 +73,19 @@ public class WarehouseController {
             @Valid @RequestBody UpdateWarehouseRequest request
     ) {
         return warehouseService.updateWarehouse(id, request);
+    }
+
+    /**
+     * API: DELETE /api/warehouses/{id}
+     * Ngừng hoạt động một kho hàng dựa trên ID (soft delete).
+     * Chỉ thay đổi trạng thái sang NGUNG_HOAT_DONG, không xóa vật lý bản ghi.
+     * Ghi chú rõ: không xóa vật lý kho để bảo toàn dữ liệu lịch sử nhập/xuất/tồn.
+     *
+     * @param id ID của kho hàng cần ngừng hoạt động
+     * @return DTO chứa thông tin chi tiết của kho hàng sau khi được ngừng hoạt động
+     */
+    @DeleteMapping("/{id}")
+    public WarehouseResponse deactivateWarehouse(@PathVariable Long id) {
+        return warehouseService.deactivateWarehouse(id);
     }
 }

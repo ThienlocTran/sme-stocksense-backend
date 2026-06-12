@@ -44,6 +44,7 @@ public class EmployeeService {
     );
     private static final String EMAIL_UNIQUE_CONSTRAINT = "nhan_vien_email_key";
     private static final String DUPLICATE_EMAIL_MESSAGE = "Email đã tồn tại.";
+    private static final String DUPLICATE_PHONE_MESSAGE = "Số điện thoại đã tồn tại.";
 
     private final EmployeeRepository employeeRepository;
     private final RoleRepository roleRepository;
@@ -87,10 +88,14 @@ public class EmployeeService {
         Employee employee = findEmployeeById(id);
 
         String email = normalizeEmail(request.email());
+        String phone = normalizeOptional(request.phoneNumber());
         validateEmail(email);
 
         if (employeeRepository.existsByEmailIgnoreCaseAndIdNot(email, id)) {
             throw duplicateEmailException();
+        }
+        if (phone != null && employeeRepository.existsByPhoneAndIdNot(phone, id)) {
+            throw duplicatePhoneException();
         }
 
         RoleCode roleCode = parseRequiredEnum(RoleCode.class, request.roleCode(), "roleCode");
@@ -100,7 +105,7 @@ public class EmployeeService {
 
         employee.setFullName(request.fullName().trim());
         employee.setEmail(email);
-        employee.setPhone(normalizeOptional(request.phoneNumber()));
+        employee.setPhone(phone);
         employee.setRole(role);
         employee.setStatus(status);
 
@@ -117,10 +122,14 @@ public class EmployeeService {
     @Transactional
     public EmployeeListItemResponse createEmployee(CreateEmployeeRequest request) {
         String email = normalizeEmail(request.email());
+        String phone = normalizeOptional(request.phoneNumber());
         validateEmail(email);
 
         if (employeeRepository.existsByEmailIgnoreCase(email)) {
             throw duplicateEmailException();
+        }
+        if (phone != null && employeeRepository.existsByPhone(phone)) {
+            throw duplicatePhoneException();
         }
 
         RoleCode roleCode = parseRequiredEnum(RoleCode.class, request.roleCode(), "roleCode");
@@ -131,7 +140,7 @@ public class EmployeeService {
         Employee employee = new Employee();
         employee.setFullName(request.fullName().trim());
         employee.setEmail(email);
-        employee.setPhone(normalizeOptional(request.phoneNumber()));
+        employee.setPhone(phone);
         employee.setPasswordHash(passwordEncoder.encode(request.password()));
         employee.setRole(role);
         employee.setStatus(status == null ? EmployeeStatus.HOAT_DONG : status);
@@ -234,6 +243,10 @@ public class EmployeeService {
 
     private FieldValidationException duplicateEmailException() {
         return new FieldValidationException(Map.of("email", DUPLICATE_EMAIL_MESSAGE));
+    }
+
+    private FieldValidationException duplicatePhoneException() {
+        return new FieldValidationException(Map.of("phoneNumber", DUPLICATE_PHONE_MESSAGE));
     }
 
     private boolean isDuplicateEmailException(DataIntegrityViolationException exception) {

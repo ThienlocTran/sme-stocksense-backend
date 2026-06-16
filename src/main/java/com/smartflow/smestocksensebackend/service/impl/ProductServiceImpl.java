@@ -3,6 +3,7 @@ package com.smartflow.smestocksensebackend.service.impl;
 import com.smartflow.smestocksensebackend.dto.product.ProductCreateRequest;
 import com.smartflow.smestocksensebackend.dto.product.ProductListItemResponse;
 import com.smartflow.smestocksensebackend.dto.product.ProductPageResponse;
+import com.smartflow.smestocksensebackend.dto.product.ProductUpdateRequest;
 import com.smartflow.smestocksensebackend.entity.Category;
 import com.smartflow.smestocksensebackend.entity.Partner;
 import com.smartflow.smestocksensebackend.entity.Product;
@@ -37,7 +38,7 @@ public class ProductServiceImpl implements ProductService {
 
     /**
      * Lấy danh sách sản phẩm có hỗ trợ tìm kiếm theo tên/SKU và lọc theo trạng thái.
-     * Sử dụng JOIN FETCH thông qua Specification để tránh N+1 query với category và partner.
+     * Dùng LEFT JOIN FETCH trong Specification để tránh N+1 với category và partner.
      */
     @Override
     @Transactional(readOnly = true)
@@ -54,17 +55,14 @@ public class ProductServiceImpl implements ProductService {
 
     /**
      * Tạo mới sản phẩm:
-     * - Validate trùng mã, SKU, barcode trước khi lưu.
-     * - Tìm Category và Partner theo ID nếu được cung cấp.
+     * - Validate trùng code, SKU, barcode.
+     * - Resolve Category và Partner theo ID (nullable).
      * - Set mặc định status = HOAT_DONG.
      */
     @Override
     @Transactional
     public ProductListItemResponse createProduct(ProductCreateRequest request) {
         validateUniqueFields(request);
-
-        Category category = resolveCategory(request.categoryId());
-        Partner partner = resolvePartner(request.partnerId());
 
         Product product = new Product();
         product.setCode(request.code().trim().toUpperCase());
@@ -73,9 +71,37 @@ public class ProductServiceImpl implements ProductService {
         product.setBarcode(normalizeOptional(request.barcode()));
         product.setUnit(request.unit().trim());
         product.setPrice(request.price());
-        product.setCategory(category);
-        product.setPartner(partner);
+        product.setCategory(resolveCategory(request.categoryId()));
+        product.setPartner(resolvePartner(request.partnerId()));
         product.setStatus(ProductStatus.HOAT_DONG);
+
+        return ProductListItemResponse.from(productRepository.saveAndFlush(product));
+    }
+
+    /**
+     * Cập nhật sản phẩm theo id:
+     * - Ném NotFoundException nếu không tìm thấy.
+     * - Validate unique code/sku/barcode, loại trừ chính id đang cập nhật.
+     * - Resolve lại Category và Partner.
+     * - Cho phép cập nhật status.
+     */
+    @Override
+    @Transactional
+    public ProductListItemResponse updateProduct(Long id, ProductUpdateRequest request) {
+        Product product = productRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException("Sản phẩm không tồn tại."));
+
+        validateUniqueFieldsForUpdate(request, id);
+
+        product.setCode(request.code().trim().toUpperCase());
+        product.setName(request.name().trim());
+        product.setSku(normalizeOptional(request.sku()));
+        product.setBarcode(normalizeOptional(request.barcode()));
+        product.setUnit(request.unit().trim());
+        product.setPrice(request.price());
+        product.setCategory(resolveCategory(request.categoryId()));
+        product.setPartner(resolvePartner(request.partnerId()));
+        product.setStatus(parseStatusStrict(request.status()));
 
         return ProductListItemResponse.from(productRepository.saveAndFlush(product));
     }
@@ -104,6 +130,26 @@ public class ProductServiceImpl implements ProductService {
         }
     }
 
+    private void validateUniqueFieldsForUpdate(ProductUpdateRequest request, Long excludedId) {
+        Map<String, String> errors = new LinkedHashMap<>();
+
+        if (productRepository.existsByCodeIgnoreCaseAndIdNot(request.code().trim(), excludedId)) {
+            errors.put("code", "Mã sản phẩm đã tồn tại.");
+        }
+        if (request.sku() != null && !request.sku().isBlank()
+                && productRepository.existsBySkuIgnoreCaseAndIdNot(request.sku().trim(), excludedId)) {
+            errors.put("sku", "SKU đã tồn tại.");
+        }
+        if (request.barcode() != null && !request.barcode().isBlank()
+                && productRepository.existsByBarcodeIgnoreCaseAndIdNot(request.barcode().trim(), excludedId)) {
+            errors.put("barcode", "Mã vạch đã tồn tại.");
+        }
+
+        if (!errors.isEmpty()) {
+            throw new FieldValidationException(errors);
+        }
+    }
+
     private Category resolveCategory(Long categoryId) {
         if (categoryId == null) {
             return null;
@@ -122,7 +168,6 @@ public class ProductServiceImpl implements ProductService {
 
     private Specification<Product> buildSpecification(String keywordLike, ProductStatus status) {
         return (root, query, cb) -> {
-            // Eager join để tránh N+1 khi map sang DTO
             if (query != null && !query.getResultType().equals(Long.class)) {
                 root.fetch("category", JoinType.LEFT);
                 root.fetch("partner", JoinType.LEFT);
@@ -136,7 +181,6 @@ public class ProductServiceImpl implements ProductService {
                         cb.like(cb.lower(root.get("sku")), keywordLike)
                 ));
             }
-
             if (status != null) {
                 predicates.add(cb.equal(root.get("status"), status));
             }
@@ -161,10 +205,20 @@ public class ProductServiceImpl implements ProductService {
         return "%" + keyword.trim().toLowerCase() + "%";
     }
 
+    /** Dùng cho list/filter — trả về null nếu không truyền status. */
     private ProductStatus parseStatus(String status) {
         if (status == null || status.isBlank()) {
             return null;
         }
+        try {
+            return ProductStatus.valueOf(status.trim().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new BadRequestException("status không hợp lệ. Chỉ nhận HOAT_DONG hoặc NGUNG_HOAT_DONG.");
+        }
+    }
+
+    /** Dùng cho update — bắt buộc phải có giá trị hợp lệ. */
+    private ProductStatus parseStatusStrict(String status) {
         try {
             return ProductStatus.valueOf(status.trim().toUpperCase());
         } catch (IllegalArgumentException e) {

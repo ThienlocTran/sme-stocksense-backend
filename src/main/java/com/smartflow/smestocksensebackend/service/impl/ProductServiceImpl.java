@@ -37,6 +37,10 @@ public class ProductServiceImpl implements ProductService {
     private final CategoryRepository categoryRepository;
     private final PartnerRepository partnerRepository;
 
+    /**
+     * Lấy danh sách sản phẩm có hỗ trợ tìm kiếm theo tên/SKU và lọc theo trạng thái.
+     * Dùng LEFT JOIN FETCH trong Specification để tránh N+1 với category và partner.
+     */
     @Override
     @Transactional(readOnly = true)
     public ProductPageResponse listProducts(String keyword, String status, Pageable pageable) {
@@ -50,11 +54,16 @@ public class ProductServiceImpl implements ProductService {
         );
     }
 
+    /**
+     * Tạo mới sản phẩm:
+     * - Validate trùng code, SKU, barcode.
+     * - Resolve Category và Partner theo ID (nullable).
+     * - Set mặc định status = HOAT_DONG.
+     */
     @Override
     @Transactional
     public ProductListItemResponse createProduct(ProductCreateRequest request) {
-        // excludeId = null → check toàn bảng
-        validateUniqueFields(request.code(), request.sku(), request.barcode(), null);
+        validateUniqueFields(request);
 
         Product product = new Product();
         product.setCode(request.code().trim().toUpperCase());
@@ -70,14 +79,20 @@ public class ProductServiceImpl implements ProductService {
         return ProductListItemResponse.from(productRepository.saveAndFlush(product));
     }
 
+    /**
+     * Cập nhật sản phẩm theo id:
+     * - Ném NotFoundException nếu không tìm thấy.
+     * - Validate unique code/sku/barcode, loại trừ chính id đang cập nhật.
+     * - Resolve lại Category và Partner.
+     * - Cho phép cập nhật status.
+     */
     @Override
     @Transactional
     public ProductListItemResponse updateProduct(Long id, ProductUpdateRequest request) {
         Product product = productRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Sản phẩm không tồn tại."));
 
-        // excludeId = id → bỏ qua chính record này khi check trùng
-        validateUniqueFields(request.code(), request.sku(), request.barcode(), id);
+        validateUniqueFieldsForUpdate(request, id);
 
         product.setCode(request.code().trim().toUpperCase());
         product.setName(request.name().trim());
@@ -104,42 +119,22 @@ public class ProductServiceImpl implements ProductService {
     }
 
     // -------------------------------------------------------------------------
-    // Unique validation — dùng chung cho CREATE (excludeId=null) và UPDATE
+    // Private helpers
     // -------------------------------------------------------------------------
 
-    /**
-     * Collect tất cả lỗi unique trước khi ném một lần duy nhất.
-     *
-     * @param excludeId null khi CREATE, product.id khi UPDATE
-     */
-    private void validateUniqueFields(String code, String sku, String barcode, Long excludeId) {
+    private void validateUniqueFields(ProductCreateRequest request) {
         Map<String, String> errors = new LinkedHashMap<>();
 
-        if (code != null && !code.isBlank()) {
-            boolean duplicate = excludeId == null
-                    ? productRepository.existsByCodeIgnoreCase(code.trim())
-                    : productRepository.existsByCodeIgnoreCaseAndIdNot(code.trim(), excludeId);
-            if (duplicate) {
-                errors.put("code", "Mã sản phẩm đã tồn tại.");
-            }
+        if (productRepository.existsByCodeIgnoreCase(request.code().trim())) {
+            errors.put("code", "Mã sản phẩm đã tồn tại.");
         }
-
-        if (sku != null && !sku.isBlank()) {
-            boolean duplicate = excludeId == null
-                    ? productRepository.existsBySkuIgnoreCase(sku.trim())
-                    : productRepository.existsBySkuIgnoreCaseAndIdNot(sku.trim(), excludeId);
-            if (duplicate) {
-                errors.put("sku", "SKU đã tồn tại.");
-            }
+        if (request.sku() != null && !request.sku().isBlank()
+                && productRepository.existsBySkuIgnoreCase(request.sku().trim())) {
+            errors.put("sku", "SKU đã tồn tại.");
         }
-
-        if (barcode != null && !barcode.isBlank()) {
-            boolean duplicate = excludeId == null
-                    ? productRepository.existsByBarcodeIgnoreCase(barcode.trim())
-                    : productRepository.existsByBarcodeIgnoreCaseAndIdNot(barcode.trim(), excludeId);
-            if (duplicate) {
-                errors.put("barcode", "Mã vạch đã tồn tại.");
-            }
+        if (request.barcode() != null && !request.barcode().isBlank()
+                && productRepository.existsByBarcodeIgnoreCase(request.barcode().trim())) {
+            errors.put("barcode", "Mã vạch đã tồn tại.");
         }
 
         if (!errors.isEmpty()) {
@@ -147,20 +142,79 @@ public class ProductServiceImpl implements ProductService {
         }
     }
 
-    // -------------------------------------------------------------------------
-    // Private helpers
-    // -------------------------------------------------------------------------
+    private void validateUniqueFieldsForUpdate(ProductUpdateRequest request, Long excludedId) {
+        Map<String, String> errors = new LinkedHashMap<>();
+
+        if (productRepository.existsByCodeIgnoreCaseAndIdNot(request.code().trim(), excludedId)) {
+            errors.put("code", "Mã sản phẩm đã tồn tại.");
+        }
+        if (request.sku() != null && !request.sku().isBlank()
+                && productRepository.existsBySkuIgnoreCaseAndIdNot(request.sku().trim(), excludedId)) {
+            errors.put("sku", "SKU đã tồn tại.");
+        }
+        if (request.barcode() != null && !request.barcode().isBlank()
+                && productRepository.existsByBarcodeIgnoreCaseAndIdNot(request.barcode().trim(), excludedId)) {
+            errors.put("barcode", "Mã vạch đã tồn tại.");
+        }
+
+        if (!errors.isEmpty()) {
+            throw new FieldValidationException(errors);
+        }
+    }
 
     private Category resolveCategory(Long categoryId) {
-        if (categoryId == null) return null;
+        if (categoryId == null) {
+            return null;
+        }
         return categoryRepository.findById(categoryId)
                 .orElseThrow(() -> new NotFoundException("Danh mục không tồn tại."));
     }
 
     private Partner resolvePartner(Long partnerId) {
-        if (partnerId == null) return null;
+        if (partnerId == null) {
+            return null;
+        }
         return partnerRepository.findById(partnerId)
                 .orElseThrow(() -> new NotFoundException("Đối tác không tồn tại."));
+    }
+
+    private Specification<Product> buildSpecification(String keywordLike, ProductStatus status) {
+        return (root, query, cb) -> {
+            if (query != null && !query.getResultType().equals(Long.class)) {
+                root.fetch("category", JoinType.LEFT);
+                root.fetch("partner", JoinType.LEFT);
+            }
+
+            List<Predicate> predicates = new ArrayList<>();
+
+            if (keywordLike != null) {
+                predicates.add(cb.or(
+                        cb.like(cb.lower(root.get("name")), keywordLike),
+                        cb.like(cb.lower(root.get("sku")), keywordLike)
+                ));
+            }
+            if (status != null) {
+                predicates.add(cb.equal(root.get("status"), status));
+            }
+
+            return predicates.isEmpty()
+                    ? cb.conjunction()
+                    : cb.and(predicates.toArray(Predicate[]::new));
+        };
+    }
+
+    private String normalizeOptional(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim();
+    }
+
+    private String normalizeKeyword(String keyword) {
+        if (keyword == null || keyword.isBlank()) {
+            return null;
+        }
+        return "%" + keyword.trim().toLowerCase() + "%";
     }
 
     private ProductStatus resolveProductStatus(String value) {
@@ -172,8 +226,11 @@ public class ProductServiceImpl implements ProductService {
         };
     }
 
+    /** Dùng cho list/filter — trả về null nếu không truyền status. */
     private ProductStatus parseStatus(String status) {
-        if (status == null || status.isBlank()) return null;
+        if (status == null || status.isBlank()) {
+            return null;
+        }
         try {
             return ProductStatus.valueOf(status.trim().toUpperCase());
         } catch (IllegalArgumentException e) {
@@ -181,43 +238,12 @@ public class ProductServiceImpl implements ProductService {
         }
     }
 
+    /** Dùng cho update — bắt buộc phải có giá trị hợp lệ. */
     private ProductStatus parseStatusStrict(String status) {
         try {
             return ProductStatus.valueOf(status.trim().toUpperCase());
         } catch (IllegalArgumentException e) {
             throw new BadRequestException("status không hợp lệ. Chỉ nhận HOAT_DONG hoặc NGUNG_HOAT_DONG.");
         }
-    }
-
-    private Specification<Product> buildSpecification(String keywordLike, ProductStatus status) {
-        return (root, query, cb) -> {
-            if (query != null && !query.getResultType().equals(Long.class)) {
-                root.fetch("category", JoinType.LEFT);
-                root.fetch("partner", JoinType.LEFT);
-            }
-            List<Predicate> predicates = new ArrayList<>();
-            if (keywordLike != null) {
-                predicates.add(cb.or(
-                        cb.like(cb.lower(root.get("name")), keywordLike),
-                        cb.like(cb.lower(root.get("sku")), keywordLike)
-                ));
-            }
-            if (status != null) {
-                predicates.add(cb.equal(root.get("status"), status));
-            }
-            return predicates.isEmpty()
-                    ? cb.conjunction()
-                    : cb.and(predicates.toArray(Predicate[]::new));
-        };
-    }
-
-    private String normalizeOptional(String value) {
-        if (value == null || value.isBlank()) return null;
-        return value.trim();
-    }
-
-    private String normalizeKeyword(String keyword) {
-        if (keyword == null || keyword.isBlank()) return null;
-        return "%" + keyword.trim().toLowerCase() + "%";
     }
 }

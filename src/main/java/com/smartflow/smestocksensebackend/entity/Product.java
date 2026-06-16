@@ -22,6 +22,12 @@ import org.hibernate.type.SqlTypes;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
+/**
+ * Thực thể Product ánh xạ đến bảng "san_pham".
+ * Quan hệ:
+ * - @ManyToOne với Category (danh mục, nullable)
+ * - @ManyToOne với Partner  (đối tác cung cấp, nullable)
+ */
 @Getter
 @Setter
 @NoArgsConstructor

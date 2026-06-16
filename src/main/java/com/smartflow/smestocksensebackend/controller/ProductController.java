@@ -29,6 +29,15 @@ public class ProductController {
 
     private final ProductService productService;
 
+    /**
+     * GET /api/products
+     * Lấy danh sách sản phẩm có phân trang, tìm kiếm và lọc theo trạng thái.
+     *
+     * @param page    trang hiện tại (bắt đầu từ 0)
+     * @param size    số lượng bản ghi mỗi trang
+     * @param keyword tìm kiếm theo tên hoặc SKU (không phân biệt hoa thường)
+     * @param status  lọc theo trạng thái: HOAT_DONG | NGUNG_HOAT_DONG
+     */
     @GetMapping
     public ProductPageResponse listProducts(
             @RequestParam(defaultValue = "0") int page,

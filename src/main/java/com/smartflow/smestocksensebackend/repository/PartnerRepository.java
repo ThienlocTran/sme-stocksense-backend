@@ -1,9 +1,13 @@
 package com.smartflow.smestocksensebackend.repository;
 
 import com.smartflow.smestocksensebackend.entity.Partner;
+import com.smartflow.smestocksensebackend.entity.PartnerStatus;
+import com.smartflow.smestocksensebackend.entity.PartnerType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.stereotype.Repository;
+
+import java.util.List;
 
 /**
  * Interface Repository quản lý các giao tiếp CSDL liên quan đến thực thể Partner.
@@ -20,4 +24,6 @@ public interface PartnerRepository extends JpaRepository<Partner, Long>, JpaSpec
      * @return true nếu đã tồn tại mã đối tác này, ngược lại là false
      */
     boolean existsByCodeIgnoreCase(String code);
+
+    List<Partner> findByTypeAndStatusOrderByNameAsc(PartnerType type, PartnerStatus status);
 }

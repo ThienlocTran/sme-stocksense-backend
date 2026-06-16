@@ -12,4 +12,10 @@ public interface ProductRepository extends JpaRepository<Product, Long>, JpaSpec
     boolean existsBySkuIgnoreCase(String sku);
 
     boolean existsByBarcodeIgnoreCase(String barcode);
+
+    boolean existsByCodeIgnoreCaseAndIdNot(String code, Long id);
+
+    boolean existsBySkuIgnoreCaseAndIdNot(String sku, Long id);
+
+    boolean existsByBarcodeIgnoreCaseAndIdNot(String barcode, Long id);
 }

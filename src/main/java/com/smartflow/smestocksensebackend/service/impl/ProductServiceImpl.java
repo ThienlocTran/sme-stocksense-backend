@@ -4,6 +4,7 @@ import com.smartflow.smestocksensebackend.dto.product.ProductCreateRequest;
 import com.smartflow.smestocksensebackend.dto.product.ProductListItemResponse;
 import com.smartflow.smestocksensebackend.dto.product.ProductPageResponse;
 import com.smartflow.smestocksensebackend.dto.product.ProductUpdateRequest;
+import com.smartflow.smestocksensebackend.dto.product.UpdateProductStatusRequest;
 import com.smartflow.smestocksensebackend.entity.Category;
 import com.smartflow.smestocksensebackend.entity.Partner;
 import com.smartflow.smestocksensebackend.entity.Product;
@@ -224,5 +225,30 @@ public class ProductServiceImpl implements ProductService {
         } catch (IllegalArgumentException e) {
             throw new BadRequestException("status không hợp lệ. Chỉ nhận HOAT_DONG hoặc NGUNG_HOAT_DONG.");
         }
+    }
+
+    /**
+     * Soft delete / đổi trạng thái sản phẩm.
+     * Nhận ACTIVE → HOAT_DONG, INACTIVE → NGUNG_HOAT_DONG.
+     * Cũng chấp nhận trực tiếp HOAT_DONG / NGUNG_HOAT_DONG.
+     */
+    @Override
+    @Transactional
+    public ProductListItemResponse updateStatus(Long id, UpdateProductStatusRequest request) {
+        Product product = productRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException("Sản phẩm không tồn tại."));
+
+        product.setStatus(resolveProductStatus(request.trangThai()));
+
+        return ProductListItemResponse.from(productRepository.saveAndFlush(product));
+    }
+
+    private ProductStatus resolveProductStatus(String value) {
+        return switch (value.trim().toUpperCase()) {
+            case "ACTIVE", "HOAT_DONG" -> ProductStatus.HOAT_DONG;
+            case "INACTIVE", "NGUNG_HOAT_DONG" -> ProductStatus.NGUNG_HOAT_DONG;
+            default -> throw new BadRequestException(
+                    "trangThai không hợp lệ. Chỉ nhận ACTIVE hoặc INACTIVE.");
+        };
     }
 }

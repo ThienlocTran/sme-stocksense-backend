@@ -6,6 +6,7 @@ import java.math.BigDecimal;
 
 public record ProductListItemResponse(
         Long id,
+        String code,
         String name,
         String sku,
         BigDecimal price,
@@ -17,6 +18,7 @@ public record ProductListItemResponse(
     public static ProductListItemResponse from(Product product) {
         return new ProductListItemResponse(
                 product.getId(),
+                product.getCode(),
                 product.getName(),
                 product.getSku(),
                 product.getPrice(),

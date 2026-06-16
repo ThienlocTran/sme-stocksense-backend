@@ -1,12 +1,20 @@
 package com.smartflow.smestocksensebackend.service.impl;
 
+import com.smartflow.smestocksensebackend.dto.product.ProductCreateRequest;
 import com.smartflow.smestocksensebackend.dto.product.ProductListItemResponse;
 import com.smartflow.smestocksensebackend.dto.product.ProductPageResponse;
+import com.smartflow.smestocksensebackend.entity.Category;
+import com.smartflow.smestocksensebackend.entity.Partner;
 import com.smartflow.smestocksensebackend.entity.Product;
 import com.smartflow.smestocksensebackend.entity.ProductStatus;
 import com.smartflow.smestocksensebackend.exception.BadRequestException;
+import com.smartflow.smestocksensebackend.exception.FieldValidationException;
+import com.smartflow.smestocksensebackend.exception.NotFoundException;
+import com.smartflow.smestocksensebackend.repository.CategoryRepository;
+import com.smartflow.smestocksensebackend.repository.PartnerRepository;
 import com.smartflow.smestocksensebackend.repository.ProductRepository;
 import com.smartflow.smestocksensebackend.service.ProductService;
+import jakarta.persistence.criteria.JoinType;
 import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
@@ -15,13 +23,17 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
 public class ProductServiceImpl implements ProductService {
 
     private final ProductRepository productRepository;
+    private final CategoryRepository categoryRepository;
+    private final PartnerRepository partnerRepository;
 
     /**
      * Lấy danh sách sản phẩm có hỗ trợ tìm kiếm theo tên/SKU và lọc theo trạng thái.
@@ -40,12 +52,80 @@ public class ProductServiceImpl implements ProductService {
         );
     }
 
+    /**
+     * Tạo mới sản phẩm:
+     * - Validate trùng mã, SKU, barcode trước khi lưu.
+     * - Tìm Category và Partner theo ID nếu được cung cấp.
+     * - Set mặc định status = HOAT_DONG.
+     */
+    @Override
+    @Transactional
+    public ProductListItemResponse createProduct(ProductCreateRequest request) {
+        validateUniqueFields(request);
+
+        Category category = resolveCategory(request.categoryId());
+        Partner partner = resolvePartner(request.partnerId());
+
+        Product product = new Product();
+        product.setCode(request.code().trim().toUpperCase());
+        product.setName(request.name().trim());
+        product.setSku(normalizeOptional(request.sku()));
+        product.setBarcode(normalizeOptional(request.barcode()));
+        product.setUnit(request.unit().trim());
+        product.setPrice(request.price());
+        product.setCategory(category);
+        product.setPartner(partner);
+        product.setStatus(ProductStatus.HOAT_DONG);
+
+        return ProductListItemResponse.from(productRepository.saveAndFlush(product));
+    }
+
+    // -------------------------------------------------------------------------
+    // Private helpers
+    // -------------------------------------------------------------------------
+
+    private void validateUniqueFields(ProductCreateRequest request) {
+        Map<String, String> errors = new LinkedHashMap<>();
+
+        if (productRepository.existsByCodeIgnoreCase(request.code().trim())) {
+            errors.put("code", "Mã sản phẩm đã tồn tại.");
+        }
+        if (request.sku() != null && !request.sku().isBlank()
+                && productRepository.existsBySkuIgnoreCase(request.sku().trim())) {
+            errors.put("sku", "SKU đã tồn tại.");
+        }
+        if (request.barcode() != null && !request.barcode().isBlank()
+                && productRepository.existsByBarcodeIgnoreCase(request.barcode().trim())) {
+            errors.put("barcode", "Mã vạch đã tồn tại.");
+        }
+
+        if (!errors.isEmpty()) {
+            throw new FieldValidationException(errors);
+        }
+    }
+
+    private Category resolveCategory(Long categoryId) {
+        if (categoryId == null) {
+            return null;
+        }
+        return categoryRepository.findById(categoryId)
+                .orElseThrow(() -> new NotFoundException("Danh mục không tồn tại."));
+    }
+
+    private Partner resolvePartner(Long partnerId) {
+        if (partnerId == null) {
+            return null;
+        }
+        return partnerRepository.findById(partnerId)
+                .orElseThrow(() -> new NotFoundException("Đối tác không tồn tại."));
+    }
+
     private Specification<Product> buildSpecification(String keywordLike, ProductStatus status) {
         return (root, query, cb) -> {
             // Eager join để tránh N+1 khi map sang DTO
             if (query != null && !query.getResultType().equals(Long.class)) {
-                root.fetch("category", jakarta.persistence.criteria.JoinType.LEFT);
-                root.fetch("partner", jakarta.persistence.criteria.JoinType.LEFT);
+                root.fetch("category", JoinType.LEFT);
+                root.fetch("partner", JoinType.LEFT);
             }
 
             List<Predicate> predicates = new ArrayList<>();
@@ -65,6 +145,13 @@ public class ProductServiceImpl implements ProductService {
                     ? cb.conjunction()
                     : cb.and(predicates.toArray(Predicate[]::new));
         };
+    }
+
+    private String normalizeOptional(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim();
     }
 
     private String normalizeKeyword(String keyword) {

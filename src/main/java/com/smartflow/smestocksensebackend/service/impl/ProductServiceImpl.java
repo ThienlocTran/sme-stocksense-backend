@@ -35,6 +35,10 @@ public class ProductServiceImpl implements ProductService {
     private final CategoryRepository categoryRepository;
     private final PartnerRepository partnerRepository;
 
+    /**
+     * Lấy danh sách sản phẩm có hỗ trợ tìm kiếm theo tên/SKU và lọc theo trạng thái.
+     * Sử dụng JOIN FETCH thông qua Specification để tránh N+1 query với category và partner.
+     */
     @Override
     @Transactional(readOnly = true)
     public ProductPageResponse listProducts(String keyword, String status, Pageable pageable) {
@@ -118,6 +122,7 @@ public class ProductServiceImpl implements ProductService {
 
     private Specification<Product> buildSpecification(String keywordLike, ProductStatus status) {
         return (root, query, cb) -> {
+            // Eager join để tránh N+1 khi map sang DTO
             if (query != null && !query.getResultType().equals(Long.class)) {
                 root.fetch("category", JoinType.LEFT);
                 root.fetch("partner", JoinType.LEFT);
@@ -131,6 +136,7 @@ public class ProductServiceImpl implements ProductService {
                         cb.like(cb.lower(root.get("sku")), keywordLike)
                 ));
             }
+
             if (status != null) {
                 predicates.add(cb.equal(root.get("status"), status));
             }

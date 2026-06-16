@@ -2,6 +2,7 @@ package com.smartflow.smestocksensebackend.service.impl;
 
 import com.smartflow.smestocksensebackend.dto.request.CreatePartnerRequest;
 import com.smartflow.smestocksensebackend.dto.request.UpdatePartnerRequest;
+import com.smartflow.smestocksensebackend.dto.response.PartnerDropdownResponse;
 import com.smartflow.smestocksensebackend.dto.response.PartnerResponse;
 import com.smartflow.smestocksensebackend.entity.Partner;
 import com.smartflow.smestocksensebackend.entity.PartnerStatus;
@@ -213,5 +214,15 @@ public class PartnerServiceImpl implements PartnerService {
                     ? criteriaBuilder.conjunction()
                     : criteriaBuilder.and(predicates.toArray(new Predicate[0]));
         };
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<PartnerDropdownResponse> getActiveSuppliers() {
+        return partnerRepository
+                .findByTypeAndStatusOrderByNameAsc(PartnerType.NHA_CUNG_CAP, PartnerStatus.HOAT_DONG)
+                .stream()
+                .map(PartnerDropdownResponse::from)
+                .toList();
     }
 }

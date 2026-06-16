@@ -1,5 +1,6 @@
 package com.smartflow.smestocksensebackend.service;
 
+import com.smartflow.smestocksensebackend.dto.category.CategoryDropdownResponse;
 import com.smartflow.smestocksensebackend.dto.category.CreateCategoryRequest;
 import com.smartflow.smestocksensebackend.dto.category.CategoryListItemResponse;
 import com.smartflow.smestocksensebackend.dto.category.CategoryPageResponse;
@@ -33,6 +34,14 @@ public class CategoryService {
     private static final String CATEGORY_CODE_UNIQUE_CONSTRAINT = "danh_muc_ma_danh_muc_key";
 
     private final CategoryRepository categoryRepository;
+
+    @Transactional(readOnly = true)
+    public List<CategoryDropdownResponse> getActiveCategories() {
+        return categoryRepository.findByStatusOrderByNameAsc(CategoryStatus.HOAT_DONG)
+                .stream()
+                .map(CategoryDropdownResponse::from)
+                .toList();
+    }
 
     @Transactional
     public CategoryListItemResponse disableCategory(Long id) {

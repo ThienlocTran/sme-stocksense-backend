@@ -1,5 +1,6 @@
 package com.smartflow.smestocksensebackend.controller;
 
+import com.smartflow.smestocksensebackend.dto.category.CategoryDropdownResponse;
 import com.smartflow.smestocksensebackend.dto.category.CategoryListItemResponse;
 import com.smartflow.smestocksensebackend.dto.category.CategoryPageResponse;
 import com.smartflow.smestocksensebackend.dto.category.CreateCategoryRequest;
@@ -18,6 +19,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/categories")
@@ -46,6 +49,11 @@ public class CategoryController {
     @PatchMapping("/{id}/disable")
     public CategoryListItemResponse disableCategory(@PathVariable Long id) {
         return categoryService.disableCategory(id);
+    }
+
+    @GetMapping("/dropdown")
+    public List<CategoryDropdownResponse> getCategoryDropdown() {
+        return categoryService.getActiveCategories();
     }
 
     @GetMapping

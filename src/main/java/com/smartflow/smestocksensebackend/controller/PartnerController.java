@@ -2,6 +2,7 @@ package com.smartflow.smestocksensebackend.controller;
 
 import com.smartflow.smestocksensebackend.dto.request.CreatePartnerRequest;
 import com.smartflow.smestocksensebackend.dto.request.UpdatePartnerRequest;
+import com.smartflow.smestocksensebackend.dto.response.PartnerDropdownResponse;
 import com.smartflow.smestocksensebackend.dto.response.PartnerResponse;
 import com.smartflow.smestocksensebackend.service.PartnerService;
 import jakarta.validation.Valid;
@@ -38,6 +39,11 @@ public class PartnerController {
      * @param loaiDoiTac Loại đối tác lọc tùy chọn (NHA_CUNG_CAP, KHACH_HANG, CA_HAI)
      * @param trangThai  Trạng thái hoạt động lọc tùy chọn (HOAT_DONG, NGUNG_HOAT_DONG)
      */
+    @GetMapping("/dropdown/suppliers")
+    public List<PartnerDropdownResponse> getSupplierDropdown() {
+        return partnerService.getActiveSuppliers();
+    }
+
     @GetMapping
     public List<PartnerResponse> getPartners(
             @RequestParam(required = false) String keyword,

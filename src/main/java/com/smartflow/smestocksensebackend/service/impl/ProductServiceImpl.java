@@ -1,6 +1,7 @@
 package com.smartflow.smestocksensebackend.service.impl;
 
 import com.smartflow.smestocksensebackend.dto.product.ProductCreateRequest;
+import com.smartflow.smestocksensebackend.dto.product.ProductDetailResponse;
 import com.smartflow.smestocksensebackend.dto.product.ProductListItemResponse;
 import com.smartflow.smestocksensebackend.dto.product.ProductPageResponse;
 import com.smartflow.smestocksensebackend.dto.product.ProductUpdateRequest;
@@ -43,15 +44,29 @@ public class ProductServiceImpl implements ProductService {
      */
     @Override
     @Transactional(readOnly = true)
-    public ProductPageResponse listProducts(String keyword, String status, Pageable pageable) {
+    public ProductPageResponse listProducts(String keyword, Long categoryId, String status, Pageable pageable) {
         ProductStatus parsedStatus = parseStatus(status);
         String keywordLike = normalizeKeyword(keyword);
 
         return ProductPageResponse.from(
                 productRepository
-                        .findAll(buildSpecification(keywordLike, parsedStatus), pageable)
+                        .findAll(buildSpecification(keywordLike, categoryId, parsedStatus), pageable)
                         .map(ProductListItemResponse::from)
         );
+    }
+
+    /**
+     * Tạo mới sản phẩm:
+     * - Validate trùng code, SKU, barcode.
+     * - Resolve Category và Partner theo ID (nullable).
+     * - Set mặc định status = HOAT_DONG.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public ProductDetailResponse getProductById(Long id) {
+        Product product = productRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException("Sản phẩm không tồn tại."));
+        return ProductDetailResponse.from(product);
     }
 
     /**
@@ -75,6 +90,9 @@ public class ProductServiceImpl implements ProductService {
         product.setCategory(resolveCategory(request.categoryId()));
         product.setPartner(resolvePartner(request.partnerId()));
         product.setStatus(ProductStatus.HOAT_DONG);
+        if (request.minStock() != null) {
+            product.setMinStock(request.minStock());
+        }
 
         return ProductListItemResponse.from(productRepository.saveAndFlush(product));
     }
@@ -103,6 +121,9 @@ public class ProductServiceImpl implements ProductService {
         product.setCategory(resolveCategory(request.categoryId()));
         product.setPartner(resolvePartner(request.partnerId()));
         product.setStatus(parseStatusStrict(request.status()));
+        if (request.minStock() != null) {
+            product.setMinStock(request.minStock());
+        }
 
         return ProductListItemResponse.from(productRepository.saveAndFlush(product));
     }
@@ -178,7 +199,7 @@ public class ProductServiceImpl implements ProductService {
                 .orElseThrow(() -> new NotFoundException("Đối tác không tồn tại."));
     }
 
-    private Specification<Product> buildSpecification(String keywordLike, ProductStatus status) {
+    private Specification<Product> buildSpecification(String keywordLike, Long categoryId, ProductStatus status) {
         return (root, query, cb) -> {
             if (query != null && !query.getResultType().equals(Long.class)) {
                 root.fetch("category", JoinType.LEFT);
@@ -190,8 +211,12 @@ public class ProductServiceImpl implements ProductService {
             if (keywordLike != null) {
                 predicates.add(cb.or(
                         cb.like(cb.lower(root.get("name")), keywordLike),
-                        cb.like(cb.lower(root.get("sku")), keywordLike)
+                        cb.like(cb.lower(root.get("sku")), keywordLike),
+                        cb.like(cb.lower(root.get("code")), keywordLike)
                 ));
+            }
+            if (categoryId != null) {
+                predicates.add(cb.equal(root.get("category").get("id"), categoryId));
             }
             if (status != null) {
                 predicates.add(cb.equal(root.get("status"), status));
@@ -226,16 +251,12 @@ public class ProductServiceImpl implements ProductService {
         };
     }
 
-    /** Dùng cho list/filter — trả về null nếu không truyền status. */
+    /** Dùng cho list/filter — trả về null nếu không truyền status. Chấp nhận cả ACTIVE/INACTIVE và HOAT_DONG/NGUNG_HOAT_DONG. */
     private ProductStatus parseStatus(String status) {
         if (status == null || status.isBlank()) {
             return null;
         }
-        try {
-            return ProductStatus.valueOf(status.trim().toUpperCase());
-        } catch (IllegalArgumentException e) {
-            throw new BadRequestException("status không hợp lệ. Chỉ nhận HOAT_DONG hoặc NGUNG_HOAT_DONG.");
-        }
+        return resolveProductStatus(status);
     }
 
     /** Dùng cho update — bắt buộc phải có giá trị hợp lệ. */

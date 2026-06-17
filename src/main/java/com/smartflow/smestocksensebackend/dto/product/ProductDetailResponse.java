@@ -4,31 +4,39 @@ import com.smartflow.smestocksensebackend.entity.Product;
 
 import java.math.BigDecimal;
 
-public record ProductListItemResponse(
+/**
+ * Chi tiết sản phẩm phục vụ form sửa: trả về categoryId/partnerId (id) thay vì tên,
+ * để frontend bind đúng v-model của dropdown.
+ */
+public record ProductDetailResponse(
         Long id,
         String code,
         String name,
         String sku,
         String barcode,
         String unit,
-        Integer minStock,
         BigDecimal price,
+        Integer minStock,
+        Long categoryId,
         String categoryName,
+        Long partnerId,
         String partnerName,
         String status
 ) {
 
-    public static ProductListItemResponse from(Product product) {
-        return new ProductListItemResponse(
+    public static ProductDetailResponse from(Product product) {
+        return new ProductDetailResponse(
                 product.getId(),
                 product.getCode(),
                 product.getName(),
                 product.getSku(),
                 product.getBarcode(),
                 product.getUnit(),
-                product.getMinStock(),
                 product.getPrice(),
+                product.getMinStock(),
+                product.getCategory() != null ? product.getCategory().getId() : null,
                 product.getCategory() != null ? product.getCategory().getName() : null,
+                product.getPartner() != null ? product.getPartner().getId() : null,
                 product.getPartner() != null ? product.getPartner().getName() : null,
                 product.getStatus().name()
         );

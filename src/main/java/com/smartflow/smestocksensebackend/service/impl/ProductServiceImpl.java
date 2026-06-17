@@ -29,6 +29,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import static com.smartflow.smestocksensebackend.dto.product.ProductListItemResponse.from;
+
 @Service
 @RequiredArgsConstructor
 public class ProductServiceImpl implements ProductService {
@@ -76,7 +78,7 @@ public class ProductServiceImpl implements ProductService {
         product.setPartner(resolvePartner(request.partnerId()));
         product.setStatus(ProductStatus.HOAT_DONG);
 
-        return ProductListItemResponse.from(productRepository.saveAndFlush(product));
+        return from(productRepository.saveAndFlush(product));
     }
 
     /**
@@ -104,7 +106,7 @@ public class ProductServiceImpl implements ProductService {
         product.setPartner(resolvePartner(request.partnerId()));
         product.setStatus(parseStatusStrict(request.status()));
 
-        return ProductListItemResponse.from(productRepository.saveAndFlush(product));
+        return from(productRepository.saveAndFlush(product));
     }
 
     @Override
@@ -115,7 +117,7 @@ public class ProductServiceImpl implements ProductService {
 
         product.setStatus(resolveProductStatus(request.trangThai()));
 
-        return ProductListItemResponse.from(productRepository.saveAndFlush(product));
+        return from(productRepository.saveAndFlush(product));
     }
 
     // -------------------------------------------------------------------------

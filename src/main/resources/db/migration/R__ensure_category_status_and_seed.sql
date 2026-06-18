@@ -1,19 +1,20 @@
-DO $$
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'trang_thai_danh_muc') THEN
-        CREATE TYPE "trang_thai_danh_muc" AS ENUM ('HOAT_DONG', 'NGUNG_HOAT_DONG');
-    END IF;
-END $$;
+-- 1. Xóa dữ liệu cũ của các user này để đảm bảo không trùng lặp email
+DELETE FROM nhan_vien
+WHERE email IN (
+                'admin@example.com',
+                'tranthienloc21102005@gmail.com',
+                'tranthienloc.nina@gmail.com',
+                'thienloct.it@gmail.com'
+    );
 
-ALTER TABLE "danh_muc"
-    ADD COLUMN IF NOT EXISTS "trang_thai" trang_thai_danh_muc NOT NULL DEFAULT 'HOAT_DONG';
-
-INSERT INTO "danh_muc" ("ma_danh_muc", "ten_danh_muc", "mo_ta", "trang_thai", "ngay_tao", "ngay_cap_nhat")
+-- 2. Insert lại toàn bộ dữ liệu mới (chắc chắn không bị trùng vì đã xóa ở bước 1)
+INSERT INTO nhan_vien (email, ho_ten, mat_khau, trang_thai, vai_tro_id)
 VALUES
-    ('DM001', 'Nguyên liệu', 'Nhóm nguyên liệu sản xuất.', 'HOAT_DONG'::trang_thai_danh_muc, now(), now()),
-    ('DM002', 'Thành phẩm', 'Nhóm sản phẩm hoàn thiện.', 'HOAT_DONG'::trang_thai_danh_muc, now(), now()),
-    ('DM003', 'Phụ kiện', 'Nhóm phụ kiện đi kèm.', 'HOAT_DONG'::trang_thai_danh_muc, now(), now())
-ON CONFLICT ("ma_danh_muc") DO UPDATE
-SET "ten_danh_muc" = EXCLUDED."ten_danh_muc",
-    "mo_ta" = EXCLUDED."mo_ta",
-    "ngay_cap_nhat" = now();
+    ('admin@example.com', 'Admin Test', '$2a$10$PJ/YxavevUizEHQ3VAST2.HYuQ.TuBf3lcIm03NQEQYtXbBIUBjrC', 'HOAT_DONG', 1),
+    ('tranthienloc21102005@gmail.com', 'Tran Thien Loc', '$2a$10$PJ/YxavevUizEHQ3VAST2.HYuQ.TuBf3lcIm03NQEQYtXbBIUBjrC', 'HOAT_DONG', 1),
+    ('tranthienloc.nina@gmail.com', 'Tran Thien Loc Nina', '$2a$10$PJ/YxavevUizEHQ3VAST2.HYuQ.TuBf3lcIm03NQEQYtXbBIUBjrC', 'HOAT_DONG', 1),
+    ('thienloct.it@gmail.com', 'Thien Loc IT', '$2a$10$PJ/YxavevUizEHQ3VAST2.HYuQ.TuBf3lcIm03NQEQYtXbBIUBjrC', 'HOAT_DONG', 1);
+
+UPDATE nhan_vien
+SET mat_khau = '$2a$10$iAbkC447zy2AIGQlWtabiuDrgdg7ydHaXHg5wr7hLhcuPv4uC9yce'
+WHERE email = 'admin@example.com';

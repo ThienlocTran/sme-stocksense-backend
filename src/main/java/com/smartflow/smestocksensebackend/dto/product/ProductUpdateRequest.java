@@ -29,6 +29,9 @@ public record ProductUpdateRequest(
         Long partnerId,
 
         @NotBlank(message = "Trạng thái không được để trống.")
-        String status
+        String status,
+
+        @Min(value = 0, message = "Ngưỡng tồn phải lớn hơn hoặc bằng 0.")
+        Integer minStock
 ) {
 }

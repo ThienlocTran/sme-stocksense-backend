@@ -26,6 +26,9 @@ public record ProductCreateRequest(
 
         Long categoryId,
 
-        Long partnerId
+        Long partnerId,
+
+        @Min(value = 0, message = "Ngưỡng tồn phải lớn hơn hoặc bằng 0.")
+        Integer minStock
 ) {
 }

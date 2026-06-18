@@ -39,9 +39,10 @@ public class SecurityConfig {
                 .filter(origin -> !origin.isBlank())
                 .toList());
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept"));
+        configuration.setAllowedHeaders(List.of("*"));  // Mở toàn bộ headers để pass Preflight
         configuration.setExposedHeaders(List.of("Authorization"));
-        configuration.setAllowCredentials(false);
+        configuration.setAllowCredentials(true);
+        configuration.setMaxAge(3600L); // Cache Preflight 1 giờ, giảm tải OPTIONS request
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
@@ -73,6 +74,8 @@ public class SecurityConfig {
                         ))
                 )
                 .authorizeHttpRequests(authorize -> authorize
+                        // Luôn permit toàn bộ OPTIONS preflight để CORS không bị chặn
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
                         .requestMatchers(HttpMethod.PATCH, "/api/auth/change-password").authenticated()
                         .requestMatchers(HttpMethod.POST, "/api/employees").hasRole("ADMIN")
@@ -104,3 +107,4 @@ public class SecurityConfig {
         response.getWriter().write("{\"message\":\"" + message + "\",\"errors\":{}}");
     }
 }
+

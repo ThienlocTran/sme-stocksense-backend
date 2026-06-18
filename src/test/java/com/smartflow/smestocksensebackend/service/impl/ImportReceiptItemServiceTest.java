@@ -2,6 +2,7 @@ package com.smartflow.smestocksensebackend.service.impl;
 
 import com.smartflow.smestocksensebackend.dto.inbound.AddImportReceiptItemRequest;
 import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptItemResponse;
+import com.smartflow.smestocksensebackend.domain.inbound.ImportReceiptAmountCalculator;
 import com.smartflow.smestocksensebackend.domain.inbound.ImportReceiptItemValidator;
 import com.smartflow.smestocksensebackend.entity.Employee;
 import com.smartflow.smestocksensebackend.entity.EmployeeStatus;
@@ -67,6 +68,7 @@ class ImportReceiptItemServiceTest {
     private ImportReceiptCodeGenerator codeGenerator;
 
     private ImportReceiptServiceImpl importReceiptService;
+    private ImportReceiptAmountCalculator amountCalculator;
     private ImportReceiptItemValidator itemValidator;
     private Employee owner;
     private ImportReceipt receipt;
@@ -75,13 +77,15 @@ class ImportReceiptItemServiceTest {
     @BeforeEach
     void setUp() {
         itemValidator = new ImportReceiptItemValidator(productRepository, importReceiptDetailRepository);
+        amountCalculator = new ImportReceiptAmountCalculator(importReceiptDetailRepository);
         importReceiptService = new ImportReceiptServiceImpl(
                 importReceiptRepository,
                 importReceiptDetailRepository,
                 warehouseRepository,
                 partnerRepository,
                 codeGenerator,
-                itemValidator
+                itemValidator,
+                amountCalculator
         );
         owner = employee(5L, RoleCode.EMPLOYEE);
         receipt = receipt(123L, owner, ImportReceiptStatus.NHAP);
@@ -104,6 +108,8 @@ class ImportReceiptItemServiceTest {
             detail.setId(1001L);
             return detail;
         });
+        when(importReceiptDetailRepository.sumLineTotalByReceiptId(123L)).thenReturn(new BigDecimal("1250000"));
+        when(importReceiptRepository.saveAndFlush(receipt)).thenReturn(receipt);
 
         ImportReceiptItemResponse response = importReceiptService.addItem(
                 123L,
@@ -137,6 +143,8 @@ class ImportReceiptItemServiceTest {
         when(productRepository.findById(25L)).thenReturn(Optional.of(product));
         when(importReceiptDetailRepository.existsByDocumentIdAndProductId(123L, 25L)).thenReturn(false);
         when(importReceiptDetailRepository.saveAndFlush(any(ImportReceiptDetail.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(importReceiptDetailRepository.sumLineTotalByReceiptId(123L)).thenReturn(new BigDecimal("58.50"));
+        when(importReceiptRepository.saveAndFlush(receipt)).thenReturn(receipt);
 
         ImportReceiptItemResponse response = importReceiptService.addItem(
                 123L,
@@ -239,18 +247,20 @@ class ImportReceiptItemServiceTest {
     }
 
     @Test
-    void addItem_shouldNotUpdateReceiptTotalOrStatus() {
+    void addItem_shouldUpdateReceiptTotalWithoutChangingStatus() {
         receipt.setTotalAmount(BigDecimal.ZERO);
         when(importReceiptRepository.findById(123L)).thenReturn(Optional.of(receipt));
         when(productRepository.findById(25L)).thenReturn(Optional.of(product));
         when(importReceiptDetailRepository.existsByDocumentIdAndProductId(123L, 25L)).thenReturn(false);
         when(importReceiptDetailRepository.saveAndFlush(any(ImportReceiptDetail.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(importReceiptDetailRepository.sumLineTotalByReceiptId(123L)).thenReturn(new BigDecimal("1250000"));
+        when(importReceiptRepository.saveAndFlush(receipt)).thenReturn(receipt);
 
         importReceiptService.addItem(123L, validRequest());
 
         assertEquals(ImportReceiptStatus.NHAP, receipt.getStatus());
-        assertEquals(BigDecimal.ZERO, receipt.getTotalAmount());
-        verify(importReceiptRepository, never()).saveAndFlush(any());
+        assertEquals(new BigDecimal("1250000"), receipt.getTotalAmount());
+        verify(importReceiptRepository).saveAndFlush(receipt);
     }
 
     private AddImportReceiptItemRequest validRequest() {

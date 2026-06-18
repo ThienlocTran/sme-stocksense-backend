@@ -1,5 +1,6 @@
 package com.smartflow.smestocksensebackend.service.impl;
 
+import com.smartflow.smestocksensebackend.domain.inbound.ImportReceiptAmountCalculator;
 import com.smartflow.smestocksensebackend.dto.inbound.CreateImportReceiptRequest;
 import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptResponse;
 import com.smartflow.smestocksensebackend.entity.Employee;
@@ -64,6 +65,9 @@ class ImportReceiptServiceImplTest {
 
     @Mock
     private ImportReceiptCodeGenerator codeGenerator;
+
+    @Mock
+    private ImportReceiptAmountCalculator amountCalculator;
 
     @InjectMocks
     private ImportReceiptServiceImpl importReceiptService;

@@ -1,6 +1,7 @@
 package com.smartflow.smestocksensebackend.service.impl;
 
 import com.smartflow.smestocksensebackend.dto.inbound.AddImportReceiptItemRequest;
+import com.smartflow.smestocksensebackend.domain.inbound.ImportReceiptAmountCalculator;
 import com.smartflow.smestocksensebackend.domain.inbound.ImportReceiptItemValidator;
 import com.smartflow.smestocksensebackend.dto.inbound.CreateImportReceiptRequest;
 import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptItemResponse;
@@ -30,6 +31,7 @@ import com.smartflow.smestocksensebackend.service.ImportReceiptCodeGenerator;
 import com.smartflow.smestocksensebackend.service.ImportReceiptService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -51,6 +53,7 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
     private final PartnerRepository partnerRepository;
     private final ImportReceiptCodeGenerator codeGenerator;
     private final ImportReceiptItemValidator itemValidator;
+    private final ImportReceiptAmountCalculator amountCalculator;
 
     @Override
     @Transactional
@@ -126,16 +129,21 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
         detail.setProduct(product);
         detail.setExpectedQuantity(request.quantity());
         detail.setExpectedUnitPrice(request.unitPrice());
-        detail.setExpectedLineTotal(request.unitPrice().multiply(BigDecimal.valueOf(request.quantity())));
+        detail.setExpectedLineTotal(amountCalculator.calculateLineTotal(request.quantity(), request.unitPrice()));
         detail.setNote(normalizeOptional(request.note()));
 
         try {
-            return ImportReceiptItemResponse.from(importReceiptDetailRepository.saveAndFlush(detail));
+            ImportReceiptDetail savedDetail = importReceiptDetailRepository.saveAndFlush(detail);
+            receipt.setTotalAmount(amountCalculator.calculateReceiptTotal(receiptId));
+            importReceiptRepository.saveAndFlush(receipt);
+            return ImportReceiptItemResponse.from(savedDetail);
         } catch (DataIntegrityViolationException exception) {
             if (isDuplicateImportReceiptDetailException(exception)) {
                 throw itemValidator.duplicateProductException();
             }
             throw exception;
+        } catch (OptimisticLockingFailureException exception) {
+            throw new ConflictException("Phieu nhap da duoc cap nhat boi request khac.");
         }
     }
 

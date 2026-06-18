@@ -3,6 +3,7 @@ package com.smartflow.smestocksensebackend.service.impl;
 import com.smartflow.smestocksensebackend.dto.inbound.AddImportReceiptItemRequest;
 import com.smartflow.smestocksensebackend.domain.inbound.ImportReceiptAmountCalculator;
 import com.smartflow.smestocksensebackend.domain.inbound.ImportReceiptItemValidator;
+import com.smartflow.smestocksensebackend.domain.inbound.ImportReceiptStatePolicy;
 import com.smartflow.smestocksensebackend.dto.inbound.CreateImportReceiptRequest;
 import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptDraftResponse;
 import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptItemResponse;
@@ -157,6 +158,20 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
     @Override
     @Transactional
     public ImportReceiptDraftResponse saveDraft(Long receiptId, SaveImportReceiptDraftRequest request) {
+        return updateReceipt(receiptId, request, false);
+    }
+
+    @Override
+    @Transactional
+    public ImportReceiptDraftResponse updateEditable(Long receiptId, SaveImportReceiptDraftRequest request) {
+        return updateReceipt(receiptId, request, true);
+    }
+
+    private ImportReceiptDraftResponse updateReceipt(
+            Long receiptId,
+            SaveImportReceiptDraftRequest request,
+            boolean allowRejected
+    ) {
         Employee actor = currentEmployee();
         if (actor.getStatus() != EmployeeStatus.HOAT_DONG) {
             throw new AccountInactiveException();
@@ -165,8 +180,13 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
         ImportReceipt receipt = importReceiptRepository.findById(receiptId)
                 .orElseThrow(() -> new NotFoundException("Phieu nhap khong ton tai."));
         ensureCanSaveDraft(actor, receipt);
-        if (receipt.getStatus() != ImportReceiptStatus.NHAP) {
-            throw new ConflictException("Chi duoc luu phieu nhap o trang thai NHAP.");
+        boolean canEdit = allowRejected
+                ? ImportReceiptStatePolicy.isEditable(receipt.getStatus())
+                : receipt.getStatus() == ImportReceiptStatus.NHAP;
+        if (!canEdit) {
+            throw new ConflictException(allowRejected
+                    ? "Chi duoc sua phieu nhap o trang thai NHAP hoac TU_CHOI."
+                    : "Chi duoc luu phieu nhap o trang thai NHAP.");
         }
 
         Warehouse warehouse = validateWarehouse(request.warehouseId());

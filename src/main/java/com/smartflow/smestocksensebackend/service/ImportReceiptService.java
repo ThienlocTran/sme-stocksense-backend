@@ -14,4 +14,6 @@ public interface ImportReceiptService {
     ImportReceiptItemResponse addItem(Long receiptId, AddImportReceiptItemRequest request);
 
     ImportReceiptDraftResponse saveDraft(Long receiptId, SaveImportReceiptDraftRequest request);
+
+    ImportReceiptDraftResponse updateEditable(Long receiptId, SaveImportReceiptDraftRequest request);
 }

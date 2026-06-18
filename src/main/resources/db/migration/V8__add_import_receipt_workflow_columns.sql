@@ -17,6 +17,10 @@ ALTER TABLE "chi_tiet_phieu_nhap"
 ALTER TABLE "phieu_nhap_kho"
     ALTER COLUMN "trang_thai" SET DEFAULT 'NHAP';
 
+UPDATE "phieu_nhap_kho"
+SET "trang_thai" = 'CHO_HANG_VE'
+WHERE "trang_thai" = 'DA_DUYET';
+
 ALTER TABLE "phieu_nhap_kho"
     ADD CONSTRAINT "chk_phieu_nhap_trang_thai_t75"
         CHECK ("trang_thai"::text IN (

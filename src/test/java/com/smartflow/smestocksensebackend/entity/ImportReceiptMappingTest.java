@@ -5,6 +5,8 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Version;
 import org.junit.jupiter.api.Test;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.lang.reflect.Field;
 import java.util.Arrays;
@@ -38,10 +40,13 @@ class ImportReceiptMappingTest {
         Field status = ImportReceipt.class.getDeclaredField("status");
 
         Enumerated enumerated = status.getAnnotation(Enumerated.class);
+        JdbcTypeCode jdbcTypeCode = status.getAnnotation(JdbcTypeCode.class);
         Column column = status.getAnnotation(Column.class);
 
         assertNotNull(enumerated);
         assertEquals(EnumType.STRING, enumerated.value());
+        assertNotNull(jdbcTypeCode);
+        assertEquals(SqlTypes.NAMED_ENUM, jdbcTypeCode.value());
         assertNotNull(column);
         assertEquals("trang_thai", column.name());
         assertEquals("trang_thai_chung_tu_kho", column.columnDefinition());

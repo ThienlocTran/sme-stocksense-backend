@@ -31,6 +31,17 @@ class ImportReceiptMigrationTest {
     }
 
     @Test
+    void migration_shouldBackfillApprovedLegacyImportReceiptsToWaitingForGoods() throws IOException {
+        String v1 = Files.readString(MIGRATION_DIR.resolve("V1__init_schema.sql"));
+        String v8 = Files.readString(MIGRATION_DIR.resolve("V8__add_import_receipt_workflow_columns.sql"));
+
+        assertTrue(v1.contains("'DA_DUYET'"));
+        assertTrue(v8.contains("UPDATE \"phieu_nhap_kho\""));
+        assertTrue(v8.contains("SET \"trang_thai\" = 'CHO_HANG_VE'"));
+        assertTrue(v8.contains("WHERE \"trang_thai\" = 'DA_DUYET'"));
+    }
+
+    @Test
     void migration_shouldDeclareExpectedConstraintsAndIndexes() throws IOException {
         String v8 = Files.readString(MIGRATION_DIR.resolve("V8__add_import_receipt_workflow_columns.sql"));
 

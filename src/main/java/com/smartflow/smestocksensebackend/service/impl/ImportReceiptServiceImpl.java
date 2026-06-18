@@ -3,6 +3,7 @@ package com.smartflow.smestocksensebackend.service.impl;
 import com.smartflow.smestocksensebackend.dto.inbound.AddImportReceiptItemRequest;
 import com.smartflow.smestocksensebackend.domain.inbound.ImportReceiptAmountCalculator;
 import com.smartflow.smestocksensebackend.domain.inbound.ImportReceiptItemValidator;
+import com.smartflow.smestocksensebackend.domain.inbound.ImportReceiptStatePolicy;
 import com.smartflow.smestocksensebackend.dto.inbound.CreateImportReceiptRequest;
 import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptDraftResponse;
 import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptItemResponse;
@@ -165,8 +166,8 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
         ImportReceipt receipt = importReceiptRepository.findById(receiptId)
                 .orElseThrow(() -> new NotFoundException("Phieu nhap khong ton tai."));
         ensureCanSaveDraft(actor, receipt);
-        if (receipt.getStatus() != ImportReceiptStatus.NHAP) {
-            throw new ConflictException("Chi duoc luu phieu nhap o trang thai NHAP.");
+        if (!ImportReceiptStatePolicy.isEditable(receipt.getStatus())) {
+            throw new ConflictException("Chi duoc luu phieu nhap o trang thai NHAP hoac TU_CHOI.");
         }
 
         Warehouse warehouse = validateWarehouse(request.warehouseId());

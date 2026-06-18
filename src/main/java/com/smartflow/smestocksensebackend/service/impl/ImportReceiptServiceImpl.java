@@ -7,7 +7,9 @@ import com.smartflow.smestocksensebackend.domain.inbound.ImportReceiptStatePolic
 import com.smartflow.smestocksensebackend.dto.inbound.CreateImportReceiptRequest;
 import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptDraftResponse;
 import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptItemResponse;
+import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptPageResponse;
 import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptResponse;
+import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptSummaryResponse;
 import com.smartflow.smestocksensebackend.dto.inbound.SaveImportReceiptDraftItemRequest;
 import com.smartflow.smestocksensebackend.dto.inbound.SaveImportReceiptDraftRequest;
 import com.smartflow.smestocksensebackend.entity.Employee;
@@ -36,6 +38,7 @@ import com.smartflow.smestocksensebackend.service.ImportReceiptService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -239,6 +242,27 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
         }
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public ImportReceiptPageResponse listMyReceipts(String status, Pageable pageable) {
+        Employee actor = currentEmployee();
+        if (actor.getStatus() != EmployeeStatus.HOAT_DONG) {
+            throw new AccountInactiveException();
+        }
+        ensureCanListOwnReceipts(actor);
+
+        ImportReceiptStatus parsedStatus = parseStatus(status);
+        if (parsedStatus == null) {
+            return ImportReceiptPageResponse.from(importReceiptRepository
+                    .findByCreatedById(actor.getId(), pageable)
+                    .map(ImportReceiptSummaryResponse::from));
+        }
+
+        return ImportReceiptPageResponse.from(importReceiptRepository
+                .findByCreatedByIdAndStatus(actor.getId(), parsedStatus, pageable)
+                .map(ImportReceiptSummaryResponse::from));
+    }
+
     private ImportReceiptDraftResponse updateReceipt(
             Long receiptId,
             SaveImportReceiptDraftRequest request,
@@ -400,6 +424,24 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
 
     private void ensureCanSubmitForApproval(Employee actor, ImportReceipt receipt) {
         ensureCanModifyDraft(actor, receipt, "Khong co quyen gui duyet phieu nhap.");
+    }
+
+    private void ensureCanListOwnReceipts(Employee actor) {
+        RoleCode roleCode = actor.getRole() != null ? actor.getRole().getCode() : null;
+        if (roleCode != RoleCode.ADMIN && roleCode != RoleCode.EMPLOYEE) {
+            throw new MissingRoleException("Khong co quyen xem danh sach phieu nhap ca nhan.");
+        }
+    }
+
+    private ImportReceiptStatus parseStatus(String status) {
+        if (status == null || status.isBlank()) {
+            return null;
+        }
+        try {
+            return ImportReceiptStatus.valueOf(status.trim().toUpperCase());
+        } catch (IllegalArgumentException exception) {
+            throw new BadRequestException("status khong hop le.");
+        }
     }
 
     private void ensureCanModifyDraft(Employee actor, ImportReceipt receipt, String missingRoleMessage) {

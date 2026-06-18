@@ -45,6 +45,10 @@ public class ImportReceiptItemValidator {
         return product;
     }
 
+    public Product validateForDraftSave(AddImportReceiptItemRequest request) {
+        return validateProductAndSimpleRules(request);
+    }
+
     public Product validateForUpdate(Long receiptId, Long detailId, AddImportReceiptItemRequest request) {
         Product product = validateProductAndSimpleRules(request);
         if (importReceiptDetailRepository.existsByDocumentIdAndProductIdAndIdNot(

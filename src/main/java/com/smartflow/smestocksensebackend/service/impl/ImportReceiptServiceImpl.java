@@ -195,6 +195,50 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
         }
     }
 
+    @Override
+    @Transactional
+    public ImportReceiptDraftResponse submitForApproval(Long receiptId) {
+        Employee actor = currentEmployee();
+        if (actor.getStatus() != EmployeeStatus.HOAT_DONG) {
+            throw new AccountInactiveException();
+        }
+
+        ImportReceipt receipt = importReceiptRepository.findById(receiptId)
+                .orElseThrow(() -> new NotFoundException("Phieu nhap khong ton tai."));
+        ensureCanSubmitForApproval(actor, receipt);
+        if (!ImportReceiptStatePolicy.canTransition(receipt.getStatus(), ImportReceiptStatus.CHO_DUYET_CAP_1)) {
+            throw new ConflictException("Chi duoc gui duyet phieu nhap o trang thai NHAP.");
+        }
+
+        Warehouse receiptWarehouse = receipt.getWarehouse();
+        Partner receiptSupplier = receipt.getSupplier();
+        if (receiptWarehouse == null || receiptWarehouse.getId() == null) {
+            throw new NotFoundException("Kho hang khong ton tai.");
+        }
+        if (receiptSupplier == null || receiptSupplier.getId() == null) {
+            throw new NotFoundException("Nha cung cap khong ton tai.");
+        }
+        validateWarehouse(receiptWarehouse.getId());
+        validateSupplier(receiptSupplier.getId());
+        List<ImportReceiptDetail> details = importReceiptDetailRepository.findByDocumentId(receiptId);
+        if (details.isEmpty()) {
+            throw new ConflictException("Phieu nhap phai co it nhat mot san pham hop le de gui duyet.");
+        }
+
+        BigDecimal totalAmount = validateAndRecalculateDetails(details);
+
+        try {
+            receipt.setTotalAmount(totalAmount);
+            receipt.setStatus(ImportReceiptStatus.CHO_DUYET_CAP_1);
+            receipt.setSubmittedBy(actor);
+            receipt.setSubmittedAt(LocalDateTime.now());
+            ImportReceipt savedReceipt = importReceiptRepository.saveAndFlush(receipt);
+            return ImportReceiptDraftResponse.from(savedReceipt, details);
+        } catch (OptimisticLockingFailureException exception) {
+            throw new ConflictException("Phieu nhap da duoc cap nhat boi request khac.");
+        }
+    }
+
     private ImportReceiptDraftResponse updateReceipt(
             Long receiptId,
             SaveImportReceiptDraftRequest request,
@@ -298,6 +342,35 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
         return details;
     }
 
+    private BigDecimal validateAndRecalculateDetails(List<ImportReceiptDetail> details) {
+        Set<Long> productIds = new LinkedHashSet<>();
+        BigDecimal totalAmount = BigDecimal.ZERO;
+        for (ImportReceiptDetail detail : details) {
+            Product product = detail.getProduct();
+            if (product == null || product.getId() == null) {
+                throw new BadRequestException("San pham khong ton tai.");
+            }
+            AddImportReceiptItemRequest itemRequest = new AddImportReceiptItemRequest(
+                    product.getId(),
+                    detail.getExpectedQuantity(),
+                    detail.getExpectedUnitPrice(),
+                    detail.getNote()
+            );
+            itemValidator.validateForDraftSave(itemRequest);
+            if (!productIds.add(product.getId())) {
+                throw itemValidator.duplicateProductException();
+            }
+
+            BigDecimal lineTotal = amountCalculator.calculateLineTotal(
+                    detail.getExpectedQuantity(),
+                    detail.getExpectedUnitPrice()
+            );
+            detail.setExpectedLineTotal(lineTotal);
+            totalAmount = totalAmount.add(lineTotal);
+        }
+        return totalAmount;
+    }
+
     private Employee currentEmployee() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !(authentication.getPrincipal() instanceof Employee employee)) {
@@ -323,6 +396,10 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
 
     private void ensureCanCancelDraft(Employee actor, ImportReceipt receipt) {
         ensureCanModifyDraft(actor, receipt, "Khong co quyen huy phieu nhap.");
+    }
+
+    private void ensureCanSubmitForApproval(Employee actor, ImportReceipt receipt) {
+        ensureCanModifyDraft(actor, receipt, "Khong co quyen gui duyet phieu nhap.");
     }
 
     private void ensureCanModifyDraft(Employee actor, ImportReceipt receipt, String missingRoleMessage) {

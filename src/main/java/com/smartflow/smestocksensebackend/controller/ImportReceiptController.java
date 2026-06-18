@@ -60,4 +60,9 @@ public class ImportReceiptController {
     public ImportReceiptDraftResponse cancelDraft(@PathVariable Long receiptId) {
         return importReceiptService.cancelDraft(receiptId);
     }
+
+    @PutMapping("/{receiptId}/submit")
+    public ImportReceiptDraftResponse submitForApproval(@PathVariable Long receiptId) {
+        return importReceiptService.submitForApproval(receiptId);
+    }
 }

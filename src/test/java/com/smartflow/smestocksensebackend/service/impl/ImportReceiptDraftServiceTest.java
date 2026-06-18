@@ -198,6 +198,14 @@ class ImportReceiptDraftServiceTest {
     }
 
     @Test
+    void saveDraft_withRejectedReceipt_shouldThrowConflictBecauseDraftEndpointIsT80Only() {
+        receipt.setStatus(ImportReceiptStatus.TU_CHOI);
+        when(importReceiptRepository.findById(123L)).thenReturn(Optional.of(receipt));
+
+        assertThrows(ConflictException.class, () -> importReceiptService.saveDraft(123L, minimalRequest()));
+    }
+
+    @Test
     void saveDraft_withInvalidWarehouse_shouldThrow() {
         stubReceiptOnly();
         when(warehouseRepository.findById(1L)).thenReturn(Optional.empty());

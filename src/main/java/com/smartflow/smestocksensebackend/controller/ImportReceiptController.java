@@ -47,4 +47,12 @@ public class ImportReceiptController {
     ) {
         return importReceiptService.saveDraft(receiptId, request);
     }
+
+    @PutMapping("/{receiptId}")
+    public ImportReceiptDraftResponse updateEditable(
+            @PathVariable Long receiptId,
+            @Valid @RequestBody SaveImportReceiptDraftRequest request
+    ) {
+        return importReceiptService.updateEditable(receiptId, request);
+    }
 }

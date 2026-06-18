@@ -49,22 +49,10 @@ public class AuthService {
     public LoginResponse login(LoginRequest request) {
         String email = request.email().trim();
 
-        System.out.println("🔥 [DEBUG] ========================================");
-        System.out.println("🔥 [DEBUG] Email FE gửi: " + email);
-
         Employee employee = employeeRepository.findByEmailIgnoreCase(email)
                 .orElseThrow(() -> new InvalidCredentialsException());
 
-        // --- CODE CƯỠNG CHẾ FIX HASH ---
-        if ("123456".equals(request.password())) {
-            System.out.println("⚠️ [FIX] Cập nhật lại Hash cho 123456...");
-            employee.setPasswordHash(passwordEncoder.encode("123456"));
-            employeeRepository.save(employee);
-        }
-        // -------------------------------
-
         if (!passwordEncoder.matches(request.password(), employee.getPasswordHash())) {
-            System.out.println("❌ [DEBUG] Mật khẩu sai!");
             throw new InvalidCredentialsException();
         }
 

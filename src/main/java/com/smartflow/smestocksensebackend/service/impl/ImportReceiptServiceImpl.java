@@ -4,8 +4,11 @@ import com.smartflow.smestocksensebackend.dto.inbound.AddImportReceiptItemReques
 import com.smartflow.smestocksensebackend.domain.inbound.ImportReceiptAmountCalculator;
 import com.smartflow.smestocksensebackend.domain.inbound.ImportReceiptItemValidator;
 import com.smartflow.smestocksensebackend.dto.inbound.CreateImportReceiptRequest;
+import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptDraftResponse;
 import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptItemResponse;
 import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptResponse;
+import com.smartflow.smestocksensebackend.dto.inbound.SaveImportReceiptDraftItemRequest;
+import com.smartflow.smestocksensebackend.dto.inbound.SaveImportReceiptDraftRequest;
 import com.smartflow.smestocksensebackend.entity.Employee;
 import com.smartflow.smestocksensebackend.entity.EmployeeStatus;
 import com.smartflow.smestocksensebackend.entity.ImportReceipt;
@@ -39,6 +42,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -147,6 +154,102 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
         }
     }
 
+    @Override
+    @Transactional
+    public ImportReceiptDraftResponse saveDraft(Long receiptId, SaveImportReceiptDraftRequest request) {
+        Employee actor = currentEmployee();
+        if (actor.getStatus() != EmployeeStatus.HOAT_DONG) {
+            throw new AccountInactiveException();
+        }
+
+        ImportReceipt receipt = importReceiptRepository.findById(receiptId)
+                .orElseThrow(() -> new NotFoundException("Phieu nhap khong ton tai."));
+        ensureCanSaveDraft(actor, receipt);
+        if (receipt.getStatus() != ImportReceiptStatus.NHAP) {
+            throw new ConflictException("Chi duoc luu phieu nhap o trang thai NHAP.");
+        }
+
+        Warehouse warehouse = validateWarehouse(request.warehouseId());
+        Partner supplier = validateSupplier(request.supplierId());
+        List<ImportReceiptDetail> replacementDetails = request.items() != null
+                ? buildReplacementDetails(receipt, request.items())
+                : null;
+
+        try {
+            receipt.setWarehouse(warehouse);
+            receipt.setSupplier(supplier);
+            receipt.setNote(normalizeOptional(request.note()));
+
+            List<ImportReceiptDetail> responseDetails;
+            if (replacementDetails != null) {
+                importReceiptDetailRepository.deleteByDocumentId(receiptId);
+                responseDetails = importReceiptDetailRepository.saveAllAndFlush(replacementDetails);
+            } else {
+                responseDetails = importReceiptDetailRepository.findByDocumentId(receiptId);
+            }
+
+            receipt.setTotalAmount(amountCalculator.calculateReceiptTotal(receiptId));
+            ImportReceipt savedReceipt = importReceiptRepository.saveAndFlush(receipt);
+            return ImportReceiptDraftResponse.from(savedReceipt, responseDetails);
+        } catch (OptimisticLockingFailureException exception) {
+            throw new ConflictException("Phieu nhap da duoc cap nhat boi request khac.");
+        } catch (DataIntegrityViolationException exception) {
+            if (isDuplicateImportReceiptDetailException(exception)) {
+                throw itemValidator.duplicateProductException();
+            }
+            throw exception;
+        }
+    }
+
+    private Warehouse validateWarehouse(Long warehouseId) {
+        Warehouse warehouse = warehouseRepository.findById(warehouseId)
+                .orElseThrow(() -> new NotFoundException("Kho hang khong ton tai."));
+        if (warehouse.getStatus() != WarehouseStatus.HOAT_DONG) {
+            throw new BadRequestException("Kho hang khong hoat dong.");
+        }
+        return warehouse;
+    }
+
+    private Partner validateSupplier(Long supplierId) {
+        Partner supplier = partnerRepository.findById(supplierId)
+                .orElseThrow(() -> new NotFoundException("Nha cung cap khong ton tai."));
+        if (supplier.getStatus() != PartnerStatus.HOAT_DONG) {
+            throw new BadRequestException("Nha cung cap khong hoat dong.");
+        }
+        if (supplier.getType() != PartnerType.NHA_CUNG_CAP && supplier.getType() != PartnerType.CA_HAI) {
+            throw new BadRequestException("Doi tac khong phai nha cung cap.");
+        }
+        return supplier;
+    }
+
+    private List<ImportReceiptDetail> buildReplacementDetails(
+            ImportReceipt receipt,
+            List<SaveImportReceiptDraftItemRequest> items
+    ) {
+        Set<Long> productIds = new LinkedHashSet<>();
+        List<ImportReceiptDetail> details = new ArrayList<>();
+        for (SaveImportReceiptDraftItemRequest item : items) {
+            if (item == null) {
+                throw new BadRequestException("items khong hop le.");
+            }
+            AddImportReceiptItemRequest itemRequest = item.toAddItemRequest();
+            Product product = itemValidator.validateForDraftSave(itemRequest);
+            if (!productIds.add(item.productId())) {
+                throw itemValidator.duplicateProductException();
+            }
+
+            ImportReceiptDetail detail = new ImportReceiptDetail();
+            detail.setDocument(receipt);
+            detail.setProduct(product);
+            detail.setExpectedQuantity(item.quantity());
+            detail.setExpectedUnitPrice(item.unitPrice());
+            detail.setExpectedLineTotal(amountCalculator.calculateLineTotal(item.quantity(), item.unitPrice()));
+            detail.setNote(normalizeOptional(item.note()));
+            details.add(detail);
+        }
+        return details;
+    }
+
     private Employee currentEmployee() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !(authentication.getPrincipal() instanceof Employee employee)) {
@@ -163,12 +266,20 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
     }
 
     private void ensureCanAddItem(Employee actor, ImportReceipt receipt) {
+        ensureCanModifyDraft(actor, receipt, "Khong co quyen them san pham vao phieu nhap.");
+    }
+
+    private void ensureCanSaveDraft(Employee actor, ImportReceipt receipt) {
+        ensureCanModifyDraft(actor, receipt, "Khong co quyen luu phieu nhap.");
+    }
+
+    private void ensureCanModifyDraft(Employee actor, ImportReceipt receipt, String missingRoleMessage) {
         RoleCode roleCode = actor.getRole() != null ? actor.getRole().getCode() : null;
         if (roleCode == RoleCode.ADMIN) {
             return;
         }
         if (roleCode != RoleCode.EMPLOYEE) {
-            throw new MissingRoleException("Khong co quyen them san pham vao phieu nhap.");
+            throw new MissingRoleException(missingRoleMessage);
         }
 
         Employee creator = receipt.getCreatedBy();

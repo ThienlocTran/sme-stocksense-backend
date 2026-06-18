@@ -2,14 +2,17 @@ package com.smartflow.smestocksensebackend.controller;
 
 import com.smartflow.smestocksensebackend.dto.inbound.AddImportReceiptItemRequest;
 import com.smartflow.smestocksensebackend.dto.inbound.CreateImportReceiptRequest;
+import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptDraftResponse;
 import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptItemResponse;
 import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptResponse;
+import com.smartflow.smestocksensebackend.dto.inbound.SaveImportReceiptDraftRequest;
 import com.smartflow.smestocksensebackend.service.ImportReceiptService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -35,5 +38,13 @@ public class ImportReceiptController {
             @Valid @RequestBody AddImportReceiptItemRequest request
     ) {
         return importReceiptService.addItem(receiptId, request);
+    }
+
+    @PutMapping("/{receiptId}/draft")
+    public ImportReceiptDraftResponse saveDraft(
+            @PathVariable Long receiptId,
+            @Valid @RequestBody SaveImportReceiptDraftRequest request
+    ) {
+        return importReceiptService.saveDraft(receiptId, request);
     }
 }

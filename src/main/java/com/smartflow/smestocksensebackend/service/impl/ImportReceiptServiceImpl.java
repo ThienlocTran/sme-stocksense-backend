@@ -43,6 +43,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -165,6 +166,33 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
     @Transactional
     public ImportReceiptDraftResponse updateEditable(Long receiptId, SaveImportReceiptDraftRequest request) {
         return updateReceipt(receiptId, request, true);
+    }
+
+    @Override
+    @Transactional
+    public ImportReceiptDraftResponse cancelDraft(Long receiptId) {
+        Employee actor = currentEmployee();
+        if (actor.getStatus() != EmployeeStatus.HOAT_DONG) {
+            throw new AccountInactiveException();
+        }
+
+        ImportReceipt receipt = importReceiptRepository.findById(receiptId)
+                .orElseThrow(() -> new NotFoundException("Phieu nhap khong ton tai."));
+        ensureCanCancelDraft(actor, receipt);
+        if (receipt.getStatus() != ImportReceiptStatus.NHAP) {
+            throw new ConflictException("Chi duoc huy phieu nhap o trang thai NHAP.");
+        }
+
+        try {
+            receipt.setStatus(ImportReceiptStatus.HUY);
+            receipt.setCancelledBy(actor);
+            receipt.setCancelledAt(LocalDateTime.now());
+            ImportReceipt savedReceipt = importReceiptRepository.saveAndFlush(receipt);
+            List<ImportReceiptDetail> details = importReceiptDetailRepository.findByDocumentId(receiptId);
+            return ImportReceiptDraftResponse.from(savedReceipt, details);
+        } catch (OptimisticLockingFailureException exception) {
+            throw new ConflictException("Phieu nhap da duoc cap nhat boi request khac.");
+        }
     }
 
     private ImportReceiptDraftResponse updateReceipt(
@@ -291,6 +319,10 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
 
     private void ensureCanSaveDraft(Employee actor, ImportReceipt receipt) {
         ensureCanModifyDraft(actor, receipt, "Khong co quyen luu phieu nhap.");
+    }
+
+    private void ensureCanCancelDraft(Employee actor, ImportReceipt receipt) {
+        ensureCanModifyDraft(actor, receipt, "Khong co quyen huy phieu nhap.");
     }
 
     private void ensureCanModifyDraft(Employee actor, ImportReceipt receipt, String missingRoleMessage) {

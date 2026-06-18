@@ -9,6 +9,45 @@ T75 keeps the MVP inbound flow as one aggregate: `phieu_nhap_kho` plus `chi_tiet
 - `phieu_mua_hang` is not created for MVP. Add it later only if the product needs a separate purchase-order lifecycle, multiple receipts per order, invoice matching, or supplier debt tracking.
 - `DA_DUYET` is not added because it would duplicate `CHO_HANG_VE` for this workflow.
 
+This keeps the database simple while still matching the approved inbound steps for MVP: purchase planning, two-level approval, waiting for goods, inspection, completion, and stock update in later service tasks.
+
+## Approved Inbound Step Mapping
+
+The current T75 model maps the inbound process as follows:
+
+| Process step | T75 model |
+| --- | --- |
+| Lập phiếu mua hàng | `phieu_nhap_kho` in `NHAP`. At this point it plays the role of a planned purchase request, not a real stock receipt. |
+| Duyệt cấp 1 | `CHO_DUYET_CAP_1 -> CHO_DUYET_CAP_2`; store `nguoi_duyet_cap_1_id` and `ngay_duyet_cap_1` in later service logic. |
+| Duyệt cấp 2 | `CHO_DUYET_CAP_2 -> CHO_HANG_VE`; store `nguoi_duyet_cap_2_id` and `ngay_duyet_cap_2` in later service logic. |
+| Phiếu mua hàng chính thức | Same `phieu_nhap_kho` once it reaches `CHO_HANG_VE`. No separate `phieu_mua_hang` table is needed for MVP. |
+| Hàng về | `CHO_HANG_VE -> CHO_KIEM_HANG`. This means goods have arrived and can be inspected. |
+| Kiểm hàng | `CHO_KIEM_HANG`; expected line quantity stays in `so_luong`, actual received quantity is written to `so_luong_thuc_nhan`. |
+| Có/không có chênh lệch | T75 can compare `so_luong` and `so_luong_thuc_nhan`, but discrepancy handling/records are out of scope. |
+| Cộng tồn | Out of scope for T75. Later completion uses `so_luong_thuc_nhan` only when moving to `HOAN_THANH`. |
+| Tạo giao dịch kho | Out of scope for T75. Later completion creates `giao_dich_kho` in the same transaction as stock update. |
+| Đổi trạng thái | `ImportReceiptStatePolicy` defines allowed transitions; service/API enforcement starts in T76+. |
+
+The document starts being treated as an actual inbound stock receipt at `CHO_KIEM_HANG`, because real receiving/inspection data can be recorded then. It only affects inventory after `HOAN_THANH`.
+
+## Why There Is No Separate `phieu_mua_hang`
+
+The approved MVP flow does not require an independent purchase-order aggregate yet. A single document can represent these business meanings by status:
+
+- `NHAP`: planned purchase request.
+- `CHO_DUYET_CAP_1` and `CHO_DUYET_CAP_2`: purchase request under approval.
+- `CHO_HANG_VE`: official purchase document waiting for goods.
+- `CHO_KIEM_HANG`: actual inbound receipt under inspection.
+- `HOAN_THANH`: completed inbound receipt, ready for inventory mutation in later tasks.
+
+A separate `phieu_mua_hang` table becomes necessary only if one purchase document must support multiple independent receiving events, invoice/debt matching, supplier confirmation lifecycle, or partial deliveries that need their own receipt numbers and statuses.
+
+## Multiple Receiving Events
+
+No clear requirement currently says one purchase document can be received in multiple batches. Therefore T75 keeps the one-aggregate MVP model.
+
+If the approved workflow later requires partial/multiple receipts for one purchase document, this becomes a schema blocker: split the model into `phieu_mua_hang` for the purchase order and `phieu_nhap_kho` or a receipt table for each receiving event.
+
 ## Tables
 
 ### `phieu_nhap_kho`
@@ -91,6 +130,8 @@ Editable statuses:
 - `NHAP`
 - `TU_CHOI`
 
+There is no dedicated discrepancy or no-receipt status in T75. The current state machine can represent the happy path and rejection/cancel path, but it does not model discrepancy resolution or a final no-receipt decision. Those rules should be added in a later Sprint task only if the backlog requires them.
+
 ## Roles By Step
 
 - Employee creates and edits draft documents.
@@ -135,7 +176,19 @@ If a second completion request arrives after the first one commits, it must retu
 - No API/controller.
 - No UI.
 - No inventory mutation.
+- No stock capacity update.
+- No `giao_dich_kho` creation.
 - No generated document numbers.
+- No discrepancy report or discrepancy approval workflow.
+- No no-receipt handling workflow.
+- No quality or expiry-date inspection data.
 - No damaged/rejected quantity columns because PB04 did not require them yet.
 - No separate receipt table until backlog requires multiple receiving events or inspection lifecycle.
 - No commit/push unless all requested validation passes.
+
+Potential later additions:
+
+- discrepancy table/report for differences between expected and actual received quantities
+- `KHONG_NHAN_HANG`, `CHO_XU_LY_CHENH_LECH`, or equivalent statuses if backlog needs explicit no-receipt/discrepancy resolution
+- quality, expiry-date, damaged quantity, rejected quantity fields
+- inventory update, stock transaction creation, and warehouse capacity update during completion

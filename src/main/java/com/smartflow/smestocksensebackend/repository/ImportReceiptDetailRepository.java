@@ -10,4 +10,6 @@ public interface ImportReceiptDetailRepository extends JpaRepository<ImportRecei
     List<ImportReceiptDetail> findByDocumentId(Long documentId);
 
     boolean existsByDocumentIdAndProductId(Long documentId, Long productId);
+
+    boolean existsByDocumentIdAndProductIdAndIdNot(Long documentId, Long productId, Long id);
 }

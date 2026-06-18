@@ -2,6 +2,7 @@ package com.smartflow.smestocksensebackend.service.impl;
 
 import com.smartflow.smestocksensebackend.dto.inbound.AddImportReceiptItemRequest;
 import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptItemResponse;
+import com.smartflow.smestocksensebackend.domain.inbound.ImportReceiptItemValidator;
 import com.smartflow.smestocksensebackend.entity.Employee;
 import com.smartflow.smestocksensebackend.entity.EmployeeStatus;
 import com.smartflow.smestocksensebackend.entity.ImportReceipt;
@@ -28,6 +29,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 
@@ -65,19 +67,21 @@ class ImportReceiptItemServiceTest {
     private ImportReceiptCodeGenerator codeGenerator;
 
     private ImportReceiptServiceImpl importReceiptService;
+    private ImportReceiptItemValidator itemValidator;
     private Employee owner;
     private ImportReceipt receipt;
     private Product product;
 
     @BeforeEach
     void setUp() {
+        itemValidator = new ImportReceiptItemValidator(productRepository, importReceiptDetailRepository);
         importReceiptService = new ImportReceiptServiceImpl(
                 importReceiptRepository,
                 importReceiptDetailRepository,
-                productRepository,
                 warehouseRepository,
                 partnerRepository,
-                codeGenerator
+                codeGenerator,
+                itemValidator
         );
         owner = employee(5L, RoleCode.EMPLOYEE);
         receipt = receipt(123L, owner, ImportReceiptStatus.NHAP);
@@ -198,6 +202,20 @@ class ImportReceiptItemServiceTest {
 
         assertThrows(ConflictException.class, () -> importReceiptService.addItem(123L, validRequest()));
         verify(importReceiptDetailRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void addItem_withDatabaseDuplicateProductRace_shouldThrowConflictException() {
+        when(importReceiptRepository.findById(123L)).thenReturn(Optional.of(receipt));
+        when(productRepository.findById(25L)).thenReturn(Optional.of(product));
+        when(importReceiptDetailRepository.existsByDocumentIdAndProductId(123L, 25L)).thenReturn(false);
+        when(importReceiptDetailRepository.saveAndFlush(any(ImportReceiptDetail.class)))
+                .thenThrow(new DataIntegrityViolationException(
+                        "duplicate key value violates unique constraint "
+                                + "chi_tiet_phieu_nhap_phieu_nhap_id_san_pham_id_idx"
+                ));
+
+        assertThrows(ConflictException.class, () -> importReceiptService.addItem(123L, validRequest()));
     }
 
     @Test

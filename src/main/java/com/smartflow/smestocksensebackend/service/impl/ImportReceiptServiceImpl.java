@@ -1,6 +1,7 @@
 package com.smartflow.smestocksensebackend.service.impl;
 
 import com.smartflow.smestocksensebackend.dto.inbound.AddImportReceiptItemRequest;
+import com.smartflow.smestocksensebackend.domain.inbound.ImportReceiptItemValidator;
 import com.smartflow.smestocksensebackend.dto.inbound.CreateImportReceiptRequest;
 import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptItemResponse;
 import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptResponse;
@@ -13,7 +14,6 @@ import com.smartflow.smestocksensebackend.entity.Partner;
 import com.smartflow.smestocksensebackend.entity.PartnerStatus;
 import com.smartflow.smestocksensebackend.entity.PartnerType;
 import com.smartflow.smestocksensebackend.entity.Product;
-import com.smartflow.smestocksensebackend.entity.ProductStatus;
 import com.smartflow.smestocksensebackend.entity.RoleCode;
 import com.smartflow.smestocksensebackend.entity.Warehouse;
 import com.smartflow.smestocksensebackend.entity.WarehouseStatus;
@@ -25,7 +25,6 @@ import com.smartflow.smestocksensebackend.exception.NotFoundException;
 import com.smartflow.smestocksensebackend.repository.ImportReceiptDetailRepository;
 import com.smartflow.smestocksensebackend.repository.ImportReceiptRepository;
 import com.smartflow.smestocksensebackend.repository.PartnerRepository;
-import com.smartflow.smestocksensebackend.repository.ProductRepository;
 import com.smartflow.smestocksensebackend.repository.WarehouseRepository;
 import com.smartflow.smestocksensebackend.service.ImportReceiptCodeGenerator;
 import com.smartflow.smestocksensebackend.service.ImportReceiptService;
@@ -44,13 +43,14 @@ import java.math.BigDecimal;
 public class ImportReceiptServiceImpl implements ImportReceiptService {
 
     private static final int MAX_CODE_ATTEMPTS = 3;
+    private static final String IMPORT_RECEIPT_DETAIL_UNIQUE_INDEX = "chi_tiet_phieu_nhap_phieu_nhap_id_san_pham_id_idx";
 
     private final ImportReceiptRepository importReceiptRepository;
     private final ImportReceiptDetailRepository importReceiptDetailRepository;
-    private final ProductRepository productRepository;
     private final WarehouseRepository warehouseRepository;
     private final PartnerRepository partnerRepository;
     private final ImportReceiptCodeGenerator codeGenerator;
+    private final ImportReceiptItemValidator itemValidator;
 
     @Override
     @Transactional
@@ -105,7 +105,7 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
     @Override
     @Transactional
     public ImportReceiptItemResponse addItem(Long receiptId, AddImportReceiptItemRequest request) {
-        validateAddItemRequest(request);
+        itemValidator.validateRequestFields(request);
 
         Employee actor = currentEmployee();
         if (actor.getStatus() != EmployeeStatus.HOAT_DONG) {
@@ -119,14 +119,7 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
             throw new ConflictException("Chi duoc them san pham khi phieu nhap o trang thai NHAP.");
         }
 
-        Product product = productRepository.findById(request.productId())
-                .orElseThrow(() -> new NotFoundException("San pham khong ton tai."));
-        if (product.getStatus() != ProductStatus.HOAT_DONG) {
-            throw new BadRequestException("San pham khong hoat dong.");
-        }
-        if (importReceiptDetailRepository.existsByDocumentIdAndProductId(receiptId, request.productId())) {
-            throw new ConflictException("San pham da ton tai trong phieu nhap.");
-        }
+        Product product = itemValidator.validateForCreate(receiptId, request);
 
         ImportReceiptDetail detail = new ImportReceiptDetail();
         detail.setDocument(receipt);
@@ -139,7 +132,10 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
         try {
             return ImportReceiptItemResponse.from(importReceiptDetailRepository.saveAndFlush(detail));
         } catch (DataIntegrityViolationException exception) {
-            throw new ConflictException("San pham da ton tai trong phieu nhap.");
+            if (isDuplicateImportReceiptDetailException(exception)) {
+                throw itemValidator.duplicateProductException();
+            }
+            throw exception;
         }
     }
 
@@ -173,15 +169,9 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
         }
     }
 
-    private void validateAddItemRequest(AddImportReceiptItemRequest request) {
-        if (request.productId() == null) {
-            throw new BadRequestException("productId khong duoc de trong.");
-        }
-        if (request.quantity() == null || request.quantity() <= 0) {
-            throw new BadRequestException("quantity phai lon hon 0.");
-        }
-        if (request.unitPrice() == null || request.unitPrice().compareTo(BigDecimal.ZERO) < 0) {
-            throw new BadRequestException("unitPrice phai lon hon hoac bang 0.");
-        }
+    private boolean isDuplicateImportReceiptDetailException(DataIntegrityViolationException exception) {
+        Throwable cause = exception.getMostSpecificCause();
+        String message = cause == null ? exception.getMessage() : cause.getMessage();
+        return message != null && message.contains(IMPORT_RECEIPT_DETAIL_UNIQUE_INDEX);
     }
 }

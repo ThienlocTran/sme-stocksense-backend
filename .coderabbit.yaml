@@ -1,0 +1,91 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+
+language: vi-VN
+focus: high
+tone_instructions: "Ngắn gọn, dễ hiểu cho developer junior. Chỉ nêu lỗi có tác động thực tế; bỏ qua formatting vụn vặt."
+
+reviews:
+  profile: assertive
+  request_changes_workflow: false
+  high_level_summary: true
+  changed_files_summary: true
+  sequence_diagrams: false
+  poem: false
+  in_progress_fortune: false
+  review_details: false
+  auto_review:
+    enabled: true
+    drafts: false
+    auto_incremental_review: true
+    base_branches:
+      - dev
+      - main
+      - release/.*
+    ignore_usernames:
+      - dependabot[bot]
+      - renovate[bot]
+      - github-actions[bot]
+  path_filters:
+    - "!target/**"
+    - "!logs/**"
+    - "!*.log"
+    - "!**/*.log"
+    - "!.idea/**"
+    - "!.vscode/**"
+    - "!**/*.iml"
+    - "!.settings/**"
+    - "!.classpath"
+    - "!.project"
+    - "!build/**"
+    - "!dist/**"
+    - "!**/generated/**"
+    - "!**/generated-sources/**"
+  path_instructions:
+    - path: "**/*"
+      instructions: |
+        Review bằng tiếng Việt. Ưu tiên lỗi correctness, security, data integrity, transaction, authorization, validation và behavior regression.
+        Không comment style/format/import nếu không gây lỗi thật. Không đề xuất đổi kiến trúc lớn khi patch nhỏ đủ xử lý.
+        Bối cảnh StockSense: một doanh nghiệp; role cố định ADMIN, MANAGER, EMPLOYEE; nhân viên tạo phiếu; manager duyệt phiếu; chỉ khi phiếu hoàn thành mới cập nhật tồn kho; không kiểm kho real-time theo từng đơn bán lẻ; kiểm kho định kỳ. Không đề xuất trái các quy tắc này.
+    - path: "src/main/java/com/smartflow/smestocksensebackend/controller/**"
+      instructions: |
+        Kiểm tra authentication/authorization theo endpoint, @Valid cho request body, HTTP status và response format.
+        Không trả trực tiếp JPA entity ra API; ưu tiên DTO/response record hiện có. Không để business logic quan trọng trong controller.
+    - path: "src/main/java/com/smartflow/smestocksensebackend/service/**"
+      instructions: |
+        Kiểm tra transaction boundary, business rule, duplicate data, null handling và race condition.
+        Không nuốt exception; lỗi nghiệp vụ nên rõ ràng và đi qua exception handler phù hợp.
+        Với nghiệp vụ kho, chỉ cập nhật tồn kho khi phiếu đã hoàn thành và transaction bảo vệ đủ dữ liệu liên quan.
+    - path: "src/main/java/com/smartflow/smestocksensebackend/config/**"
+      instructions: |
+        Đây là khu vực security của repo. Tập trung JWT, SecurityConfig, filter, public endpoint và role ADMIN/MANAGER/EMPLOYEE.
+        Kiểm tra bypass quyền, endpoint public mở nhầm, password phải được mã hóa, không log token/mật khẩu/dữ liệu nhạy cảm.
+    - path: "src/main/java/com/smartflow/smestocksensebackend/repository/**"
+      instructions: |
+        Kiểm tra N+1 query, Optional, unique constraint, query trả sai dữ liệu và update kho có nguy cơ sai transaction.
+        Với JPA, chú ý EntityGraph/fetch join khi response cần dữ liệu quan hệ.
+    - path: "src/main/java/com/smartflow/smestocksensebackend/dto/**"
+      instructions: |
+        Kiểm tra validation annotation, lộ dữ liệu nội bộ, mapping DTO/entity, enum và nullable field.
+        Response DTO không nên chứa password hash, token ngoài ngữ cảnh auth, hoặc trường nội bộ không cần cho API.
+    - path: "src/main/java/com/smartflow/smestocksensebackend/entity/**"
+      instructions: |
+        Kiểm tra mapping JPA, enum, nullable, unique constraint, quan hệ entity và dữ liệu nhạy cảm.
+        Entity phải đồng bộ với Flyway migration; tránh thay đổi phá dữ liệu hiện có nếu không cần thiết.
+    - path: "src/main/java/com/smartflow/smestocksensebackend/exception/**"
+      instructions: |
+        Kiểm tra HTTP status, response lỗi nhất quán, validation error rõ ràng và không lộ thông tin nhạy cảm.
+    - path: "src/main/resources/db/migration/**"
+      instructions: |
+        Kiểm tra schema đồng bộ với entity, foreign key, unique constraint, index quan trọng và dữ liệu seed role ADMIN/MANAGER/EMPLOYEE.
+        Không đề xuất migration phá dữ liệu hiện có nếu không có lý do mạnh và hướng migrate an toàn.
+    - path: "src/test/**"
+      instructions: |
+        Kiểm tra coverage cho happy path, validation failure, duplicate data, authentication failure và authorization failure.
+        Ưu tiên test hành vi nghiệp vụ/API thay vì implementation detail.
+
+chat:
+  art: false
+
+knowledge_base:
+  web_search:
+    enabled: true

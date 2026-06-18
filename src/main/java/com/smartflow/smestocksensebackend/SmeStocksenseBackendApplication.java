@@ -9,5 +9,4 @@ public class SmeStocksenseBackendApplication {
     public static void main(String[] args) {
         SpringApplication.run(SmeStocksenseBackendApplication.class, args);
     }
-
 }

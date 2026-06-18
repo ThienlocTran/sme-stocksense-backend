@@ -1,0 +1,36 @@
+package com.smartflow.smestocksensebackend.dto.product;
+
+import com.smartflow.smestocksensebackend.entity.Product;
+
+import java.math.BigDecimal;
+
+public record ProductListItemResponse(
+        Long id,
+        String code,
+        String name,
+        String sku,
+        String barcode,
+        String unit,
+        Integer minStock,
+        BigDecimal price,
+        String categoryName,
+        String partnerName,
+        String status
+) {
+
+    public static ProductListItemResponse from(Product product) {
+        return new ProductListItemResponse(
+                product.getId(),
+                product.getCode(),
+                product.getName(),
+                product.getSku(),
+                product.getBarcode(),
+                product.getUnit(),
+                product.getMinStock(),
+                product.getPrice(),
+                product.getCategory() != null ? product.getCategory().getName() : null,
+                product.getPartner() != null ? product.getPartner().getName() : null,
+                product.getStatus().name()
+        );
+    }
+}

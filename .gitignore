@@ -16,6 +16,7 @@ logs/
 .env.*
 application-neon.yml
 application-prod.yml
+src/main/resources/application.yml
 
 # OS files
 .DS_Store

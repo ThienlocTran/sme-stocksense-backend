@@ -263,6 +263,28 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
                 .map(ImportReceiptSummaryResponse::from));
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public ImportReceiptDraftResponse getDetail(Long receiptId) {
+        Employee actor = currentEmployee();
+        if (actor.getStatus() != EmployeeStatus.HOAT_DONG) {
+            throw new AccountInactiveException();
+        }
+        ensureCanListOwnReceipts(actor);
+
+        ImportReceipt receipt = importReceiptRepository.findById(receiptId)
+                .orElseThrow(() -> new NotFoundException("Phieu nhap khong ton tai."));
+
+        RoleCode roleCode = actor.getRole() != null ? actor.getRole().getCode() : null;
+        boolean isOwner = receipt.getCreatedBy() != null && receipt.getCreatedBy().getId().equals(actor.getId());
+        if (roleCode != RoleCode.ADMIN && !isOwner) {
+            throw new MissingRoleException("Khong co quyen xem phieu nhap cua nguoi khac.");
+        }
+
+        List<ImportReceiptDetail> details = importReceiptDetailRepository.findByDocumentIdOrderByIdAsc(receiptId);
+        return ImportReceiptDraftResponse.from(receipt, details);
+    }
+
     private ImportReceiptDraftResponse updateReceipt(
             Long receiptId,
             SaveImportReceiptDraftRequest request,

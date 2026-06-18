@@ -44,6 +44,11 @@ public class ImportReceiptController {
         return importReceiptService.listMyReceipts(status, pageable);
     }
 
+    @GetMapping("/{receiptId}")
+    public ImportReceiptDraftResponse getDetail(@PathVariable Long receiptId) {
+        return importReceiptService.getDetail(receiptId);
+    }
+
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public ImportReceiptResponse createDraft(@Valid @RequestBody CreateImportReceiptRequest request) {

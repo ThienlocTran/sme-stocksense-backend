@@ -24,4 +24,6 @@ public interface ImportReceiptService {
     ImportReceiptDraftResponse submitForApproval(Long receiptId);
 
     ImportReceiptPageResponse listMyReceipts(String status, Pageable pageable);
+
+    ImportReceiptDraftResponse getDetail(Long receiptId);
 }

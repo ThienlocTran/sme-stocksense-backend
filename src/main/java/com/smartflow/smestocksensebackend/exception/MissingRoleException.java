@@ -3,6 +3,10 @@ package com.smartflow.smestocksensebackend.exception;
 public class MissingRoleException extends RuntimeException {
 
     public MissingRoleException() {
-        super("Tài khoản chưa được gán vai trò.");
+        super("Tai khoan chua duoc gan vai tro.");
+    }
+
+    public MissingRoleException(String message) {
+        super(message);
     }
 }

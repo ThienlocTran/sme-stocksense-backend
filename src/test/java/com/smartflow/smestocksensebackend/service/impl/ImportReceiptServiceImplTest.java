@@ -14,8 +14,10 @@ import com.smartflow.smestocksensebackend.entity.WarehouseStatus;
 import com.smartflow.smestocksensebackend.exception.BadRequestException;
 import com.smartflow.smestocksensebackend.exception.ConflictException;
 import com.smartflow.smestocksensebackend.exception.NotFoundException;
+import com.smartflow.smestocksensebackend.repository.ImportReceiptDetailRepository;
 import com.smartflow.smestocksensebackend.repository.ImportReceiptRepository;
 import com.smartflow.smestocksensebackend.repository.PartnerRepository;
+import com.smartflow.smestocksensebackend.repository.ProductRepository;
 import com.smartflow.smestocksensebackend.repository.WarehouseRepository;
 import com.smartflow.smestocksensebackend.service.ImportReceiptCodeGenerator;
 import org.junit.jupiter.api.AfterEach;
@@ -47,6 +49,12 @@ class ImportReceiptServiceImplTest {
 
     @Mock
     private ImportReceiptRepository importReceiptRepository;
+
+    @Mock
+    private ImportReceiptDetailRepository importReceiptDetailRepository;
+
+    @Mock
+    private ProductRepository productRepository;
 
     @Mock
     private WarehouseRepository warehouseRepository;

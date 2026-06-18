@@ -2,6 +2,9 @@ package com.smartflow.smestocksensebackend.repository;
 
 import com.smartflow.smestocksensebackend.entity.ImportReceipt;
 import com.smartflow.smestocksensebackend.entity.ImportReceiptStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
@@ -14,4 +17,10 @@ public interface ImportReceiptRepository extends JpaRepository<ImportReceipt, Lo
     boolean existsByCodeIgnoreCase(String code);
 
     long countByStatus(ImportReceiptStatus status);
+
+    @EntityGraph(attributePaths = {"warehouse", "supplier", "createdBy"})
+    Page<ImportReceipt> findByCreatedById(Long createdById, Pageable pageable);
+
+    @EntityGraph(attributePaths = {"warehouse", "supplier", "createdBy"})
+    Page<ImportReceipt> findByCreatedByIdAndStatus(Long createdById, ImportReceiptStatus status, Pageable pageable);
 }

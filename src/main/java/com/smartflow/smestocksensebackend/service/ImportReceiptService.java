@@ -4,8 +4,10 @@ import com.smartflow.smestocksensebackend.dto.inbound.CreateImportReceiptRequest
 import com.smartflow.smestocksensebackend.dto.inbound.AddImportReceiptItemRequest;
 import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptDraftResponse;
 import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptItemResponse;
+import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptPageResponse;
 import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptResponse;
 import com.smartflow.smestocksensebackend.dto.inbound.SaveImportReceiptDraftRequest;
+import org.springframework.data.domain.Pageable;
 
 public interface ImportReceiptService {
 
@@ -20,4 +22,6 @@ public interface ImportReceiptService {
     ImportReceiptDraftResponse cancelDraft(Long receiptId);
 
     ImportReceiptDraftResponse submitForApproval(Long receiptId);
+
+    ImportReceiptPageResponse listMyReceipts(String status, Pageable pageable);
 }

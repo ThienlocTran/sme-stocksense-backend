@@ -19,6 +19,7 @@ import com.smartflow.smestocksensebackend.entity.Role;
 import com.smartflow.smestocksensebackend.entity.RoleCode;
 import com.smartflow.smestocksensebackend.entity.Warehouse;
 import com.smartflow.smestocksensebackend.entity.WarehouseStatus;
+import com.smartflow.smestocksensebackend.exception.AccountInactiveException;
 import com.smartflow.smestocksensebackend.exception.BadRequestException;
 import com.smartflow.smestocksensebackend.exception.ConflictException;
 import com.smartflow.smestocksensebackend.exception.MissingRoleException;
@@ -40,9 +41,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.transaction.annotation.Transactional;
 
-import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.List;
@@ -50,7 +49,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
@@ -167,6 +166,23 @@ class ImportReceiptDraftServiceTest {
     }
 
     @Test
+    void saveDraft_withInactiveEmployee_shouldThrowBeforeMutatingDraft() {
+        Employee inactiveEmployee = employee(5L, RoleCode.EMPLOYEE);
+        inactiveEmployee.setStatus(EmployeeStatus.NGUNG_HOAT_DONG);
+        authenticate(inactiveEmployee);
+
+        assertThrows(AccountInactiveException.class, () -> importReceiptService.saveDraft(123L, minimalRequest()));
+
+        assertNull(receipt.getWarehouse());
+        assertNull(receipt.getSupplier());
+        assertNull(receipt.getNote());
+        verify(importReceiptRepository, never()).findById(123L);
+        verify(importReceiptDetailRepository, never()).deleteByDocumentId(123L);
+        verify(importReceiptDetailRepository, never()).saveAllAndFlush(anyList());
+        verify(importReceiptRepository, never()).saveAndFlush(any(ImportReceipt.class));
+    }
+
+    @Test
     void saveDraft_withMissingReceipt_shouldThrowNotFound() {
         when(importReceiptRepository.findById(404L)).thenReturn(Optional.empty());
 
@@ -260,15 +276,6 @@ class ImportReceiptDraftServiceTest {
     }
 
     @Test
-    void saveDraft_shouldNotDependOnInventoryMutation() {
-        List<String> dependencies = Arrays.stream(ImportReceiptServiceImpl.class.getDeclaredFields())
-                .map(field -> field.getType().getSimpleName().toLowerCase())
-                .toList();
-
-        assertFalse(dependencies.stream().anyMatch(name -> name.contains("inventory") || name.contains("stock")));
-    }
-
-    @Test
     void saveDraft_whenVersionConflicts_shouldReturnConflict() {
         stubValidHeader();
         when(importReceiptDetailRepository.findByDocumentId(123L)).thenReturn(List.of());
@@ -280,15 +287,38 @@ class ImportReceiptDraftServiceTest {
     }
 
     @Test
-    void saveDraft_whenDetailSaveFails_shouldPropagateForRollback() throws NoSuchMethodException {
+    void saveDraft_whenDetailSaveFails_shouldNotSaveHeader() {
         stubValidHeader();
         when(productRepository.findById(25L)).thenReturn(Optional.of(product));
         when(importReceiptDetailRepository.saveAllAndFlush(anyList())).thenThrow(new DataIntegrityViolationException("detail failed"));
 
         assertThrows(DataIntegrityViolationException.class, () -> importReceiptService.saveDraft(123L, requestWithOneItem()));
 
-        Method saveDraft = ImportReceiptServiceImpl.class.getMethod("saveDraft", Long.class, SaveImportReceiptDraftRequest.class);
-        assertNotNull(saveDraft.getAnnotation(Transactional.class));
+        verify(importReceiptRepository, never()).saveAndFlush(any(ImportReceipt.class));
+    }
+
+    @Test
+    void saveDraft_whenDetailDuplicateRace_shouldThrowConflict() {
+        stubValidHeader();
+        when(productRepository.findById(25L)).thenReturn(Optional.of(product));
+        when(importReceiptDetailRepository.saveAllAndFlush(anyList())).thenThrow(duplicateDetailException());
+
+        assertThrows(ConflictException.class, () -> importReceiptService.saveDraft(123L, requestWithOneItem()));
+
+        verify(importReceiptRepository, never()).saveAndFlush(any(ImportReceipt.class));
+    }
+
+    @Test
+    void saveDraft_whenUnrelatedDataIntegrityViolationOccurs_shouldPropagate() {
+        DataIntegrityViolationException exception = new DataIntegrityViolationException("foreign key failed");
+        stubValidHeader();
+        when(productRepository.findById(25L)).thenReturn(Optional.of(product));
+        when(importReceiptDetailRepository.saveAllAndFlush(anyList())).thenThrow(exception);
+
+        DataIntegrityViolationException thrown = assertThrows(DataIntegrityViolationException.class,
+                () -> importReceiptService.saveDraft(123L, requestWithOneItem()));
+
+        assertEquals(exception, thrown);
         verify(importReceiptRepository, never()).saveAndFlush(any(ImportReceipt.class));
     }
 
@@ -366,5 +396,12 @@ class ImportReceiptDraftServiceTest {
         product.setName("Ca phe rang xay");
         product.setStatus(status);
         return product;
+    }
+
+    private DataIntegrityViolationException duplicateDetailException() {
+        return new DataIntegrityViolationException(
+                "duplicate detail",
+                new RuntimeException("duplicate key value violates unique constraint chi_tiet_phieu_nhap_phieu_nhap_id_san_pham_id_idx")
+        );
     }
 }

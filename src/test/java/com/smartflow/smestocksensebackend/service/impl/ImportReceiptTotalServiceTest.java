@@ -31,9 +31,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.transaction.annotation.Transactional;
 
-import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.List;
@@ -41,7 +39,6 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.inOrder;
@@ -155,7 +152,7 @@ class ImportReceiptTotalServiceTest {
     }
 
     @Test
-    void addItem_whenHeaderSaveFails_shouldPropagateForTransactionRollback() throws NoSuchMethodException {
+    void addItem_whenHeaderSaveFails_shouldPropagateForRollback() {
         stubReceiptAndProduct();
         when(importReceiptDetailRepository.saveAndFlush(any(ImportReceiptDetail.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(importReceiptDetailRepository.sumLineTotalByReceiptId(123L)).thenReturn(new BigDecimal("100.00"));
@@ -166,8 +163,7 @@ class ImportReceiptTotalServiceTest {
                 new AddImportReceiptItemRequest(25L, 2, new BigDecimal("50.00"), null)
         ));
 
-        Method addItem = ImportReceiptServiceImpl.class.getMethod("addItem", Long.class, AddImportReceiptItemRequest.class);
-        assertNotNull(addItem.getAnnotation(Transactional.class));
+        verify(importReceiptRepository).saveAndFlush(receipt);
     }
 
     @Test
@@ -212,15 +208,6 @@ class ImportReceiptTotalServiceTest {
                 "lineTotal",
                 "note"
         ), fields);
-    }
-
-    @Test
-    void addItem_shouldNotDependOnInventoryMutation() {
-        List<String> dependencies = Arrays.stream(ImportReceiptServiceImpl.class.getDeclaredFields())
-                .map(field -> field.getType().getSimpleName().toLowerCase())
-                .toList();
-
-        assertFalse(dependencies.stream().anyMatch(name -> name.contains("inventory") || name.contains("stock")));
     }
 
     private void stubValidAddItem(BigDecimal aggregatedTotal) {

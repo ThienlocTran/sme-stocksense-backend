@@ -193,6 +193,11 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
             return ImportReceiptDraftResponse.from(savedReceipt, responseDetails);
         } catch (OptimisticLockingFailureException exception) {
             throw new ConflictException("Phieu nhap da duoc cap nhat boi request khac.");
+        } catch (DataIntegrityViolationException exception) {
+            if (isDuplicateImportReceiptDetailException(exception)) {
+                throw itemValidator.duplicateProductException();
+            }
+            throw exception;
         }
     }
 

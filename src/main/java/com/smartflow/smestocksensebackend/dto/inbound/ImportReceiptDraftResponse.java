@@ -19,6 +19,9 @@ public record ImportReceiptDraftResponse(
         String supplierName,
         Long createdById,
         String createdByName,
+        Long submittedById,
+        String submittedByName,
+        LocalDateTime submittedAt,
         String status,
         BigDecimal totalAmount,
         String note,
@@ -27,10 +30,50 @@ public record ImportReceiptDraftResponse(
         LocalDateTime updatedAt,
         Long version
 ) {
+    public ImportReceiptDraftResponse(
+            Long id,
+            String code,
+            Long warehouseId,
+            String warehouseName,
+            Long supplierId,
+            String supplierName,
+            Long createdById,
+            String createdByName,
+            String status,
+            BigDecimal totalAmount,
+            String note,
+            List<ImportReceiptItemResponse> details,
+            Integer detailCount,
+            LocalDateTime updatedAt,
+            Long version
+    ) {
+        this(
+                id,
+                code,
+                warehouseId,
+                warehouseName,
+                supplierId,
+                supplierName,
+                createdById,
+                createdByName,
+                null,
+                null,
+                null,
+                status,
+                totalAmount,
+                note,
+                details,
+                detailCount,
+                updatedAt,
+                version
+        );
+    }
+
     public static ImportReceiptDraftResponse from(ImportReceipt receipt, List<ImportReceiptDetail> details) {
         Warehouse warehouse = receipt.getWarehouse();
         Partner supplier = receipt.getSupplier();
         Employee createdBy = receipt.getCreatedBy();
+        Employee submittedBy = receipt.getSubmittedBy();
         List<ImportReceiptItemResponse> itemResponses = details.stream()
                 .map(ImportReceiptItemResponse::from)
                 .toList();
@@ -44,6 +87,9 @@ public record ImportReceiptDraftResponse(
                 supplier != null ? supplier.getName() : null,
                 createdBy != null ? createdBy.getId() : null,
                 createdBy != null ? createdBy.getFullName() : null,
+                submittedBy != null ? submittedBy.getId() : null,
+                submittedBy != null ? submittedBy.getFullName() : null,
+                receipt.getSubmittedAt(),
                 receipt.getStatus() != null ? receipt.getStatus().name() : null,
                 receipt.getTotalAmount(),
                 receipt.getNote(),

@@ -18,4 +18,6 @@ public interface ImportReceiptService {
     ImportReceiptDraftResponse updateEditable(Long receiptId, SaveImportReceiptDraftRequest request);
 
     ImportReceiptDraftResponse cancelDraft(Long receiptId);
+
+    ImportReceiptDraftResponse submitForApproval(Long receiptId);
 }

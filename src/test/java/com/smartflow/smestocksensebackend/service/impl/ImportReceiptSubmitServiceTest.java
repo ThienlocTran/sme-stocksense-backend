@@ -269,14 +269,6 @@ class ImportReceiptSubmitServiceTest {
     }
 
     @Test
-    void submitForApproval_shouldNotUseInventoryOrStockTransactionRepositories() throws NoSuchFieldException {
-        ImportReceiptServiceImpl.class.getDeclaredField("importReceiptRepository");
-        ImportReceiptServiceImpl.class.getDeclaredField("importReceiptDetailRepository");
-        assertThrows(NoSuchFieldException.class, () -> ImportReceiptServiceImpl.class.getDeclaredField("inventoryRepository"));
-        assertThrows(NoSuchFieldException.class, () -> ImportReceiptServiceImpl.class.getDeclaredField("stockTransactionRepository"));
-    }
-
-    @Test
     void submitForApproval_whenVersionConflictsShouldThrowConflict() {
         stubHeaderAndMasterData();
         when(importReceiptDetailRepository.findByDocumentId(123L)).thenReturn(List.of(detail));

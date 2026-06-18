@@ -55,4 +55,9 @@ public class ImportReceiptController {
     ) {
         return importReceiptService.updateEditable(receiptId, request);
     }
+
+    @PutMapping("/{receiptId}/cancel")
+    public ImportReceiptDraftResponse cancelDraft(@PathVariable Long receiptId) {
+        return importReceiptService.cancelDraft(receiptId);
+    }
 }

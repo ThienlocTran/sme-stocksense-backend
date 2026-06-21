@@ -20,6 +20,11 @@ import org.hibernate.annotations.UpdateTimestamp;
 import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
+import java.util.List;
+
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 
 @Getter
 @Setter
@@ -61,4 +66,11 @@ public class Employee {
     @UpdateTimestamp
     @Column(name = "ngay_cap_nhat")
     private LocalDateTime updatedAt;
+
+    public Collection<GrantedAuthority> getAuthorities() {
+        if (role == null || role.getCode() == null) {
+            return List.of();
+        }
+        return List.of(new SimpleGrantedAuthority("ROLE_" + role.getCode().name()));
+    }
 }

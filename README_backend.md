@@ -228,7 +228,7 @@ Các endpoint dưới đây là roadmap API, chưa phải API đang chạy.
 | PUT | `/api/import-receipts/{id}/submit` | Gửi duyệt phiếu nhập |
 | PUT | `/api/import-receipts/{id}/inspect` | Kiểm tra hàng thực tế (ghi nhận số lượng thực tế, tình trạng, hạn sử dụng và đối chiếu khớp/lệch) |
 | POST | `/api/import-receipts/{receiptId}/discrepancy-report` | Lập biên bản chênh lệch khi kiểm đếm lệch số lượng |
-| PUT | `/api/v1/phieu-nhap/{id}/hoan-tat` | Hoàn thành phiếu nhập (cộng tồn kho) |
+| PUT | `/api/v1/phieu-nhap/{receiptId}/hoan-tat` | Hoàn thành phiếu nhập (cộng tồn kho) |
 | POST | `/api/stock-out` | Tạo phiếu xuất kho |
 | PATCH | `/api/stock-out/{id}/submit` | Gửi duyệt phiếu xuất |
 | PATCH | `/api/stock-out/{id}/approve` | Duyệt phiếu xuất |

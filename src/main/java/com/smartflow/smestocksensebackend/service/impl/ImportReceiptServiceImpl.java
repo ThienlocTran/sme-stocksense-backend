@@ -566,6 +566,9 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
             if (item == null || item.productId() == null || item.actualReceivedQuantity() == null) {
                 throw new BadRequestException("Thong tin san pham kiem hang khong hop le.");
             }
+            if (item.actualReceivedQuantity() < 0) {
+                throw new BadRequestException("So luong thuc nhan khong duoc am.");
+            }
             if (!inspectedProductIds.add(item.productId())) {
                 throw new BadRequestException("Danh sach san pham kiem hang bi trung san pham ID: " + item.productId() + ".");
             }
@@ -673,6 +676,9 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
         for (ImportReceiptDetail diff : discrepancyDetails) {
             List<CreateDiscrepancyReportItemRequest> items =
                     request.getItems() != null ? request.getItems() : List.of();
+            if (items.stream().anyMatch(i -> i == null || i.getProductId() == null)) {
+                throw new BadRequestException("Chi tiet bien ban khong hop le.");
+            }
             CreateDiscrepancyReportItemRequest itemReq = items.stream()
                     .filter(i -> i.getProductId().equals(diff.getProduct().getId()))
                     .findFirst()

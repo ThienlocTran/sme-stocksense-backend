@@ -446,6 +446,32 @@ class ImportReceiptDetailServiceTest {
                 .isInstanceOf(AccountInactiveException.class);
     }
 
+    @Test
+    void inspectReceipt_error_whenEmployeeNotOwner() {
+        Employee actor = createEmployee(1L, RoleCode.EMPLOYEE, EmployeeStatus.HOAT_DONG);
+        authenticateAs(actor);
+        Employee owner = createEmployee(2L, RoleCode.EMPLOYEE, EmployeeStatus.HOAT_DONG);
+        ImportReceipt receipt = createReceipt(100L, ImportReceiptStatus.CHO_KIEM_HANG, owner);
+        InspectImportReceiptRequest request = new InspectImportReceiptRequest(Collections.emptyList());
+        when(importReceiptRepository.findById(100L)).thenReturn(Optional.of(receipt));
+        assertThatThrownBy(() -> importReceiptService.inspectReceipt(100L, request))
+                .isInstanceOf(MissingRoleException.class)
+                .hasMessageContaining("Khong co quyen");
+    }
+
+    @Test
+    void createDiscrepancyReport_error_whenEmployeeNotOwner() {
+        Employee actor = createEmployee(1L, RoleCode.EMPLOYEE, EmployeeStatus.HOAT_DONG);
+        authenticateAs(actor);
+        Employee owner = createEmployee(2L, RoleCode.EMPLOYEE, EmployeeStatus.HOAT_DONG);
+        ImportReceipt receipt = createReceipt(100L, ImportReceiptStatus.CHO_KIEM_HANG, owner);
+        CreateDiscrepancyReportRequest request = new CreateDiscrepancyReportRequest("Ghi chu", List.of());
+        when(importReceiptRepository.findById(100L)).thenReturn(Optional.of(receipt));
+        assertThatThrownBy(() -> importReceiptService.createDiscrepancyReport(100L, request))
+                .isInstanceOf(MissingRoleException.class)
+                .hasMessageContaining("Khong co quyen");
+    }
+
     private Employee createEmployee(Long id, RoleCode code, EmployeeStatus status) {
         Employee employee = new Employee();
         employee.setId(id);

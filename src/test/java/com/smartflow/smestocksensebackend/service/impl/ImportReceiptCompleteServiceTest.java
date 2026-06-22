@@ -30,6 +30,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -173,6 +174,15 @@ class ImportReceiptCompleteServiceTest {
     }
 
     @Test
+    void completeImport_error_whenManagerCalls_shouldThrowMissingRoleException() {
+        authenticate(employee(7L, RoleCode.MANAGER));
+        when(importReceiptRepository.findById(123L)).thenReturn(Optional.of(receipt));
+        InspectImportReceiptRequest request = new InspectImportReceiptRequest(List.of(new InspectImportReceiptItemRequest(25L, 10, "Binh thuong", null)));
+        assertThrows(MissingRoleException.class, () -> importReceiptService.completeImport(123L, request));
+        verify(inventoryService, never()).increaseInventory(anyLong(), anyLong(), anyInt(), any(ImportReceipt.class));
+    }
+
+    @Test
     void completeImport_error_whenInventoryServiceFails_shouldPropagateExceptionForRollback() {
         InspectImportReceiptRequest request = new InspectImportReceiptRequest(
                 List.of(new InspectImportReceiptItemRequest(25L, 10, "Binh thuong", null))
@@ -188,8 +198,8 @@ class ImportReceiptCompleteServiceTest {
 
         assertThrows(NotFoundException.class, () -> importReceiptService.completeImport(123L, request));
 
-        // saveAndFlush should only be called once (during inspectReceipt), not the second time (for HOAN_THANH)
-        verify(importReceiptRepository, times(1)).saveAndFlush(any(ImportReceipt.class));
+        assertEquals(ImportReceiptStatus.CHO_KIEM_HANG, receipt.getStatus());
+        verify(importReceiptRepository, never()).saveAndFlush(argThat(saved -> saved.getStatus() == ImportReceiptStatus.HOAN_THANH));
     }
 
     private void authenticate(Employee emp) {

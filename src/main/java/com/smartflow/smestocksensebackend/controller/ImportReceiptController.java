@@ -136,7 +136,7 @@ public class ImportReceiptController {
      * @param request DTO chứa thông tin kiểm hàng thực nhận
      * @return Thông tin phiếu nhập kho sau khi hoàn tất
      */
-    @PutMapping("/api/v1/phieu-nhap/{id}/hoan-tat")
+    @PutMapping("/{id}/hoan-tat")
     public ImportReceiptDraftResponse complete(
             @PathVariable Long id,
             @Valid @RequestBody InspectImportReceiptRequest request

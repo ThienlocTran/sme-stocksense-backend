@@ -199,6 +199,40 @@ class InventoryServiceImplTest {
     }
 
     /**
+     * Kiểm thử race condition cực biên: lần insert bị DataIntegrityViolationException
+     * nhưng lần fallback query (trong catch) vẫn trả về empty (bản ghi đã bị xóa hoặc lỗi DB).
+     * Kỳ vọng: exception gốc được ném lại nguyên vẹn (assertSame), saveAndFlush chỉ gọi đúng 1 lần.
+     */
+    @Test
+    void increaseInventory_error_whenInsertRacesAndFallbackMissingRecord() {
+        DataIntegrityViolationException expectedException =
+                new DataIntegrityViolationException("duplicate key – fallback empty");
+
+        Mockito.when(productRepository.findById(1L)).thenReturn(Optional.of(product));
+        Mockito.when(warehouseRepository.findById(1L)).thenReturn(Optional.of(warehouse));
+
+        // Cả lần 1 (trước insert) và lần 2 (trong catch) đều trả empty
+        Mockito.when(inventoryLevelRepository.findByProductIdAndWarehouseIdForUpdate(1L, 1L))
+                .thenReturn(Optional.empty())
+                .thenReturn(Optional.empty());
+
+        // saveAndFlush ném exception gốc
+        Mockito.when(inventoryLevelRepository.saveAndFlush(any()))
+                .thenThrow(expectedException);
+
+        DataIntegrityViolationException thrown = assertThrows(
+                DataIntegrityViolationException.class,
+                () -> inventoryService.increaseInventory(1L, 1L, 50)
+        );
+
+        // Exception phải là chính xác instance đã mock, không phải exception mới
+        assertSame(expectedException, thrown);
+
+        // saveAndFlush chỉ được gọi đúng 1 lần (không có lần 2 vì fallback đã throw)
+        Mockito.verify(inventoryLevelRepository, Mockito.times(1)).saveAndFlush(any());
+    }
+
+    /**
      * Kiểm thử luồng: Tăng tồn kho kèm phiếu nhập.
      * Kỳ vọng: Tăng tồn kho thành công và gọi service ghi log giao dịch kho loại NHAP_KHO.
      */

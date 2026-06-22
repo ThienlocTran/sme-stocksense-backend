@@ -468,6 +468,8 @@ SET "so_luong" = EXCLUDED."so_luong", "ngay_cap_nhat" = now();
 -- ============================================================================
 
 -- Verify categories
+/*
+-- Verify categories
 SELECT '=== DANH MỤC ===' as info;
 SELECT "ma_danh_muc", "ten_danh_muc", "trang_thai" FROM "danh_muc" ORDER BY "ma_danh_muc";
 
@@ -512,3 +514,4 @@ JOIN "san_pham" sp ON tk."san_pham_id" = sp."id"
 JOIN "kho" k ON tk."kho_id" = k."id"
 GROUP BY k."ma_kho"
 ORDER BY k."ma_kho";
+*/

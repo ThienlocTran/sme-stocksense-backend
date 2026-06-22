@@ -63,6 +63,28 @@ public abstract class BaseSpecification<T> {
     }
 
     /**
+     * field &gt;= value. @return null nếu value là null (không thêm điều kiện).
+     */
+    protected <Y extends Comparable<? super Y>> Predicate greaterThanOrEqual(
+            CriteriaBuilder cb, Expression<Y> field, Y value) {
+        if (value == null) {
+            return null;
+        }
+        return cb.greaterThanOrEqualTo(field, value);
+    }
+
+    /**
+     * field &lt;= value. @return null nếu value là null (không thêm điều kiện).
+     */
+    protected <Y extends Comparable<? super Y>> Predicate lessThanOrEqual(
+            CriteriaBuilder cb, Expression<Y> field, Y value) {
+        if (value == null) {
+            return null;
+        }
+        return cb.lessThanOrEqualTo(field, value);
+    }
+
+    /**
      * Gộp danh sách predicate bằng AND, tự loại bỏ phần tử null.
      * @return conjunction (luôn true) nếu không có điều kiện nào.
      */

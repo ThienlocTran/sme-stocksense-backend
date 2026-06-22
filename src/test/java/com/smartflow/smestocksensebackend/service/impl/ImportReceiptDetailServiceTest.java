@@ -313,7 +313,7 @@ class ImportReceiptDetailServiceTest {
         when(discrepancyReportRepository.existsByImportReceiptId(100L)).thenReturn(false);
         when(importReceiptDetailRepository.findByDocumentId(100L)).thenReturn(details);
         when(discrepancyReportRepository.existsByCodeIgnoreCase("BBCL-PNK-100")).thenReturn(false);
-        when(discrepancyReportRepository.save(org.mockito.ArgumentMatchers.any(DiscrepancyReport.class))).thenAnswer(invocation -> {
+        when(discrepancyReportRepository.saveAndFlush(org.mockito.ArgumentMatchers.any(DiscrepancyReport.class))).thenAnswer(invocation -> {
             DiscrepancyReport r = invocation.getArgument(0);
             r.setId(500L);
             return r;

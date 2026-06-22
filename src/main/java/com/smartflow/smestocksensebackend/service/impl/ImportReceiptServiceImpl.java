@@ -495,6 +495,16 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
         }
     }
 
+    /**
+     * Thực hiện kiểm hàng thực tế cho phiếu nhập kho (T100).
+     * Ghi nhận số lượng thực đếm, tình trạng sản phẩm và đối chiếu khớp/lệch với chứng từ gốc.
+     * Chỉ áp dụng cho phiếu nhập từ Nhà cung cấp đang ở trạng thái CHO_KIEM_HANG.
+     * Cập nhật trạng thái dòng là KHOP hoặc CHENH_LECH.
+     *
+     * @param receiptId ID của phiếu nhập kho
+     * @param request Yêu cầu kiểm hàng chứa danh sách sản phẩm và số lượng thực tế kiểm đếm
+     * @return Kết quả kiểm hàng và chi tiết phiếu nhập
+     */
     @Override
     @Transactional
     public ImportReceiptDraftResponse inspectReceipt(Long receiptId, InspectImportReceiptRequest request) {
@@ -583,6 +593,15 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
         }
     }
 
+    /**
+     * Lập biên bản chênh lệch cho phiếu nhập kho (T101).
+     * Được gọi khi phiếu nhập có các sản phẩm bị lệch số lượng (CHENH_LECH) sau kiểm hàng.
+     * Tự động tạo mã biên bản, lưu thông tin lý do và hướng xử lý đề xuất cho các sản phẩm bị lệch.
+     *
+     * @param receiptId ID của phiếu nhập kho
+     * @param request Yêu cầu lập biên bản chứa ghi chú và các chi tiết xử lý
+     * @return Biên bản chênh lệch đã lập thành công
+     */
     @Override
     @Transactional
     public DiscrepancyReportResponse createDiscrepancyReport(Long receiptId, CreateDiscrepancyReportRequest request) {

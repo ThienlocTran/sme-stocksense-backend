@@ -268,6 +268,8 @@ class ImportReceiptServiceImplTest {
         assertNotNull(response);
         assertEquals(ImportReceiptStatus.CHO_KIEM_HANG.name(), response.status());
         assertEquals(arrivalTime, receipt.getActualArrivalDate());
+        // Kiểm tra mapping trong ImportReceiptDraftResponse.from() có trả đúng actualArrivalDate
+        assertEquals(arrivalTime, response.actualArrivalDate());
         verify(importReceiptRepository).saveAndFlush(receipt);
     }
 
@@ -299,6 +301,8 @@ class ImportReceiptServiceImplTest {
         assertNotNull(response);
         assertEquals(ImportReceiptStatus.CHO_KIEM_HANG.name(), response.status());
         assertEquals(arrivalTime, receipt.getActualArrivalDate());
+        // Kiểm tra mapping trong ImportReceiptDraftResponse.from() có trả đúng actualArrivalDate
+        assertEquals(arrivalTime, response.actualArrivalDate());
         verify(importReceiptRepository).saveAndFlush(receipt);
     }
 

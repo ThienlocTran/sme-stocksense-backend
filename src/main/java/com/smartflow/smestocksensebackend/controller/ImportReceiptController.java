@@ -8,6 +8,8 @@ import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptPageResponse;
 import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptResponse;
 import com.smartflow.smestocksensebackend.dto.inbound.SaveImportReceiptDraftRequest;
 import com.smartflow.smestocksensebackend.dto.inbound.InspectImportReceiptRequest;
+import com.smartflow.smestocksensebackend.dto.inbound.CreateDiscrepancyReportRequest;
+import com.smartflow.smestocksensebackend.dto.inbound.DiscrepancyReportResponse;
 import com.smartflow.smestocksensebackend.service.ImportReceiptService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -97,5 +99,14 @@ public class ImportReceiptController {
             @Valid @RequestBody InspectImportReceiptRequest request
     ) {
         return importReceiptService.inspectReceipt(receiptId, request);
+    }
+
+    @PostMapping("/{receiptId}/discrepancy-report")
+    @ResponseStatus(HttpStatus.CREATED)
+    public DiscrepancyReportResponse createDiscrepancyReport(
+            @PathVariable Long receiptId,
+            @Valid @RequestBody CreateDiscrepancyReportRequest request
+    ) {
+        return importReceiptService.createDiscrepancyReport(receiptId, request);
     }
 }

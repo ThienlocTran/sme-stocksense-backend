@@ -16,10 +16,18 @@ import com.smartflow.smestocksensebackend.entity.Role;
 import com.smartflow.smestocksensebackend.entity.RoleCode;
 import com.smartflow.smestocksensebackend.exception.AccountInactiveException;
 import com.smartflow.smestocksensebackend.exception.BadRequestException;
+import com.smartflow.smestocksensebackend.exception.ConflictException;
 import com.smartflow.smestocksensebackend.exception.MissingRoleException;
 import com.smartflow.smestocksensebackend.exception.NotFoundException;
 import com.smartflow.smestocksensebackend.repository.ImportReceiptDetailRepository;
 import com.smartflow.smestocksensebackend.repository.ImportReceiptRepository;
+import com.smartflow.smestocksensebackend.repository.DiscrepancyReportRepository;
+import com.smartflow.smestocksensebackend.repository.DiscrepancyReportDetailRepository;
+import com.smartflow.smestocksensebackend.dto.inbound.CreateDiscrepancyReportRequest;
+import com.smartflow.smestocksensebackend.dto.inbound.CreateDiscrepancyReportItemRequest;
+import com.smartflow.smestocksensebackend.dto.inbound.DiscrepancyReportResponse;
+import com.smartflow.smestocksensebackend.entity.DiscrepancyReport;
+import com.smartflow.smestocksensebackend.entity.DiscrepancyReportDetail;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -46,6 +54,12 @@ class ImportReceiptDetailServiceTest {
 
     @Mock
     private ImportReceiptDetailRepository importReceiptDetailRepository;
+
+    @Mock
+    private DiscrepancyReportRepository discrepancyReportRepository;
+
+    @Mock
+    private DiscrepancyReportDetailRepository discrepancyReportDetailRepository;
 
     @InjectMocks
     private ImportReceiptServiceImpl importReceiptService;
@@ -270,6 +284,104 @@ class ImportReceiptDetailServiceTest {
         assertThatThrownBy(() -> importReceiptService.inspectReceipt(100L, request))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("Chi ap dung kiem hang cho phieu nhap tu nha cung cap.");
+    }
+
+    @Test
+    void createDiscrepancyReport_success() {
+        Employee owner = createEmployee(1L, RoleCode.EMPLOYEE, EmployeeStatus.HOAT_DONG);
+        authenticateAs(owner);
+
+        ImportReceipt receipt = createReceipt(100L, ImportReceiptStatus.CHO_KIEM_HANG, owner);
+
+        Product product = new Product();
+        product.setId(20L);
+        product.setCode("SP-20");
+        product.setName("Product 20");
+
+        ImportReceiptDetail detail = createDetail(1L, receipt);
+        detail.setProduct(product);
+        detail.setExpectedQuantity(10);
+        detail.setActualReceivedQuantity(8);
+        detail.setRowStatus("CHENH_LECH");
+
+        List<ImportReceiptDetail> details = List.of(detail);
+
+        CreateDiscrepancyReportItemRequest itemReq = new CreateDiscrepancyReportItemRequest(20L, "Thieu hang", "Giao bu");
+        CreateDiscrepancyReportRequest request = new CreateDiscrepancyReportRequest("Ghi chu kiem hang", List.of(itemReq));
+
+        when(importReceiptRepository.findById(100L)).thenReturn(Optional.of(receipt));
+        when(discrepancyReportRepository.existsByImportReceiptId(100L)).thenReturn(false);
+        when(importReceiptDetailRepository.findByDocumentId(100L)).thenReturn(details);
+        when(discrepancyReportRepository.existsByCodeIgnoreCase("BBCL-PNK-100")).thenReturn(false);
+        when(discrepancyReportRepository.save(org.mockito.ArgumentMatchers.any(DiscrepancyReport.class))).thenAnswer(invocation -> {
+            DiscrepancyReport r = invocation.getArgument(0);
+            r.setId(500L);
+            return r;
+        });
+
+        DiscrepancyReportResponse response = importReceiptService.createDiscrepancyReport(100L, request);
+
+        assertThat(response).isNotNull();
+        assertThat(response.getId()).isEqualTo(500L);
+        assertThat(response.getCode()).isEqualTo("BBCL-PNK-100");
+        assertThat(response.getDetails()).hasSize(1);
+        assertThat(response.getDetails().get(0).getDiscrepancyQuantity()).isEqualTo(-2);
+        assertThat(response.getDetails().get(0).getReason()).isEqualTo("Thieu hang");
+        assertThat(response.getDetails().get(0).getAction()).isEqualTo("Giao bu");
+    }
+
+    @Test
+    void createDiscrepancyReport_error_whenNoDiscrepancies() {
+        Employee owner = createEmployee(1L, RoleCode.EMPLOYEE, EmployeeStatus.HOAT_DONG);
+        authenticateAs(owner);
+
+        ImportReceipt receipt = createReceipt(100L, ImportReceiptStatus.CHO_KIEM_HANG, owner);
+        ImportReceiptDetail detail = createDetail(1L, receipt);
+        detail.setExpectedQuantity(10);
+        detail.setActualReceivedQuantity(10);
+        detail.setRowStatus("KHOP");
+
+        List<ImportReceiptDetail> details = List.of(detail);
+        CreateDiscrepancyReportRequest request = new CreateDiscrepancyReportRequest("Ghi chu", List.of());
+
+        when(importReceiptRepository.findById(100L)).thenReturn(Optional.of(receipt));
+        when(discrepancyReportRepository.existsByImportReceiptId(100L)).thenReturn(false);
+        when(importReceiptDetailRepository.findByDocumentId(100L)).thenReturn(details);
+
+        assertThatThrownBy(() -> importReceiptService.createDiscrepancyReport(100L, request))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("Phieu nhap khong co san pham nao bi chenh lech de lap bien ban.");
+    }
+
+    @Test
+    void createDiscrepancyReport_error_whenStatusNotChoKiemHang() {
+        Employee owner = createEmployee(1L, RoleCode.EMPLOYEE, EmployeeStatus.HOAT_DONG);
+        authenticateAs(owner);
+
+        ImportReceipt receipt = createReceipt(100L, ImportReceiptStatus.NHAP, owner);
+        CreateDiscrepancyReportRequest request = new CreateDiscrepancyReportRequest("Ghi chu", List.of());
+
+        when(importReceiptRepository.findById(100L)).thenReturn(Optional.of(receipt));
+
+        assertThatThrownBy(() -> importReceiptService.createDiscrepancyReport(100L, request))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("Phieu nhap khong o trang thai CHO_KIEM_HANG.");
+    }
+
+    @Test
+    void createDiscrepancyReport_error_whenAlreadyExists() {
+        Employee owner = createEmployee(1L, RoleCode.EMPLOYEE, EmployeeStatus.HOAT_DONG);
+        authenticateAs(owner);
+
+        ImportReceipt receipt = createReceipt(100L, ImportReceiptStatus.CHO_KIEM_HANG, owner);
+        CreateDiscrepancyReportRequest request = new CreateDiscrepancyReportRequest("Ghi chu", List.of());
+
+        when(importReceiptRepository.findById(100L)).thenReturn(Optional.of(receipt));
+        when(discrepancyReportRepository.existsByImportReceiptId(100L)).thenReturn(true);
+
+        assertThatThrownBy(() -> importReceiptService.createDiscrepancyReport(100L, request))
+                .isInstanceOf(ConflictException.class)
+                .hasMessageContaining("Bien ban chenh lech cho phieu nhap nay da ton tai.");
     }
 
     private Employee createEmployee(Long id, RoleCode code, EmployeeStatus status) {

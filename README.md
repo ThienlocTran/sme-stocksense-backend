@@ -33,7 +33,7 @@ Tính năng **Kiểm hàng** hỗ trợ nhân viên kho thực hiện đối chi
 
 ### Yêu Cầu Hệ Thống
 * Java JDK 21
-* Maven 3.9+ (hoặc sử dụng `./mvnw.cmd`)
+* Maven 3.9+ (hoặc sử dụng `.\mvnw.cmd`)
 
 ### Lệnh Chạy Bộ Test Tự Động
 Chạy riêng các test case cho luồng kiểm hàng và chi tiết phiếu nhập:

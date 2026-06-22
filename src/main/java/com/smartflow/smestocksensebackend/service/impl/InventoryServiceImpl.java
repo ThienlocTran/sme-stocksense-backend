@@ -11,6 +11,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -29,6 +30,14 @@ public class InventoryServiceImpl implements InventoryService {
         }
         if (productId != null && !productRepository.existsById(productId)) {
             throw new com.smartflow.smestocksensebackend.exception.NotFoundException("Sản phẩm không tồn tại.");
+        }
+
+        // Validate stockStatus
+        if (stockStatus != null) {
+            Set<String> VALID_STOCK_STATUSES = Set.of("OUT_OF_STOCK", "LOW_STOCK", "OVER_STOCK", "NORMAL");
+            if (!VALID_STOCK_STATUSES.contains(stockStatus)) {
+                throw new IllegalArgumentException("Trạng thái tồn kho không hợp lệ: " + stockStatus);
+            }
         }
 
         String keywordParam = (keyword == null || keyword.isBlank()) ? null : "%" + keyword.trim() + "%";

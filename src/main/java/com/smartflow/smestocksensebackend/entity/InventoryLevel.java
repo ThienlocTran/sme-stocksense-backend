@@ -9,6 +9,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -20,7 +21,7 @@ import java.time.LocalDateTime;
 @Setter
 @NoArgsConstructor
 @Entity
-@Table(name = "ton_kho")
+@Table(name = "ton_kho", uniqueConstraints = {@UniqueConstraint(columnNames = {"san_pham_id", "kho_id"})})
 public class InventoryLevel {
 
     @Id
@@ -28,11 +29,11 @@ public class InventoryLevel {
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "san_pham_id")
+    @JoinColumn(name = "san_pham_id", nullable = false)
     private Product product;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "kho_id")
+    @JoinColumn(name = "kho_id", nullable = false)
     private Warehouse warehouse;
 
     @Column(name = "so_luong", nullable = false)

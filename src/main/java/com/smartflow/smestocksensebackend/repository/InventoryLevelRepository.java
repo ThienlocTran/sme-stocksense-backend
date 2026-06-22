@@ -17,7 +17,7 @@ public interface InventoryLevelRepository
                         "k.id AS \"warehouseId\", k.ma_kho AS \"warehouseCode\", k.ten_kho AS \"warehouse\", t.so_luong AS \"currentQuantity\", sp.ton_toi_thieu AS \"minStock\", sp.ton_toi_da AS \"maxStock\", "
                         +
                         "sp.trang_thai AS \"productStatus\", k.trang_thai AS \"warehouseStatus\", " +
-                        "CASE WHEN t.so_luong <= 0 THEN 'OUT_OF_STOCK' WHEN t.so_luong <= sp.ton_toi_thieu THEN 'LOW_STOCK' WHEN sp.ton_toi_da IS NOT NULL AND t.so_luong >= sp.ton_toi_da THEN 'OVER_STOCK' ELSE 'NORMAL' END AS \"status\", t.ngay_cap_nhat AS \"lastUpdatedAt\" "
+                        "CASE WHEN t.so_luong = 0 THEN 'OUT_OF_STOCK' WHEN t.so_luong <= sp.ton_toi_thieu THEN 'LOW_STOCK' WHEN sp.ton_toi_da IS NOT NULL AND t.so_luong >= sp.ton_toi_da THEN 'OVER_STOCK' ELSE 'NORMAL' END AS \"status\", t.ngay_cap_nhat AS \"lastUpdatedAt\" "
                         +
                         "FROM ton_kho t " +
                         "JOIN san_pham sp ON sp.id = t.san_pham_id " +
@@ -29,7 +29,7 @@ public interface InventoryLevelRepository
                         "OR sp.ma_vach::text ILIKE :keyword " +
                         "OR k.ma_kho::text ILIKE :keyword " +
                         "OR k.ten_kho::text ILIKE :keyword)) " +
-                        "AND (:stockStatus IS NULL OR (CASE WHEN t.so_luong <= 0 THEN 'OUT_OF_STOCK' WHEN t.so_luong <= sp.ton_toi_thieu THEN 'LOW_STOCK' WHEN sp.ton_toi_da IS NOT NULL AND t.so_luong >= sp.ton_toi_da THEN 'OVER_STOCK' ELSE 'NORMAL' END) = :stockStatus) "
+                        "AND (:stockStatus IS NULL OR (CASE WHEN t.so_luong = 0 THEN 'OUT_OF_STOCK' WHEN t.so_luong <= sp.ton_toi_thieu THEN 'LOW_STOCK' WHEN sp.ton_toi_da IS NOT NULL AND t.so_luong >= sp.ton_toi_da THEN 'OVER_STOCK' ELSE 'NORMAL' END) = :stockStatus) "
                         +
                         "ORDER BY t.id DESC", countQuery = "SELECT COUNT(*) " +
                                         "FROM ton_kho t " +
@@ -42,7 +42,7 @@ public interface InventoryLevelRepository
                                         "OR sp.ma_vach::text ILIKE :keyword " +
                                         "OR k.ma_kho::text ILIKE :keyword " +
                                         "OR k.ten_kho::text ILIKE :keyword)) " +
-                                        "AND (:stockStatus IS NULL OR (CASE WHEN t.so_luong <= 0 THEN 'OUT_OF_STOCK' WHEN t.so_luong <= sp.ton_toi_thieu THEN 'LOW_STOCK' WHEN sp.ton_toi_da IS NOT NULL AND t.so_luong >= sp.ton_toi_da THEN 'OVER_STOCK' ELSE 'NORMAL' END) = :stockStatus)", nativeQuery = true)
+                                        "AND (:stockStatus IS NULL OR (CASE WHEN t.so_luong = 0 THEN 'OUT_OF_STOCK' WHEN t.so_luong <= sp.ton_toi_thieu THEN 'LOW_STOCK' WHEN sp.ton_toi_da IS NOT NULL AND t.so_luong >= sp.ton_toi_da THEN 'OVER_STOCK' ELSE 'NORMAL' END) = :stockStatus)", nativeQuery = true)
         Page<InventoryLevelProjection> findInventory(
                         @Param("warehouseId") Long warehouseId,
                         @Param("productId") Long productId,

@@ -9,6 +9,7 @@ import com.smartflow.smestocksensebackend.repository.ProductRepository;
 import com.smartflow.smestocksensebackend.repository.WarehouseRepository;
 import com.smartflow.smestocksensebackend.service.InventoryService;
 import com.smartflow.smestocksensebackend.entity.ImportReceipt;
+import com.smartflow.smestocksensebackend.entity.ImportReceiptStatus;
 import com.smartflow.smestocksensebackend.entity.InventoryTransactionType;
 import com.smartflow.smestocksensebackend.service.InventoryTransactionService;
 import lombok.RequiredArgsConstructor;
@@ -58,6 +59,11 @@ public class InventoryServiceImpl implements InventoryService {
         // 0. Validate đầu vào
         if (productId == null || productId <= 0 || warehouseId == null || warehouseId <= 0 || quantity == null || quantity <= 0) {
             throw new IllegalArgumentException("productId, warehouseId, quantity phải > 0");
+        }
+
+        // 0.1 Kiểm tra trạng thái phiếu nhập: chỉ cho phép cập nhật tồn kho khi phiếu đã HOAN_THANH
+        if (importReceipt != null && !ImportReceiptStatus.HOAN_THANH.equals(importReceipt.getStatus())) {
+            throw new IllegalStateException("Chỉ cập nhật tồn kho khi phiếu nhập đã COMPLETED.");
         }
 
         // 1. Kiểm tra sự tồn tại của sản phẩm

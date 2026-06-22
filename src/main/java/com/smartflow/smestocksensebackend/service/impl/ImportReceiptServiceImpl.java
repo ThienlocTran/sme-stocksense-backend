@@ -667,10 +667,16 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
         }
         report.setCode(code);
 
+        // Validate danh sách items: tránh NullPointerException khi item hoặc productId là null
+        List<CreateDiscrepancyReportItemRequest> items = request.getItems() != null ? request.getItems() : List.of();
+        for (CreateDiscrepancyReportItemRequest item : items) {
+            if (item == null || item.getProductId() == null) {
+                throw new BadRequestException("Thong tin san pham bien ban khong hop le.");
+            }
+        }
+
         List<DiscrepancyReportDetail> reportDetails = new ArrayList<>();
         for (ImportReceiptDetail diff : discrepancyDetails) {
-            List<CreateDiscrepancyReportItemRequest> items =
-                    request.getItems() != null ? request.getItems() : List.of();
             CreateDiscrepancyReportItemRequest itemReq = items.stream()
                     .filter(i -> i.getProductId().equals(diff.getProduct().getId()))
                     .findFirst()

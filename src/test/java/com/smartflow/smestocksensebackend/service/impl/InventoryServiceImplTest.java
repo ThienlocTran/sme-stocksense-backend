@@ -163,6 +163,34 @@ class InventoryServiceImplTest {
     }
 
     /**
+     * Kiểm thử ngoại lệ: productId = 0 (không hợp lệ vì phải > 0).
+     * Kỳ vọng: Ném IllegalArgumentException ngay trước khi truy vấn DB.
+     */
+    @Test
+    void increaseInventory_error_whenProductIdInvalid() {
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
+                inventoryService.increaseInventory(0L, 1L, 50)
+        );
+
+        assertEquals("productId, warehouseId, quantity phải > 0", exception.getMessage());
+        Mockito.verify(inventoryLevelRepository, Mockito.never()).saveAndFlush(any());
+    }
+
+    /**
+     * Kiểm thử ngoại lệ: warehouseId = -1 (âm, không hợp lệ vì phải > 0).
+     * Kỳ vọng: Ném IllegalArgumentException ngay trước khi truy vấn DB.
+     */
+    @Test
+    void increaseInventory_error_whenWarehouseIdInvalid() {
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
+                inventoryService.increaseInventory(1L, -1L, 50)
+        );
+
+        assertEquals("productId, warehouseId, quantity phải > 0", exception.getMessage());
+        Mockito.verify(inventoryLevelRepository, Mockito.never()).saveAndFlush(any());
+    }
+
+    /**
      * Kiểm thử race condition: lần insert đầu bị DataIntegrityViolationException
      * (transaction khác đã insert trước). Kỳ vọng: fallback sang update, cộng dồn đúng.
      */

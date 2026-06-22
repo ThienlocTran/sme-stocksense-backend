@@ -19,7 +19,7 @@ Tính năng lập biên bản chênh lệch cho phép ghi nhận chênh lệch s
 ---
 
 ## 3. Cấu trúc Cơ sở dữ liệu (Database Schema)
-Các bảng được tạo mới qua Flyway migration [V11__create_discrepancy_report_tables.sql](file:///d:/DATN_BE/src/main/resources/db/migration/V11__create_discrepancy_report_tables.sql):
+Các bảng được tạo mới qua Flyway migration [V11__create_discrepancy_report_tables.sql](src/main/resources/db/migration/V11__create_discrepancy_report_tables.sql):
 
 ### A. Bảng `bien_ban_chenh_lech`
 Lưu trữ thông tin đầu phiếu của biên bản chênh lệch (quan hệ `1-1` với phiếu nhập).
@@ -98,23 +98,23 @@ Lưu trữ chi tiết các sản phẩm bị chênh lệch số lượng.
 
 ## 6. Cấu trúc các file mã nguồn triển khai (Code Structure)
 - **Entities**:
-  - [DiscrepancyReport.java](file:///d:/DATN_BE/src/main/java/com/smartflow/smestocksensebackend/entity/DiscrepancyReport.java)
-  - [DiscrepancyReportDetail.java](file:///d:/DATN_BE/src/main/java/com/smartflow/smestocksensebackend/entity/DiscrepancyReportDetail.java)
+  - [DiscrepancyReport.java](src/main/java/com/smartflow/smestocksensebackend/entity/DiscrepancyReport.java)
+  - [DiscrepancyReportDetail.java](src/main/java/com/smartflow/smestocksensebackend/entity/DiscrepancyReportDetail.java)
 - **Repositories**:
-  - [DiscrepancyReportRepository.java](file:///d:/DATN_BE/src/main/java/com/smartflow/smestocksensebackend/repository/DiscrepancyReportRepository.java)
-  - [DiscrepancyReportDetailRepository.java](file:///d:/DATN_BE/src/main/java/com/smartflow/smestocksensebackend/repository/DiscrepancyReportDetailRepository.java)
+  - [DiscrepancyReportRepository.java](src/main/java/com/smartflow/smestocksensebackend/repository/DiscrepancyReportRepository.java)
+  - [DiscrepancyReportDetailRepository.java](src/main/java/com/smartflow/smestocksensebackend/repository/DiscrepancyReportDetailRepository.java)
 - **DTOs (Lombok Classes)**:
-  - [CreateDiscrepancyReportRequest.java](file:///d:/DATN_BE/src/main/java/com/smartflow/smestocksensebackend/dto/inbound/CreateDiscrepancyReportRequest.java)
-  - [CreateDiscrepancyReportItemRequest.java](file:///d:/DATN_BE/src/main/java/com/smartflow/smestocksensebackend/dto/inbound/CreateDiscrepancyReportItemRequest.java)
-  - [DiscrepancyReportResponse.java](file:///d:/DATN_BE/src/main/java/com/smartflow/smestocksensebackend/dto/inbound/DiscrepancyReportResponse.java)
-  - [DiscrepancyReportDetailResponse.java](file:///d:/DATN_BE/src/main/java/com/smartflow/smestocksensebackend/dto/inbound/DiscrepancyReportDetailResponse.java)
+  - [CreateDiscrepancyReportRequest.java](src/main/java/com/smartflow/smestocksensebackend/dto/inbound/CreateDiscrepancyReportRequest.java)
+  - [CreateDiscrepancyReportItemRequest.java](src/main/java/com/smartflow/smestocksensebackend/dto/inbound/CreateDiscrepancyReportItemRequest.java)
+  - [DiscrepancyReportResponse.java](src/main/java/com/smartflow/smestocksensebackend/dto/inbound/DiscrepancyReportResponse.java)
+  - [DiscrepancyReportDetailResponse.java](src/main/java/com/smartflow/smestocksensebackend/dto/inbound/DiscrepancyReportDetailResponse.java)
 - **Controller & Service layer**:
-  - [ImportReceiptController.java](file:///d:/DATN_BE/src/main/java/com/smartflow/smestocksensebackend/controller/ImportReceiptController.java) (Khai báo endpoint `/api/import-receipts/{receiptId}/discrepancy-report`)
-  - [ImportReceiptService.java](file:///d:/DATN_BE/src/main/java/com/smartflow/smestocksensebackend/service/ImportReceiptService.java) (Khai báo interface nghiệp vụ)
-  - [ImportReceiptServiceImpl.java](file:///d:/DATN_BE/src/main/java/com/smartflow/smestocksensebackend/service/impl/ImportReceiptServiceImpl.java) (Triển khai logic nghiệp vụ tại method `createDiscrepancyReport`)
+  - [ImportReceiptController.java](src/main/java/com/smartflow/smestocksensebackend/controller/ImportReceiptController.java) (Khai báo endpoint `/api/import-receipts/{receiptId}/discrepancy-report`)
+  - [ImportReceiptService.java](src/main/java/com/smartflow/smestocksensebackend/service/ImportReceiptService.java) (Khai báo interface nghiệp vụ)
+  - [ImportReceiptServiceImpl.java](src/main/java/com/smartflow/smestocksensebackend/service/impl/ImportReceiptServiceImpl.java) (Triển khai logic nghiệp vụ tại method `createDiscrepancyReport`)
 - **Unit Tests**:
-  - [ImportReceiptDiscrepancyReportControllerTest.java](file:///d:/DATN_BE/src/test/java/com/smartflow/smestocksensebackend/controller/ImportReceiptDiscrepancyReportControllerTest.java) (Test endpoint và bảo mật)
-  - [ImportReceiptDetailServiceTest.java](file:///d:/DATN_BE/src/test/java/com/smartflow/smestocksensebackend/service/impl/ImportReceiptDetailServiceTest.java) (Test nghiệp vụ, tính toán số lượng lệch và các logic ràng buộc)
+  - [ImportReceiptDiscrepancyReportControllerTest.java](src/test/java/com/smartflow/smestocksensebackend/controller/ImportReceiptDiscrepancyReportControllerTest.java) (Test endpoint và bảo mật)
+  - [ImportReceiptDetailServiceTest.java](src/test/java/com/smartflow/smestocksensebackend/service/impl/ImportReceiptDetailServiceTest.java) (Test nghiệp vụ, tính toán số lượng lệch và các logic ràng buộc)
 
 ---
 

@@ -32,23 +32,30 @@ Thao tác trực tiếp trên bảng `ton_kho`:
 
 ## 4. Cấu trúc các file mã nguồn triển khai (Code Structure)
 - **Entity**:
-  - [InventoryLevel.java](file:///d:/DATN_BE/src/main/java/com/smartflow/smestocksensebackend/entity/InventoryLevel.java): Thực thể JPA ánh xạ bảng `ton_kho`.
+  - [InventoryLevel.java](src/main/java/com/smartflow/smestocksensebackend/entity/InventoryLevel.java): Thực thể JPA ánh xạ bảng `ton_kho`.
 - **Repository**:
-  - [InventoryLevelRepository.java](file:///d:/DATN_BE/src/main/java/com/smartflow/smestocksensebackend/repository/InventoryLevelRepository.java): Khai báo các phương thức truy vấn Spring Data JPA, bao gồm tìm kiếm theo sản phẩm và kho hàng.
+  - [InventoryLevelRepository.java](src/main/java/com/smartflow/smestocksensebackend/repository/InventoryLevelRepository.java): Khai báo các phương thức truy vấn Spring Data JPA, bao gồm tìm kiếm theo sản phẩm và kho hàng.
 - **Service**:
-  - [InventoryService.java](file:///d:/DATN_BE/src/main/java/com/smartflow/smestocksensebackend/service/InventoryService.java): Định nghĩa interface cho Core Service tăng tồn kho.
-  - [InventoryServiceImpl.java](file:///d:/DATN_BE/src/main/java/com/smartflow/smestocksensebackend/service/impl/InventoryServiceImpl.java): Triển khai chi tiết logic nghiệp vụ, tích hợp `@Transactional` để đảm bảo tính toàn vẹn dữ liệu.
+  - [InventoryService.java](src/main/java/com/smartflow/smestocksensebackend/service/InventoryService.java): Định nghĩa interface cho Core Service tăng tồn kho.
+  - [InventoryServiceImpl.java](src/main/java/com/smartflow/smestocksensebackend/service/impl/InventoryServiceImpl.java): Triển khai chi tiết logic nghiệp vụ, tích hợp `@Transactional` để đảm bảo tính toàn vẹn dữ liệu.
 - **Unit Test**:
-  - [InventoryServiceImplTest.java](file:///d:/DATN_BE/src/test/java/com/smartflow/smestocksensebackend/service/impl/InventoryServiceImplTest.java): Kiểm thử các trường hợp thành công (tạo mới/cộng dồn) và ngoại lệ (sản phẩm/kho không tồn tại).
+  - [InventoryServiceImplTest.java](src/test/java/com/smartflow/smestocksensebackend/service/impl/InventoryServiceImplTest.java): Kiểm thử các trường hợp thành công (tạo mới/cộng dồn) và ngoại lệ (sản phẩm/kho không tồn tại).
 
 ---
 
 ## 5. Hướng dẫn chạy kiểm thử (Testing)
 Chạy riêng các test case cho Service Tồn kho:
 ```bash
-./mvnw test -pl . -Dtest=InventoryServiceImplTest
+./mvnw test -Dtest=InventoryServiceImplTest
 ```
-Hoặc chạy toàn bộ test suite (bỏ qua validation checksum của Flyway nếu database Neon thật bị lệch):
+Chạy toàn bộ test suite:
 ```bash
-./mvnw test "-Dspring.flyway.validate-on-migrate=false"
+./mvnw test
 ```
+
+> [!NOTE]
+> **Chỉ dùng khi kết nối DB Neon thật bị lệch checksum Flyway**: Nếu Flyway báo lỗi `validate-on-migrate`, thêm cờ sau làm giải pháp tạm thời:
+> ```bash
+> ./mvnw test "-Dspring.flyway.validate-on-migrate=false"
+> ```
+> Không nên dùng cờ này trong môi trường CI/CD chính thức.

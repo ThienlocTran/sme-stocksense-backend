@@ -71,7 +71,7 @@ public class InventoryTransaction {
     @Column(name = "ghi_chu", length = 255)
     private String note;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "nguoi_tao_id")
     private Employee createdBy;
 

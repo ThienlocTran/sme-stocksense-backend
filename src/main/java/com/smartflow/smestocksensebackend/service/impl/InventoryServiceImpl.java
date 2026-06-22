@@ -89,7 +89,7 @@ public class InventoryServiceImpl implements InventoryService {
                 InventoryLevel locked = inventoryLevelRepository.findByProductIdAndWarehouseIdForUpdate(productId, warehouseId)
                         .orElseThrow(() -> e);
                 quantityBefore = locked.getQuantity();
-                quantityAfter = quantityBefore + quantity;
+                quantityAfter = safeAddQuantity(quantityBefore, quantity);
                 locked.setQuantity(quantityAfter);
                 inventoryLevelRepository.saveAndFlush(locked);
             }
@@ -97,7 +97,7 @@ public class InventoryServiceImpl implements InventoryService {
             // 5. Nếu đã tồn tại -> Cập nhật cộng dồn (Update)
             InventoryLevel existingInventory = inventoryLevelOpt.get();
             quantityBefore = existingInventory.getQuantity();
-            quantityAfter = quantityBefore + quantity;
+            quantityAfter = safeAddQuantity(quantityBefore, quantity);
             existingInventory.setQuantity(quantityAfter);
             inventoryLevelRepository.saveAndFlush(existingInventory);
         }
@@ -115,6 +115,22 @@ public class InventoryServiceImpl implements InventoryService {
                     importReceipt,
                     "Kế thừa T73, track biến động kho phục vụ đối soát"
             );
+        }
+    }
+
+    /**
+     * Cộng số lượng tồn kho an toàn, tránh lỗi tràn số nguyên (Integer overflow).
+     *
+     * @param current Số lượng tồn hiện tại
+     * @param delta   Số lượng cần cộng thêm
+     * @return Tổng số lượng sau khi cộng
+     * @throws IllegalArgumentException nếu tổng vượt quá Integer.MAX_VALUE
+     */
+    private int safeAddQuantity(int current, int delta) {
+        try {
+            return Math.addExact(current, delta);
+        } catch (ArithmeticException ex) {
+            throw new IllegalArgumentException("Tong so luong ton kho vuot gioi han cho phep.", ex);
         }
     }
 }

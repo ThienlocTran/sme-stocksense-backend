@@ -20,17 +20,17 @@
 ### 2.1 Các File Mới Tạo & Cập Nhật
 
 * **Entity**:
-  * [InventoryTransaction.java](file:///d:/DATN_BE/src/main/java/com/smartflow/smestocksensebackend/entity/InventoryTransaction.java): Ánh xạ đến bảng `giao_dich_kho` trong Database.
-  * [InventoryTransactionType.java](file:///d:/DATN_BE/src/main/java/com/smartflow/smestocksensebackend/entity/InventoryTransactionType.java): Enum định nghĩa các loại biến động kho (`NHAP_KHO`, `XUAT_KHO`, `NHAP_DAU_KY`, `DIEU_CHINH_TANG`, `DIEU_CHINH_GIAM`).
+  * [InventoryTransaction.java](src/main/java/com/smartflow/smestocksensebackend/entity/InventoryTransaction.java): Ánh xạ đến bảng `giao_dich_kho` trong Database.
+  * [InventoryTransactionType.java](src/main/java/com/smartflow/smestocksensebackend/entity/InventoryTransactionType.java): Enum định nghĩa các loại biến động kho (`NHAP_KHO`, `XUAT_KHO`, `NHAP_DAU_KY`, `DIEU_CHINH_TANG`, `DIEU_CHINH_GIAM`).
 
 * **Repository**:
-  * [InventoryTransactionRepository.java](file:///d:/DATN_BE/src/main/java/com/smartflow/smestocksensebackend/repository/InventoryTransactionRepository.java): Giao tiếp DB cho bảng `giao_dich_kho`.
+  * [InventoryTransactionRepository.java](src/main/java/com/smartflow/smestocksensebackend/repository/InventoryTransactionRepository.java): Giao tiếp DB cho bảng `giao_dich_kho`.
 
 * **Service**:
-  * [InventoryTransactionService.java](file:///d:/DATN_BE/src/main/java/com/smartflow/smestocksensebackend/service/InventoryTransactionService.java): Định nghĩa API ghi log biến động nội bộ.
-  * [InventoryTransactionServiceImpl.java](file:///d:/DATN_BE/src/main/java/com/smartflow/smestocksensebackend/service/impl/InventoryTransactionServiceImpl.java): Xử lý logic nghiệp vụ ghi log, tự động gán nhân viên đang đăng nhập và lưu vết.
-  * [InventoryService.java](file:///d:/DATN_BE/src/main/java/com/smartflow/smestocksensebackend/service/InventoryService.java): Cập nhật signature nạp chồng nhận thêm `ImportReceipt`.
-  * [InventoryServiceImpl.java](file:///d:/DATN_BE/src/main/java/com/smartflow/smestocksensebackend/service/impl/InventoryServiceImpl.java): Thực hiện đo lường `so_luong_truoc` và `so_luong_sau` trong Pessimistic Lock, sau đó kích hoạt ghi log giao dịch.
+  * [InventoryTransactionService.java](src/main/java/com/smartflow/smestocksensebackend/service/InventoryTransactionService.java): Định nghĩa API ghi log biến động nội bộ.
+  * [InventoryTransactionServiceImpl.java](src/main/java/com/smartflow/smestocksensebackend/service/impl/InventoryTransactionServiceImpl.java): Xử lý logic nghiệp vụ ghi log, tự động gán nhân viên đang đăng nhập và lưu vết.
+  * [InventoryService.java](src/main/java/com/smartflow/smestocksensebackend/service/InventoryService.java): Cập nhật signature nạp chồng nhận thêm `ImportReceipt`.
+  * [InventoryServiceImpl.java](src/main/java/com/smartflow/smestocksensebackend/service/impl/InventoryServiceImpl.java): Thực hiện đo lường `so_luong_truoc` và `so_luong_sau` trong Pessimistic Lock, sau đó kích hoạt ghi log giao dịch.
 
 ### 2.2 Đảm Bảo An Toàn Đồng Thời (Concurrency Safety)
 * Việc đo lường số lượng trước/sau được tiến hành ngay bên trong khối đồng bộ của `increaseInventory` sử dụng **Pessimistic Write Lock** (`SELECT ... FOR UPDATE`).
@@ -39,5 +39,5 @@
 ---
 
 ## 3. Kiểm Thử Hệ Thống (Unit Tests)
-* **[InventoryTransactionServiceImplTest.java](file:///d:/DATN_BE/src/test/java/com/smartflow/smestocksensebackend/service/impl/InventoryTransactionServiceImplTest.java)**: Kiểm thử độc lập khả năng ghi log giao dịch kho, kiểm tra đầy đủ các trường thông tin lưu vết, xử lý trường hợp không tìm thấy kho/sản phẩm, và xử lý khi không có nhân viên đăng nhập.
-* **[InventoryServiceImplTest.java](file:///d:/DATN_BE/src/test/java/com/smartflow/smestocksensebackend/service/impl/InventoryServiceImplTest.java)**: Bổ sung ca kiểm thử `increaseInventory_withImportReceipt_shouldLogTransaction` để xác nhận luồng tích hợp ghi nhận giao dịch hoạt động chuẩn xác.
+* **[InventoryTransactionServiceImplTest.java](src/test/java/com/smartflow/smestocksensebackend/service/impl/InventoryTransactionServiceImplTest.java)**: Kiểm thử độc lập khả năng ghi log giao dịch kho, kiểm tra đầy đủ các trường thông tin lưu vết, xử lý trường hợp không tìm thấy kho/sản phẩm, và xử lý khi không có nhân viên đăng nhập.
+* **[InventoryServiceImplTest.java](src/test/java/com/smartflow/smestocksensebackend/service/impl/InventoryServiceImplTest.java)**: Bổ sung ca kiểm thử `increaseInventory_withImportReceipt_shouldLogTransaction` để xác nhận luồng tích hợp ghi nhận giao dịch hoạt động chuẩn xác.

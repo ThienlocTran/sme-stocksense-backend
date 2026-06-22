@@ -7,6 +7,6 @@ import org.springframework.data.domain.Pageable;
 public interface InventoryService {
 
     Page<InventoryLevelResponse> listInventory(Long warehouseId, Long productId, String keyword, String stockStatus,
-            Pageable pageable);
+            String warehouseStatus, String productStatus, Pageable pageable);
 
 }

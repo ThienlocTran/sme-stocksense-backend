@@ -7,6 +7,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Positive;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -27,13 +28,31 @@ public class InventoryController {
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN','MANAGER','EMPLOYEE')")
     public Page<InventoryLevelResponse> listInventory(
-            @RequestParam(required = false) Long warehouseId,
-            @RequestParam(required = false) Long productId,
+            @RequestParam(required = false) @Positive Long warehouseId,
+            @RequestParam(required = false) @Positive Long productId,
             @RequestParam(required = false) String keyword,
-            @RequestParam(required = false) String stockStatus,
+            @RequestParam(name = "status", required = false) String stockStatus,
+            @RequestParam(required = false) String warehouseStatus,
+            @RequestParam(required = false) String productStatus,
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.unsorted());
-        return inventoryService.listInventory(warehouseId, productId, keyword, stockStatus, pageable);
+        return inventoryService.listInventory(warehouseId, productId, keyword, stockStatus,
+                warehouseStatus, productStatus, pageable);
+    }
+
+    @GetMapping("/low-stock")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER','EMPLOYEE')")
+    public Page<InventoryLevelResponse> listLowStockInventory(
+            @RequestParam(required = false) @Positive Long warehouseId,
+            @RequestParam(required = false) @Positive Long productId,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String warehouseStatus,
+            @RequestParam(required = false) String productStatus,
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
+        Pageable pageable = PageRequest.of(page, size, Sort.unsorted());
+        return inventoryService.listInventory(warehouseId, productId, keyword, "LOW_STOCK",
+                warehouseStatus, productStatus, pageable);
     }
 }

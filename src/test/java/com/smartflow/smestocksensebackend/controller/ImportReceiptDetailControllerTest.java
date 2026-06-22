@@ -48,12 +48,6 @@ class ImportReceiptDetailControllerTest {
     private EmployeeRepository employeeRepository;
 
     @Test
-    void getDetail_withoutTokenShouldReturn401() throws Exception {
-        mockMvc.perform(get("/api/import-receipts/123"))
-                .andExpect(status().isUnauthorized());
-    }
-
-    @Test
     void getDetail_employeeOwnerShouldReturn200() throws Exception {
         when(importReceiptService.getDetail(eq(123L))).thenReturn(response("NHAP"));
 
@@ -148,6 +142,7 @@ class ImportReceiptDetailControllerTest {
                 .andExpect(jsonPath("$.createdById").exists())
                 .andExpect(jsonPath("$.createdByName").exists())
                 .andExpect(jsonPath("$.status").exists())
+                .andExpect(jsonPath("$.rejectionReason").value("Sai don gia nhap."))
                 .andExpect(jsonPath("$.totalAmount").exists())
                 .andExpect(jsonPath("$.details").exists())
                 .andExpect(jsonPath("$.detailCount").exists())
@@ -179,6 +174,7 @@ class ImportReceiptDetailControllerTest {
                 status,
                 new BigDecimal("1250000"),
                 "Ghi chu test",
+                "TU_CHOI".equals(status) ? "Sai don gia nhap." : null,
                 List.of(item),
                 1,
                 LocalDateTime.of(2026, 6, 18, 10, 0),

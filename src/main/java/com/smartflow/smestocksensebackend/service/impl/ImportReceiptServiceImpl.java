@@ -281,7 +281,7 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
             throw new MissingRoleException("Khong co quyen xem phieu nhap cua nguoi khac.");
         }
 
-        List<ImportReceiptDetail> details = importReceiptDetailRepository.findByDocumentIdOrderByIdAsc(receiptId);
+        List<ImportReceiptDetail> details = importReceiptDetailRepository.findByDocumentId(receiptId);
         return ImportReceiptDraftResponse.from(receipt, details);
     }
 

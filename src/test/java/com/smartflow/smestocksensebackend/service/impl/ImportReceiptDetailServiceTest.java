@@ -50,15 +50,32 @@ class ImportReceiptDetailServiceTest {
         List<ImportReceiptDetail> details = List.of(createDetail(1L, receipt));
 
         when(importReceiptRepository.findById(100L)).thenReturn(Optional.of(receipt));
-        when(importReceiptDetailRepository.findByDocumentIdOrderByIdAsc(100L)).thenReturn(details);
+        when(importReceiptDetailRepository.findByDocumentId(100L)).thenReturn(details);
 
         ImportReceiptDraftResponse response = importReceiptService.getDetail(100L);
 
         assertThat(response).isNotNull();
         assertThat(response.id()).isEqualTo(100L);
         assertThat(response.status()).isEqualTo("NHAP");
+        assertThat(response.rejectionReason()).isNull();
         assertThat(response.details()).hasSize(1);
         assertThat(response.detailCount()).isEqualTo(1);
+    }
+
+    @Test
+    void getDetail_rejectedReceiptShouldReturnRejectionReason() {
+        Employee owner = createEmployee(1L, RoleCode.EMPLOYEE, EmployeeStatus.HOAT_DONG);
+        authenticateAs(owner);
+
+        ImportReceipt receipt = createReceipt(100L, ImportReceiptStatus.TU_CHOI, owner);
+        receipt.setRejectionReason("Sai don gia nhap.");
+        when(importReceiptRepository.findById(100L)).thenReturn(Optional.of(receipt));
+        when(importReceiptDetailRepository.findByDocumentId(100L)).thenReturn(List.of());
+
+        ImportReceiptDraftResponse response = importReceiptService.getDetail(100L);
+
+        assertThat(response.status()).isEqualTo("TU_CHOI");
+        assertThat(response.rejectionReason()).isEqualTo("Sai don gia nhap.");
     }
 
     @Test
@@ -71,7 +88,7 @@ class ImportReceiptDetailServiceTest {
         List<ImportReceiptDetail> details = List.of(createDetail(1L, receipt));
 
         when(importReceiptRepository.findById(100L)).thenReturn(Optional.of(receipt));
-        when(importReceiptDetailRepository.findByDocumentIdOrderByIdAsc(100L)).thenReturn(details);
+        when(importReceiptDetailRepository.findByDocumentId(100L)).thenReturn(details);
 
         ImportReceiptDraftResponse response = importReceiptService.getDetail(100L);
 
@@ -134,7 +151,7 @@ class ImportReceiptDetailServiceTest {
         List<ImportReceiptDetail> details = List.of(createDetail(1L, receipt));
 
         when(importReceiptRepository.findById(100L)).thenReturn(Optional.of(receipt));
-        when(importReceiptDetailRepository.findByDocumentIdOrderByIdAsc(100L)).thenReturn(details);
+        when(importReceiptDetailRepository.findByDocumentId(100L)).thenReturn(details);
 
         ImportReceiptDraftResponse response = importReceiptService.getDetail(100L);
 
@@ -178,7 +195,7 @@ class ImportReceiptDetailServiceTest {
 
     private void authenticateAs(Employee employee) {
         UsernamePasswordAuthenticationToken authentication =
-                new UsernamePasswordAuthenticationToken(employee, null, employee.getAuthorities());
+                new UsernamePasswordAuthenticationToken(employee, null, List.of());
         SecurityContextHolder.getContext().setAuthentication(authentication);
     }
 }

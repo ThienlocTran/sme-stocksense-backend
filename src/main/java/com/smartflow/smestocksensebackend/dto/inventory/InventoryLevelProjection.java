@@ -33,6 +33,3 @@ public interface InventoryLevelProjection {
 
     LocalDateTime getLastUpdatedAt();
 }
-
-        String getProductStatus();
-        String getWarehouseStatus();

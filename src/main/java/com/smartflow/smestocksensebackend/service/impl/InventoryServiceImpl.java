@@ -2,6 +2,7 @@ package com.smartflow.smestocksensebackend.service.impl;
 
 import com.smartflow.smestocksensebackend.dto.inventory.InventoryLevelProjection;
 import com.smartflow.smestocksensebackend.dto.inventory.InventoryLevelResponse;
+import com.smartflow.smestocksensebackend.exception.BadRequestException;
 import com.smartflow.smestocksensebackend.repository.InventoryLevelRepository;
 import com.smartflow.smestocksensebackend.repository.ProductRepository;
 import com.smartflow.smestocksensebackend.repository.WarehouseRepository;
@@ -31,9 +32,17 @@ public class InventoryServiceImpl implements InventoryService {
             throw new com.smartflow.smestocksensebackend.exception.NotFoundException("Sản phẩm không tồn tại.");
         }
 
-        String normalizedStockStatus = normalizeStockStatus(stockStatus);
-        String normalizedWarehouseStatus = normalizeActiveStatus(warehouseStatus);
-        String normalizedProductStatus = normalizeActiveStatus(productStatus);
+        String normalizedStockStatus;
+        String normalizedWarehouseStatus;
+        String normalizedProductStatus;
+
+        try {
+            normalizedStockStatus = normalizeStockStatus(stockStatus);
+            normalizedWarehouseStatus = normalizeActiveStatus(warehouseStatus);
+            normalizedProductStatus = normalizeActiveStatus(productStatus);
+        } catch (IllegalArgumentException e) {
+            throw new BadRequestException(e.getMessage());
+        }
 
         String keywordParam = (keyword == null || keyword.isBlank()) ? null : "%" + keyword.trim() + "%";
         Page<InventoryLevelProjection> result = inventoryLevelRepository.findInventory(warehouseId, productId,

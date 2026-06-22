@@ -6,6 +6,15 @@ import jakarta.validation.constraints.Size;
 
 import java.time.LocalDateTime;
 
+/**
+ * Yêu cầu chi tiết kiểm hàng cho từng sản phẩm trong phiếu nhập kho.
+ * Chứa số lượng thực tế nhận được, tình trạng vật lý và hạn sử dụng của sản phẩm.
+ *
+ * @param productId ID của sản phẩm cần kiểm đếm
+ * @param actualReceivedQuantity Số lượng sản phẩm thực tế nhận được (phải >= 0)
+ * @param physicalStatus Mô tả tình trạng vật lý (ví dụ: nguyên vẹn, móp méo, vỡ...)
+ * @param expiryDate Hạn sử dụng của lô hàng thực nhận (nếu có)
+ */
 public record InspectImportReceiptItemRequest(
         @NotNull(message = "productId không được để trống.")
         Long productId,

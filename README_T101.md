@@ -63,16 +63,18 @@ Lưu trữ chi tiết các sản phẩm bị chênh lệch số lượng.
   ```
 - **Response Body (201 Created)**:
   Trả về thông tin biên bản chênh lệch cùng danh sách chi tiết các sản phẩm chênh lệch được lập.
+
   ```json
   {
     "id": 1,
     "code": "BBCL-PNK-20240001",
     "note": "Biên bản ghi nhận thiếu hàng cà phê",
-    "createdBy": "employee1@example.com",
+    "createdById": 1,
+    "createdByName": "Nguyễn Văn A",
     "createdAt": "2024-06-22T10:30:00",
     "details": [
       {
-        "san_pham_id": 20,
+        "productId": 20,
         "discrepancyQuantity": -2,
         "reason": "Nhà cung cấp giao thiếu hàng",
         "action": "Yêu cầu giao bù trong 3 ngày"

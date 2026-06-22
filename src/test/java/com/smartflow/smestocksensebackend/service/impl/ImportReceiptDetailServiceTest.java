@@ -1,14 +1,21 @@
 package com.smartflow.smestocksensebackend.service.impl;
 
 import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptDraftResponse;
+import com.smartflow.smestocksensebackend.dto.inbound.InspectImportReceiptRequest;
+import com.smartflow.smestocksensebackend.dto.inbound.InspectImportReceiptItemRequest;
 import com.smartflow.smestocksensebackend.entity.Employee;
 import com.smartflow.smestocksensebackend.entity.EmployeeStatus;
 import com.smartflow.smestocksensebackend.entity.ImportReceipt;
 import com.smartflow.smestocksensebackend.entity.ImportReceiptDetail;
 import com.smartflow.smestocksensebackend.entity.ImportReceiptStatus;
+import com.smartflow.smestocksensebackend.entity.Partner;
+import com.smartflow.smestocksensebackend.entity.PartnerStatus;
+import com.smartflow.smestocksensebackend.entity.PartnerType;
+import com.smartflow.smestocksensebackend.entity.Product;
 import com.smartflow.smestocksensebackend.entity.Role;
 import com.smartflow.smestocksensebackend.entity.RoleCode;
 import com.smartflow.smestocksensebackend.exception.AccountInactiveException;
+import com.smartflow.smestocksensebackend.exception.BadRequestException;
 import com.smartflow.smestocksensebackend.exception.MissingRoleException;
 import com.smartflow.smestocksensebackend.exception.NotFoundException;
 import com.smartflow.smestocksensebackend.repository.ImportReceiptDetailRepository;
@@ -22,6 +29,8 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
@@ -142,6 +151,127 @@ class ImportReceiptDetailServiceTest {
         assertThat(receipt.getTotalAmount()).isEqualTo(BigDecimal.valueOf(1000));
     }
 
+    @Test
+    void inspectReceipt_success_whenMatched() {
+        Employee owner = createEmployee(1L, RoleCode.EMPLOYEE, EmployeeStatus.HOAT_DONG);
+        authenticateAs(owner);
+
+        Partner supplier = new Partner();
+        supplier.setId(10L);
+        supplier.setType(PartnerType.NHA_CUNG_CAP);
+        supplier.setStatus(PartnerStatus.HOAT_DONG);
+
+        ImportReceipt receipt = createReceipt(100L, ImportReceiptStatus.CHO_KIEM_HANG, owner);
+        receipt.setSupplier(supplier);
+
+        Product product = new Product();
+        product.setId(20L);
+        product.setCode("SP-20");
+        product.setName("Product 20");
+
+        ImportReceiptDetail detail = createDetail(1L, receipt);
+        detail.setProduct(product);
+        detail.setExpectedQuantity(10);
+
+        List<ImportReceiptDetail> details = List.of(detail);
+
+        LocalDateTime now = LocalDateTime.now();
+        InspectImportReceiptItemRequest itemRequest = new InspectImportReceiptItemRequest(20L, 10, "Binh thuong", now);
+        InspectImportReceiptRequest request = new InspectImportReceiptRequest(List.of(itemRequest));
+
+        when(importReceiptRepository.findById(100L)).thenReturn(Optional.of(receipt));
+        when(importReceiptDetailRepository.findByDocumentId(100L)).thenReturn(details);
+        when(importReceiptDetailRepository.saveAllAndFlush(details)).thenReturn(details);
+        when(importReceiptRepository.saveAndFlush(receipt)).thenReturn(receipt);
+
+        ImportReceiptDraftResponse response = importReceiptService.inspectReceipt(100L, request);
+
+        assertThat(response).isNotNull();
+        assertThat(detail.getActualReceivedQuantity()).isEqualTo(10);
+        assertThat(detail.getPhysicalStatus()).isEqualTo("Binh thuong");
+        assertThat(detail.getExpiryDate()).isEqualTo(now);
+        assertThat(detail.getRowStatus()).isEqualTo("KHOP");
+    }
+
+    @Test
+    void inspectReceipt_success_whenMismatched() {
+        Employee owner = createEmployee(1L, RoleCode.EMPLOYEE, EmployeeStatus.HOAT_DONG);
+        authenticateAs(owner);
+
+        Partner supplier = new Partner();
+        supplier.setId(10L);
+        supplier.setType(PartnerType.NHA_CUNG_CAP);
+        supplier.setStatus(PartnerStatus.HOAT_DONG);
+
+        ImportReceipt receipt = createReceipt(100L, ImportReceiptStatus.CHO_KIEM_HANG, owner);
+        receipt.setSupplier(supplier);
+
+        Product product = new Product();
+        product.setId(20L);
+        product.setCode("SP-20");
+        product.setName("Product 20");
+
+        ImportReceiptDetail detail = createDetail(1L, receipt);
+        detail.setProduct(product);
+        detail.setExpectedQuantity(10);
+
+        List<ImportReceiptDetail> details = List.of(detail);
+
+        LocalDateTime now = LocalDateTime.now();
+        InspectImportReceiptItemRequest itemRequest = new InspectImportReceiptItemRequest(20L, 8, "Binh thuong", now);
+        InspectImportReceiptRequest request = new InspectImportReceiptRequest(List.of(itemRequest));
+
+        when(importReceiptRepository.findById(100L)).thenReturn(Optional.of(receipt));
+        when(importReceiptDetailRepository.findByDocumentId(100L)).thenReturn(details);
+        when(importReceiptDetailRepository.saveAllAndFlush(details)).thenReturn(details);
+        when(importReceiptRepository.saveAndFlush(receipt)).thenReturn(receipt);
+
+        ImportReceiptDraftResponse response = importReceiptService.inspectReceipt(100L, request);
+
+        assertThat(response).isNotNull();
+        assertThat(detail.getActualReceivedQuantity()).isEqualTo(8);
+        assertThat(detail.getPhysicalStatus()).isEqualTo("Binh thuong");
+        assertThat(detail.getExpiryDate()).isEqualTo(now);
+        assertThat(detail.getRowStatus()).isEqualTo("CHENH_LECH");
+    }
+
+    @Test
+    void inspectReceipt_error_whenStatusNotChoKiemHang() {
+        Employee owner = createEmployee(1L, RoleCode.EMPLOYEE, EmployeeStatus.HOAT_DONG);
+        authenticateAs(owner);
+
+        ImportReceipt receipt = createReceipt(100L, ImportReceiptStatus.NHAP, owner);
+        InspectImportReceiptRequest request = new InspectImportReceiptRequest(Collections.emptyList());
+
+        when(importReceiptRepository.findById(100L)).thenReturn(Optional.of(receipt));
+
+        assertThatThrownBy(() -> importReceiptService.inspectReceipt(100L, request))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("Phieu nhap khong o trang thai CHO_KIEM_HANG.");
+    }
+
+    @Test
+    void inspectReceipt_error_whenPartnerNotSupplier() {
+        Employee owner = createEmployee(1L, RoleCode.EMPLOYEE, EmployeeStatus.HOAT_DONG);
+        authenticateAs(owner);
+
+        Partner supplier = new Partner();
+        supplier.setId(10L);
+        supplier.setType(PartnerType.KHACH_HANG);
+        supplier.setStatus(PartnerStatus.HOAT_DONG);
+
+        ImportReceipt receipt = createReceipt(100L, ImportReceiptStatus.CHO_KIEM_HANG, owner);
+        receipt.setSupplier(supplier);
+
+        InspectImportReceiptRequest request = new InspectImportReceiptRequest(Collections.emptyList());
+
+        when(importReceiptRepository.findById(100L)).thenReturn(Optional.of(receipt));
+
+        assertThatThrownBy(() -> importReceiptService.inspectReceipt(100L, request))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("Chi ap dung kiem hang cho phieu nhap tu nha cung cap.");
+    }
+
     private Employee createEmployee(Long id, RoleCode code, EmployeeStatus status) {
         Employee employee = new Employee();
         employee.setId(id);
@@ -177,8 +307,10 @@ class ImportReceiptDetailServiceTest {
     }
 
     private void authenticateAs(Employee employee) {
+        org.springframework.security.core.authority.SimpleGrantedAuthority authority =
+                new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_" + employee.getRole().getCode().name());
         UsernamePasswordAuthenticationToken authentication =
-                new UsernamePasswordAuthenticationToken(employee, null, employee.getAuthorities());
+                new UsernamePasswordAuthenticationToken(employee, null, List.of(authority));
         SecurityContextHolder.getContext().setAuthentication(authentication);
     }
 }

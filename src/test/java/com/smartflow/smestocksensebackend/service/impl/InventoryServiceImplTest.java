@@ -63,7 +63,7 @@ class InventoryServiceImplTest {
     void increaseInventory_success_whenInventoryDoesNotExist() {
         Mockito.when(productRepository.findById(1L)).thenReturn(Optional.of(product));
         Mockito.when(warehouseRepository.findById(1L)).thenReturn(Optional.of(warehouse));
-        Mockito.when(inventoryLevelRepository.findByProductIdAndWarehouseId(1L, 1L))
+        Mockito.when(inventoryLevelRepository.findByProductIdAndWarehouseIdForUpdate(1L, 1L))
                 .thenReturn(Optional.empty());
 
         inventoryService.increaseInventory(1L, 1L, 50);
@@ -92,7 +92,7 @@ class InventoryServiceImplTest {
 
         Mockito.when(productRepository.findById(1L)).thenReturn(Optional.of(product));
         Mockito.when(warehouseRepository.findById(1L)).thenReturn(Optional.of(warehouse));
-        Mockito.when(inventoryLevelRepository.findByProductIdAndWarehouseId(1L, 1L))
+        Mockito.when(inventoryLevelRepository.findByProductIdAndWarehouseIdForUpdate(1L, 1L))
                 .thenReturn(Optional.of(existingInventory));
 
         inventoryService.increaseInventory(1L, 1L, 50);
@@ -136,6 +136,20 @@ class InventoryServiceImplTest {
         );
 
         assertEquals("Kho hàng không tồn tại.", exception.getMessage());
+        Mockito.verify(inventoryLevelRepository, Mockito.never()).saveAndFlush(any());
+    }
+
+    /**
+     * Kiểm thử ngoại lệ: Tham số đầu vào không hợp lệ (quantity = 0).
+     * Kỳ vọng: Ném IllegalArgumentException với message đúng trước khi truy vấn DB.
+     */
+    @Test
+    void increaseInventory_error_whenInvalidInput() {
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
+                inventoryService.increaseInventory(1L, 1L, 0)
+        );
+
+        assertEquals("productId, warehouseId, quantity phải > 0", exception.getMessage());
         Mockito.verify(inventoryLevelRepository, Mockito.never()).saveAndFlush(any());
     }
 }

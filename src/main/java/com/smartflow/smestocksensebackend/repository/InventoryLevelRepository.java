@@ -31,6 +31,8 @@ public interface InventoryLevelRepository
                         "OR k.ten_kho::text ILIKE :keyword)) " +
                         "AND (:stockStatus IS NULL OR (CASE WHEN t.so_luong = 0 THEN 'OUT_OF_STOCK' WHEN t.so_luong <= sp.ton_toi_thieu THEN 'LOW_STOCK' WHEN sp.ton_toi_da IS NOT NULL AND t.so_luong >= sp.ton_toi_da THEN 'OVER_STOCK' ELSE 'NORMAL' END) = :stockStatus) "
                         +
+                        "AND (:warehouseStatus IS NULL OR k.trang_thai = :warehouseStatus) " +
+                        "AND (:productStatus IS NULL OR sp.trang_thai = :productStatus) " +
                         "ORDER BY t.id DESC", countQuery = "SELECT COUNT(*) " +
                                         "FROM ton_kho t " +
                                         "JOIN san_pham sp ON sp.id = t.san_pham_id " +
@@ -42,11 +44,16 @@ public interface InventoryLevelRepository
                                         "OR sp.ma_vach::text ILIKE :keyword " +
                                         "OR k.ma_kho::text ILIKE :keyword " +
                                         "OR k.ten_kho::text ILIKE :keyword)) " +
-                                        "AND (:stockStatus IS NULL OR (CASE WHEN t.so_luong = 0 THEN 'OUT_OF_STOCK' WHEN t.so_luong <= sp.ton_toi_thieu THEN 'LOW_STOCK' WHEN sp.ton_toi_da IS NOT NULL AND t.so_luong >= sp.ton_toi_da THEN 'OVER_STOCK' ELSE 'NORMAL' END) = :stockStatus)", nativeQuery = true)
+                                        "AND (:stockStatus IS NULL OR (CASE WHEN t.so_luong = 0 THEN 'OUT_OF_STOCK' WHEN t.so_luong <= sp.ton_toi_thieu THEN 'LOW_STOCK' WHEN sp.ton_toi_da IS NOT NULL AND t.so_luong >= sp.ton_toi_da THEN 'OVER_STOCK' ELSE 'NORMAL' END) = :stockStatus) "
+                                        +
+                                        "AND (:warehouseStatus IS NULL OR k.trang_thai = :warehouseStatus) " +
+                                        "AND (:productStatus IS NULL OR sp.trang_thai = :productStatus)", nativeQuery = true)
         Page<InventoryLevelProjection> findInventory(
                         @Param("warehouseId") Long warehouseId,
                         @Param("productId") Long productId,
                         @Param("keyword") String keyword,
                         @Param("stockStatus") String stockStatus,
+                        @Param("warehouseStatus") String warehouseStatus,
+                        @Param("productStatus") String productStatus,
                         Pageable pageable);
 }

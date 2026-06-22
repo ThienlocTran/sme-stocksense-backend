@@ -30,10 +30,28 @@ public class InventoryController {
             @RequestParam(required = false) Long warehouseId,
             @RequestParam(required = false) Long productId,
             @RequestParam(required = false) String keyword,
-            @RequestParam(required = false) String stockStatus,
+            @RequestParam(name = "status", required = false) String stockStatus,
+            @RequestParam(required = false) String warehouseStatus,
+            @RequestParam(required = false) String productStatus,
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.unsorted());
-        return inventoryService.listInventory(warehouseId, productId, keyword, stockStatus, pageable);
+        return inventoryService.listInventory(warehouseId, productId, keyword, stockStatus,
+                warehouseStatus, productStatus, pageable);
+    }
+
+    @GetMapping("/low-stock")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER','EMPLOYEE')")
+    public Page<InventoryLevelResponse> listLowStockInventory(
+            @RequestParam(required = false) Long warehouseId,
+            @RequestParam(required = false) Long productId,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String warehouseStatus,
+            @RequestParam(required = false) String productStatus,
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
+        Pageable pageable = PageRequest.of(page, size, Sort.unsorted());
+        return inventoryService.listInventory(warehouseId, productId, keyword, "LOW_STOCK",
+                warehouseStatus, productStatus, pageable);
     }
 }

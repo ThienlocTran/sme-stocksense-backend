@@ -178,7 +178,7 @@ class ImportReceiptDetailServiceTest {
 
     private void authenticateAs(Employee employee) {
         UsernamePasswordAuthenticationToken authentication =
-                new UsernamePasswordAuthenticationToken(employee, null, employee.getAuthorities());
+                new UsernamePasswordAuthenticationToken(employee, null, List.of());
         SecurityContextHolder.getContext().setAuthentication(authentication);
     }
 }

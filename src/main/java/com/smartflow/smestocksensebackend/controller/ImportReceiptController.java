@@ -7,6 +7,7 @@ import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptItemResponse;
 import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptPageResponse;
 import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptResponse;
 import com.smartflow.smestocksensebackend.dto.inbound.SaveImportReceiptDraftRequest;
+import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptArrivalRequest;
 import com.smartflow.smestocksensebackend.service.ImportReceiptService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -88,5 +89,23 @@ public class ImportReceiptController {
     @PutMapping("/{receiptId}/submit")
     public ImportReceiptDraftResponse submitForApproval(@PathVariable Long receiptId) {
         return importReceiptService.submitForApproval(receiptId);
+    }
+
+    /**
+     * API ghi nhận ngày hàng về thực tế của phiếu nhập kho và chuyển trạng thái sang CHO_KIEM_HANG.
+     * Endpoint: PUT /api/import-receipts/{receiptId}/arrival
+     * Phân quyền: Cấu hình Spring Security cho phép role EMPLOYEE (Nhân viên kho) và ADMIN thực hiện.
+     * 
+     * @param receiptId ID của phiếu nhập kho cần cập nhật
+     * @param request DTO chứa ngày hàng về thực tế (actualArrivalDate)
+     * @return ImportReceiptDraftResponse thông tin phiếu nhập sau khi cập nhật
+     */
+    @PutMapping("/{receiptId}/arrival")
+    public ImportReceiptDraftResponse recordArrival(
+            @PathVariable Long receiptId,
+            @Valid @RequestBody ImportReceiptArrivalRequest request
+    ) {
+        // Ủy quyền xử lý nghiệp vụ ghi nhận hàng về cho service
+        return importReceiptService.recordArrival(receiptId, request);
     }
 }

@@ -24,8 +24,48 @@ public record ImportReceiptSummaryResponse(
         LocalDateTime updatedAt,
         LocalDateTime submittedAt,
         LocalDateTime cancelledAt,
+        LocalDateTime actualArrivalDate,
         Long version
 ) {
+    public ImportReceiptSummaryResponse(
+            Long id,
+            String code,
+            Long warehouseId,
+            String warehouseName,
+            Long supplierId,
+            String supplierName,
+            Long createdById,
+            String createdByName,
+            String status,
+            BigDecimal totalAmount,
+            String note,
+            LocalDateTime createdAt,
+            LocalDateTime updatedAt,
+            LocalDateTime submittedAt,
+            LocalDateTime cancelledAt,
+            Long version
+    ) {
+        this(
+                id,
+                code,
+                warehouseId,
+                warehouseName,
+                supplierId,
+                supplierName,
+                createdById,
+                createdByName,
+                status,
+                totalAmount,
+                note,
+                createdAt,
+                updatedAt,
+                submittedAt,
+                cancelledAt,
+                null,
+                version
+        );
+    }
+
     public static ImportReceiptSummaryResponse from(ImportReceipt receipt) {
         Warehouse warehouse = receipt.getWarehouse();
         Partner supplier = receipt.getSupplier();
@@ -47,6 +87,7 @@ public record ImportReceiptSummaryResponse(
                 receipt.getUpdatedAt(),
                 receipt.getSubmittedAt(),
                 receipt.getCancelledAt(),
+                receipt.getActualArrivalDate(),
                 receipt.getVersion()
         );
     }

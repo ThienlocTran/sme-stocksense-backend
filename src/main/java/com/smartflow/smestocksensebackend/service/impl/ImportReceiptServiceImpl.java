@@ -1,6 +1,7 @@
 package com.smartflow.smestocksensebackend.service.impl;
 
 import com.smartflow.smestocksensebackend.dto.inbound.AddImportReceiptItemRequest;
+import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptArrivalRequest;
 import com.smartflow.smestocksensebackend.domain.inbound.ImportReceiptAmountCalculator;
 import com.smartflow.smestocksensebackend.domain.inbound.ImportReceiptItemValidator;
 import com.smartflow.smestocksensebackend.domain.inbound.ImportReceiptStatePolicy;
@@ -485,5 +486,62 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
         Throwable cause = exception.getMostSpecificCause();
         String message = cause == null ? exception.getMessage() : cause.getMessage();
         return message != null && message.contains(IMPORT_RECEIPT_DETAIL_UNIQUE_INDEX);
+    }
+
+    /**
+     * Ghi nhận ngày hàng về thực tế và cập nhật trạng thái phiếu nhập kho sang CHO_KIEM_HANG.
+     * Chỉ những phiếu đang ở trạng thái CHO_HANG_VE mới được phép cập nhật.
+     * 
+     * @param receiptId ID của phiếu nhập kho
+     * @param request DTO chứa ngày hàng về thực tế
+     * @return ImportReceiptDraftResponse thông tin chi tiết phiếu sau khi cập nhật
+     */
+    @Override
+    @Transactional
+    public ImportReceiptDraftResponse recordArrival(Long receiptId, ImportReceiptArrivalRequest request) {
+        // Lấy thông tin nhân viên hiện tại thực hiện request
+        Employee actor = currentEmployee();
+        // Kiểm tra xem tài khoản nhân viên có đang hoạt động hay không
+        if (actor.getStatus() != EmployeeStatus.HOAT_DONG) {
+            throw new AccountInactiveException();
+        }
+
+        // Kiểm tra phân quyền nghiệp vụ: Chỉ cho phép ADMIN hoặc EMPLOYEE (Nhân viên kho) thực hiện ghi nhận
+        RoleCode roleCode = actor.getRole() != null ? actor.getRole().getCode() : null;
+        if (roleCode != RoleCode.ADMIN && roleCode != RoleCode.EMPLOYEE) {
+            throw new MissingRoleException("Không có quyền ghi nhận hàng về.");
+        }
+
+        // Truy vấn dữ liệu thực tế từ DB, ném lỗi 404 nếu không tìm thấy phiếu nhập
+        ImportReceipt receipt = importReceiptRepository.findById(receiptId)
+                .orElseThrow(() -> new NotFoundException("Phiếu nhập không tồn tại."));
+
+        /*
+         * logic check trạng thái:
+         * Chỉ phiếu nhập kho có trạng thái là CHO_HANG_VE mới được phép cập nhật ngày hàng về thực tế
+         * và chuyển đổi trạng thái sang CHO_KIEM_HANG.
+         * Nếu phiếu nhập đang ở trạng thái khác (ví dụ: NHAP, CHO_DUYET, HOAN_THANH...),
+         * hệ thống sẽ chặn lại và quăng lỗi ConflictException.
+         */
+        if (receipt.getStatus() != ImportReceiptStatus.CHO_HANG_VE) {
+            throw new ConflictException("Chỉ được ghi nhận hàng về cho phiếu nhập ở trạng thái chờ hàng về (CHO_HANG_VE).");
+        }
+
+        try {
+            // Cập nhật ngày hàng về thực tế
+            receipt.setActualArrivalDate(request.actualArrivalDate());
+            // Cập nhật trạng thái phiếu nhập sang CHO_KIEM_HANG
+            receipt.setStatus(ImportReceiptStatus.CHO_KIEM_HANG);
+
+            // Lưu dữ liệu cập nhật xuống PostgreSQL DB thật
+            ImportReceipt savedReceipt = importReceiptRepository.saveAndFlush(receipt);
+
+            // Lấy danh sách chi tiết các mặt hàng đi kèm phiếu để đóng gói kết quả trả về
+            List<ImportReceiptDetail> details = importReceiptDetailRepository.findByDocumentIdOrderByIdAsc(receiptId);
+            return ImportReceiptDraftResponse.from(savedReceipt, details);
+        } catch (OptimisticLockingFailureException exception) {
+            // Xử lý khi có xung đột dữ liệu do ghi đồng thời
+            throw new ConflictException("Phiếu nhập đã được cập nhật bởi một phiên làm việc khác.");
+        }
     }
 }

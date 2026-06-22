@@ -2,6 +2,8 @@ package com.smartflow.smestocksensebackend.service.impl;
 
 import com.smartflow.smestocksensebackend.domain.inbound.ImportReceiptAmountCalculator;
 import com.smartflow.smestocksensebackend.dto.inbound.CreateImportReceiptRequest;
+import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptArrivalRequest;
+import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptDraftResponse;
 import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptResponse;
 import com.smartflow.smestocksensebackend.entity.Employee;
 import com.smartflow.smestocksensebackend.entity.EmployeeStatus;
@@ -10,11 +12,15 @@ import com.smartflow.smestocksensebackend.entity.ImportReceiptStatus;
 import com.smartflow.smestocksensebackend.entity.Partner;
 import com.smartflow.smestocksensebackend.entity.PartnerStatus;
 import com.smartflow.smestocksensebackend.entity.PartnerType;
+import com.smartflow.smestocksensebackend.entity.Role;
+import com.smartflow.smestocksensebackend.entity.RoleCode;
 import com.smartflow.smestocksensebackend.entity.Warehouse;
 import com.smartflow.smestocksensebackend.entity.WarehouseStatus;
 import com.smartflow.smestocksensebackend.exception.BadRequestException;
 import com.smartflow.smestocksensebackend.exception.ConflictException;
 import com.smartflow.smestocksensebackend.exception.NotFoundException;
+import com.smartflow.smestocksensebackend.exception.AccountInactiveException;
+import com.smartflow.smestocksensebackend.exception.MissingRoleException;
 import com.smartflow.smestocksensebackend.repository.ImportReceiptDetailRepository;
 import com.smartflow.smestocksensebackend.repository.ImportReceiptRepository;
 import com.smartflow.smestocksensebackend.repository.PartnerRepository;
@@ -236,5 +242,97 @@ class ImportReceiptServiceImplTest {
 
         assertFalse(fields.contains("status"));
         assertFalse(fields.contains("createdById"));
+    }
+
+    @Test
+    void recordArrival_withValidStatusAndRole_shouldUpdateStatusAndArrivalDate() {
+        // Arrange
+        Role role = new Role();
+        role.setCode(RoleCode.EMPLOYEE);
+        creator.setRole(role);
+
+        ImportReceipt receipt = new ImportReceipt();
+        receipt.setId(100L);
+        receipt.setCode("PNK-20260618-SUCCESS");
+        receipt.setStatus(ImportReceiptStatus.CHO_HANG_VE);
+        receipt.setVersion(1L);
+
+        java.time.LocalDateTime arrivalTime = java.time.LocalDateTime.of(2026, 6, 22, 10, 0);
+        ImportReceiptArrivalRequest request = new ImportReceiptArrivalRequest(arrivalTime);
+
+        when(importReceiptRepository.findById(100L)).thenReturn(Optional.of(receipt));
+        when(importReceiptRepository.saveAndFlush(any(ImportReceipt.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(importReceiptDetailRepository.findByDocumentIdOrderByIdAsc(100L)).thenReturn(List.of());
+
+        // Act
+        ImportReceiptDraftResponse response = importReceiptService.recordArrival(100L, request);
+
+        // Assert
+        assertNotNull(response);
+        assertEquals(ImportReceiptStatus.CHO_KIEM_HANG.name(), response.status());
+        assertEquals(arrivalTime, receipt.getActualArrivalDate());
+        verify(importReceiptRepository).saveAndFlush(receipt);
+    }
+
+    @Test
+    void recordArrival_withInvalidStatus_shouldThrowConflictException() {
+        // Arrange
+        Role role = new Role();
+        role.setCode(RoleCode.EMPLOYEE);
+        creator.setRole(role);
+
+        ImportReceipt receipt = new ImportReceipt();
+        receipt.setId(100L);
+        receipt.setStatus(ImportReceiptStatus.NHAP); // Không phải CHO_HANG_VE
+
+        ImportReceiptArrivalRequest request = new ImportReceiptArrivalRequest(java.time.LocalDateTime.now());
+
+        when(importReceiptRepository.findById(100L)).thenReturn(Optional.of(receipt));
+
+        // Act & Assert
+        assertThrows(ConflictException.class, () -> importReceiptService.recordArrival(100L, request));
+        verify(importReceiptRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void recordArrival_withInactiveEmployee_shouldThrowAccountInactiveException() {
+        // Arrange
+        creator.setStatus(EmployeeStatus.TAM_KHOA); // Tài khoản bị khoá
+
+        ImportReceiptArrivalRequest request = new ImportReceiptArrivalRequest(java.time.LocalDateTime.now());
+
+        // Act & Assert
+        assertThrows(AccountInactiveException.class, () -> importReceiptService.recordArrival(100L, request));
+        verify(importReceiptRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void recordArrival_withMissingRole_shouldThrowMissingRoleException() {
+        // Arrange
+        Role role = new Role();
+        role.setCode(RoleCode.MANAGER); // Role MANAGER không có quyền ghi nhận hàng về
+        creator.setRole(role);
+
+        ImportReceiptArrivalRequest request = new ImportReceiptArrivalRequest(java.time.LocalDateTime.now());
+
+        // Act & Assert
+        assertThrows(MissingRoleException.class, () -> importReceiptService.recordArrival(100L, request));
+        verify(importReceiptRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void recordArrival_withNotFoundReceipt_shouldThrowNotFoundException() {
+        // Arrange
+        Role role = new Role();
+        role.setCode(RoleCode.EMPLOYEE);
+        creator.setRole(role);
+
+        ImportReceiptArrivalRequest request = new ImportReceiptArrivalRequest(java.time.LocalDateTime.now());
+
+        when(importReceiptRepository.findById(999L)).thenReturn(Optional.empty());
+
+        // Act & Assert
+        assertThrows(NotFoundException.class, () -> importReceiptService.recordArrival(999L, request));
+        verify(importReceiptRepository, never()).saveAndFlush(any());
     }
 }

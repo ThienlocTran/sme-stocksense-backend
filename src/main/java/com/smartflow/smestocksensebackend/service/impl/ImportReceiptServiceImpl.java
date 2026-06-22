@@ -671,8 +671,10 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
             reportDetail.setDocumentQuantity(diff.getExpectedQuantity());
             reportDetail.setActualQuantity(diff.getActualReceivedQuantity());
             reportDetail.setDiscrepancyQuantity(diff.getActualReceivedQuantity() - diff.getExpectedQuantity());
-            reportDetail.setReason(itemReq != null ? normalizeOptional(itemReq.getReason()) : "Chua xac dinh");
-            reportDetail.setAction(itemReq != null ? normalizeOptional(itemReq.getAction()) : "Chua xac dinh");
+            String reason = itemReq != null ? normalizeOptional(itemReq.getReason()) : null;
+            String action = itemReq != null ? normalizeOptional(itemReq.getAction()) : null;
+            reportDetail.setReason(reason != null ? reason : "Chua xac dinh");
+            reportDetail.setAction(action != null ? action : "Chua xac dinh");
             reportDetails.add(reportDetail);
         }
         report.setDetails(reportDetails);

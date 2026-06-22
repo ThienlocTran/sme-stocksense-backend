@@ -7,6 +7,9 @@ import com.smartflow.smestocksensebackend.exception.NotFoundException;
 import com.smartflow.smestocksensebackend.repository.InventoryLevelRepository;
 import com.smartflow.smestocksensebackend.repository.ProductRepository;
 import com.smartflow.smestocksensebackend.repository.WarehouseRepository;
+import com.smartflow.smestocksensebackend.entity.ImportReceipt;
+import com.smartflow.smestocksensebackend.entity.InventoryTransactionType;
+import com.smartflow.smestocksensebackend.service.InventoryTransactionService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -38,6 +41,9 @@ class InventoryServiceImplTest {
 
     @Mock
     private WarehouseRepository warehouseRepository;
+
+    @Mock
+    private InventoryTransactionService inventoryTransactionService;
 
     @InjectMocks
     private InventoryServiceImpl inventoryService;
@@ -190,5 +196,40 @@ class InventoryServiceImplTest {
         InventoryLevel secondSave = allSaves.get(1);
         assertNotNull(secondSave);
         assertEquals(150, secondSave.getQuantity());
+    }
+
+    /**
+     * Kiểm thử luồng: Tăng tồn kho kèm phiếu nhập.
+     * Kỳ vọng: Tăng tồn kho thành công và gọi service ghi log giao dịch kho loại NHAP_KHO.
+     */
+    @Test
+    void increaseInventory_withImportReceipt_shouldLogTransaction() {
+        ImportReceipt receipt = new ImportReceipt();
+        receipt.setId(5L);
+
+        Mockito.when(productRepository.findById(1L)).thenReturn(Optional.of(product));
+        Mockito.when(warehouseRepository.findById(1L)).thenReturn(Optional.of(warehouse));
+        Mockito.when(inventoryLevelRepository.findByProductIdAndWarehouseIdForUpdate(1L, 1L))
+                .thenReturn(Optional.empty());
+
+        inventoryService.increaseInventory(1L, 1L, 50, receipt);
+
+        ArgumentCaptor<InventoryLevel> inventoryCaptor = ArgumentCaptor.forClass(InventoryLevel.class);
+        Mockito.verify(inventoryLevelRepository).saveAndFlush(inventoryCaptor.capture());
+
+        InventoryLevel savedInventory = inventoryCaptor.getValue();
+        assertNotNull(savedInventory);
+        assertEquals(50, savedInventory.getQuantity());
+
+        Mockito.verify(inventoryTransactionService).recordTransaction(
+                1L,
+                1L,
+                InventoryTransactionType.NHAP_KHO,
+                50,
+                0,
+                50,
+                receipt,
+                "Kế thừa T73, track biến động kho phục vụ đối soát"
+        );
     }
 }

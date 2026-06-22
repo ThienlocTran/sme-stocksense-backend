@@ -510,7 +510,7 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
             throw new BadRequestException("Chi ap dung kiem hang cho phieu nhap tu nha cung cap.");
         }
 
-        List<ImportReceiptDetail> details = importReceiptDetailRepository.findByDocumentId(receiptId);
+        List<ImportReceiptDetail> details = importReceiptDetailRepository.findByDocumentIdOrderByIdAsc(receiptId);
         if (details.isEmpty()) {
             throw new BadRequestException("Phieu nhap khong co san pham nao de kiem hang.");
         }
@@ -519,7 +519,14 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
          * Chỉ kiểm đếm lưu số lượng thực tế, không thực hiện cộng tồn kho ở bước này.
          * Logic này sẽ được thực hiện khi hoàn thành phiếu nhập kho ở các task sau (T104/T102).
          */
+        Set<Long> seenProductIds = new LinkedHashSet<>();
         for (InspectImportReceiptItemRequest item : request.items()) {
+            if (item == null) {
+                throw new BadRequestException("items khong hop le.");
+            }
+            if (!seenProductIds.add(item.productId())) {
+                throw new BadRequestException("Danh sach san pham kiem hang bi trung san pham ID: " + item.productId() + ".");
+            }
             ImportReceiptDetail detail = details.stream()
                     .filter(d -> d.getProduct().getId().equals(item.productId()))
                     .findFirst()

@@ -180,7 +180,7 @@ class ImportReceiptDetailServiceTest {
         InspectImportReceiptRequest request = new InspectImportReceiptRequest(List.of(itemRequest));
 
         when(importReceiptRepository.findById(100L)).thenReturn(Optional.of(receipt));
-        when(importReceiptDetailRepository.findByDocumentId(100L)).thenReturn(details);
+        when(importReceiptDetailRepository.findByDocumentIdOrderByIdAsc(100L)).thenReturn(details);
         when(importReceiptDetailRepository.saveAllAndFlush(details)).thenReturn(details);
         when(importReceiptRepository.saveAndFlush(receipt)).thenReturn(receipt);
 
@@ -222,7 +222,7 @@ class ImportReceiptDetailServiceTest {
         InspectImportReceiptRequest request = new InspectImportReceiptRequest(List.of(itemRequest));
 
         when(importReceiptRepository.findById(100L)).thenReturn(Optional.of(receipt));
-        when(importReceiptDetailRepository.findByDocumentId(100L)).thenReturn(details);
+        when(importReceiptDetailRepository.findByDocumentIdOrderByIdAsc(100L)).thenReturn(details);
         when(importReceiptDetailRepository.saveAllAndFlush(details)).thenReturn(details);
         when(importReceiptRepository.saveAndFlush(receipt)).thenReturn(receipt);
 
@@ -270,6 +270,43 @@ class ImportReceiptDetailServiceTest {
         assertThatThrownBy(() -> importReceiptService.inspectReceipt(100L, request))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("Chi ap dung kiem hang cho phieu nhap tu nha cung cap.");
+    }
+
+    @Test
+    void inspectReceipt_error_whenDuplicateProductId() {
+        Employee owner = createEmployee(1L, RoleCode.EMPLOYEE, EmployeeStatus.HOAT_DONG);
+        authenticateAs(owner);
+
+        Partner supplier = new Partner();
+        supplier.setId(10L);
+        supplier.setType(PartnerType.NHA_CUNG_CAP);
+        supplier.setStatus(PartnerStatus.HOAT_DONG);
+
+        ImportReceipt receipt = createReceipt(100L, ImportReceiptStatus.CHO_KIEM_HANG, owner);
+        receipt.setSupplier(supplier);
+
+        Product product = new Product();
+        product.setId(20L);
+        product.setCode("SP-20");
+        product.setName("Product 20");
+
+        ImportReceiptDetail detail = createDetail(1L, receipt);
+        detail.setProduct(product);
+        detail.setExpectedQuantity(10);
+
+        List<ImportReceiptDetail> details = List.of(detail);
+
+        LocalDateTime now = LocalDateTime.now();
+        InspectImportReceiptItemRequest itemRequest1 = new InspectImportReceiptItemRequest(20L, 10, "Binh thuong", now);
+        InspectImportReceiptItemRequest itemRequest2 = new InspectImportReceiptItemRequest(20L, 5, "Binh thuong", now);
+        InspectImportReceiptRequest request = new InspectImportReceiptRequest(List.of(itemRequest1, itemRequest2));
+
+        when(importReceiptRepository.findById(100L)).thenReturn(Optional.of(receipt));
+        when(importReceiptDetailRepository.findByDocumentIdOrderByIdAsc(100L)).thenReturn(details);
+
+        assertThatThrownBy(() -> importReceiptService.inspectReceipt(100L, request))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("Danh sach san pham kiem hang bi trung san pham ID: 20.");
     }
 
     private Employee createEmployee(Long id, RoleCode code, EmployeeStatus status) {

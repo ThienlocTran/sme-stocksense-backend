@@ -177,8 +177,10 @@ class ImportReceiptDetailServiceTest {
     }
 
     private void authenticateAs(Employee employee) {
+        org.springframework.security.core.authority.SimpleGrantedAuthority authority =
+                new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_" + employee.getRole().getCode().name());
         UsernamePasswordAuthenticationToken authentication =
-                new UsernamePasswordAuthenticationToken(employee, null, employee.getAuthorities());
+                new UsernamePasswordAuthenticationToken(employee, null, java.util.List.of(authority));
         SecurityContextHolder.getContext().setAuthentication(authentication);
     }
 }

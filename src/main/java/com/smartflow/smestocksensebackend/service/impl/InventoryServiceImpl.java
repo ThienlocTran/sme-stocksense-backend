@@ -68,7 +68,7 @@ public class InventoryServiceImpl implements InventoryService {
             } catch (DataIntegrityViolationException e) {
                 // Race condition: bản ghi đã được tạo bởi transaction khác -> query lại và cộng dồn
                 InventoryLevel locked = inventoryLevelRepository.findByProductIdAndWarehouseIdForUpdate(productId, warehouseId)
-                        .orElseThrow(() -> new NotFoundException("Sản phẩm không tồn tại."));
+                        .orElseThrow(() -> e);
                 locked.setQuantity(locked.getQuantity() + quantity);
                 inventoryLevelRepository.saveAndFlush(locked);
             }

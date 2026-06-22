@@ -16,6 +16,9 @@ import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import org.springframework.dao.DataIntegrityViolationException;
+
+import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -151,5 +154,41 @@ class InventoryServiceImplTest {
 
         assertEquals("productId, warehouseId, quantity phải > 0", exception.getMessage());
         Mockito.verify(inventoryLevelRepository, Mockito.never()).saveAndFlush(any());
+    }
+
+    /**
+     * Kiểm thử race condition: lần insert đầu bị DataIntegrityViolationException
+     * (transaction khác đã insert trước). Kỳ vọng: fallback sang update, cộng dồn đúng.
+     */
+    @Test
+    void increaseInventory_success_whenInsertRacesAndFallbackToUpdate() {
+        InventoryLevel lockedInventory = new InventoryLevel();
+        lockedInventory.setId(10L);
+        lockedInventory.setProduct(product);
+        lockedInventory.setWarehouse(warehouse);
+        lockedInventory.setQuantity(100);
+
+        Mockito.when(productRepository.findById(1L)).thenReturn(Optional.of(product));
+        Mockito.when(warehouseRepository.findById(1L)).thenReturn(Optional.of(warehouse));
+
+        // Lần 1: check trước insert -> empty; Lần 2: trong catch -> trả bản ghi bị khóa
+        Mockito.when(inventoryLevelRepository.findByProductIdAndWarehouseIdForUpdate(1L, 1L))
+                .thenReturn(Optional.empty())
+                .thenReturn(Optional.of(lockedInventory));
+
+        // Lần 1: ném DataIntegrityViolationException; Lần 2: trả về đối tượng được lưu
+        Mockito.when(inventoryLevelRepository.saveAndFlush(any()))
+                .thenThrow(new DataIntegrityViolationException("duplicate key"))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        inventoryService.increaseInventory(1L, 1L, 50);
+
+        ArgumentCaptor<InventoryLevel> captor = ArgumentCaptor.forClass(InventoryLevel.class);
+        Mockito.verify(inventoryLevelRepository, Mockito.times(2)).saveAndFlush(captor.capture());
+
+        List<InventoryLevel> allSaves = captor.getAllValues();
+        InventoryLevel secondSave = allSaves.get(1);
+        assertNotNull(secondSave);
+        assertEquals(150, secondSave.getQuantity());
     }
 }

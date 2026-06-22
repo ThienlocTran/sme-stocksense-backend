@@ -53,21 +53,49 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
+/**
+ * Service xử lý toàn bộ nghiệp vụ liên quan đến Phiếu Nhập Kho.
+ *
+ * <p>Luồng trạng thái chuẩn của một phiếu nhập:</p>
+ * <pre>
+ *  NHAP → CHO_DUYET_CAP_1 → CHO_DUYET_CAP_2 → CHO_HANG_VE → CHO_KIEM_HANG → [HOAN_THANH]
+ *       ↘ TU_CHOI (quay lại NHAP để sửa)
+ *       ↘ HUY
+ * </pre>
+ *
+ * <p>Phân quyền tổng quát:</p>
+ * <ul>
+ *   <li>ADMIN: toàn quyền thao tác trên mọi phiếu.</li>
+ *   <li>EMPLOYEE: chỉ được thao tác trên phiếu do chính mình tạo.</li>
+ *   <li>MANAGER: không được thao tác trực tiếp trên phiếu nhập (chỉ duyệt qua luồng approval).</li>
+ * </ul>
+ */
 @Service
 @RequiredArgsConstructor
 public class ImportReceiptServiceImpl implements ImportReceiptService {
 
+    // Số lần tối đa thử sinh mã phiếu nhập mới khi xảy ra trùng lặp
     private static final int MAX_CODE_ATTEMPTS = 3;
+    // Tên unique index trong DB để nhận diện lỗi sản phẩm trùng lặp trong cùng một phiếu nhập
     private static final String IMPORT_RECEIPT_DETAIL_UNIQUE_INDEX = "chi_tiet_phieu_nhap_phieu_nhap_id_san_pham_id_idx";
 
     private final ImportReceiptRepository importReceiptRepository;
     private final ImportReceiptDetailRepository importReceiptDetailRepository;
     private final WarehouseRepository warehouseRepository;
     private final PartnerRepository partnerRepository;
-    private final ImportReceiptCodeGenerator codeGenerator;
-    private final ImportReceiptItemValidator itemValidator;
-    private final ImportReceiptAmountCalculator amountCalculator;
+    private final ImportReceiptCodeGenerator codeGenerator;     // Sinh mã phiếu dạng PNK-XXXXXXXX
+    private final ImportReceiptItemValidator itemValidator;      // Validate sản phẩm và các trường số lượng/đơn giá
+    private final ImportReceiptAmountCalculator amountCalculator; // Tính tổng tiền dòng và tổng phiếu
 
+    // =========================================================================
+    // NHÓM 1: TẠO VÀ QUẢN LÝ PHIẾU NHÁP (Trạng thái: NHAP)
+    // =========================================================================
+
+    /**
+     * Tạo phiếu nhập kho ở trạng thái nháp (NHAP).
+     * Mã phiếu được sinh tự động với tối đa {@code MAX_CODE_ATTEMPTS} lần thử
+     * để tránh xung đột mã trùng lặp trong môi trường concurrent.
+     */
     @Override
     @Transactional
     public ImportReceiptResponse createDraft(CreateImportReceiptRequest request) {
@@ -118,6 +146,11 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
         throw new ConflictException("Không thể tạo mã phiếu nhập duy nhất.");
     }
 
+    /**
+     * Thêm một dòng sản phẩm mới vào phiếu nhập đang ở trạng thái NHAP.
+     * Mỗi lần thêm sẽ tự động tính lại tổng tiền phiếu.
+     * Nếu sản phẩm đã có trong phiếu (vi phạm unique index DB), ném lỗi 409 Conflict.
+     */
     @Override
     @Transactional
     public ImportReceiptItemResponse addItem(Long receiptId, AddImportReceiptItemRequest request) {
@@ -160,18 +193,32 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
         }
     }
 
+    /**
+     * Lưu/cập nhật toàn bộ thông tin phiếu nhập khi đang ở trạng thái NHAP.
+     * Chỉ cho phép chỉnh sửa khi phiếu ở trạng thái NHAP (nháp mới tạo).
+     * Danh sách sản phẩm nếu cung cấp sẽ thay thế toàn bộ các dòng cũ (replace all).
+     */
     @Override
     @Transactional
     public ImportReceiptDraftResponse saveDraft(Long receiptId, SaveImportReceiptDraftRequest request) {
         return updateReceipt(receiptId, request, false);
     }
 
+    /**
+     * Cập nhật phiếu nhập đang ở trạng thái có thể sửa được (NHAP hoặc TU_CHOI).
+     * Dùng cho trường hợp phiếu bị từ chối và cần chỉnh sửa để gửi duyệt lại.
+     */
     @Override
     @Transactional
     public ImportReceiptDraftResponse updateEditable(Long receiptId, SaveImportReceiptDraftRequest request) {
         return updateReceipt(receiptId, request, true);
     }
 
+    /**
+     * Hủy phiếu nhập đang ở trạng thái NHAP.
+     * Sau khi hủy, phiếu chuyển sang trạng thái HUY và không thể sửa đổi thêm.
+     * Ghi nhận thông tin ai hủy và thời điểm hủy.
+     */
     @Override
     @Transactional
     public ImportReceiptDraftResponse cancelDraft(Long receiptId) {
@@ -199,6 +246,19 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
         }
     }
 
+    // =========================================================================
+    // NHÓM 2: LUỒNG DUYỆT PHIẾU NHẬP (NHAP → CHO_DUYET_CAP_1)
+    // =========================================================================
+
+    /**
+     * Gửi phiếu nhập để bắt đầu quy trình duyệt (chuyển sang CHO_DUYET_CAP_1).
+     * Trước khi gửi, hệ thống sẽ:
+     * <ol>
+     *   <li>Xác nhận kho hàng và nhà cung cấp vẫn còn hoạt động.</li>
+     *   <li>Kiểm tra phiếu có ít nhất một sản phẩm hợp lệ.</li>
+     *   <li>Tính lại tổng tiền dựa trên dữ liệu hiện tại trong DB.</li>
+     * </ol>
+     */
     @Override
     @Transactional
     public ImportReceiptDraftResponse submitForApproval(Long receiptId) {
@@ -243,6 +303,15 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
         }
     }
 
+    // =========================================================================
+    // NHÓM 3: TRA CỨU PHIẾU NHẬP
+    // =========================================================================
+
+    /**
+     * Lấy danh sách phiếu nhập của nhân viên đang đăng nhập, hỗ trợ phân trang.
+     * Nếu không truyền {@code status}, trả về tất cả phiếu.
+     * Nếu truyền {@code status}, lọc theo trạng thái tương ứng.
+     */
     @Override
     @Transactional(readOnly = true)
     public ImportReceiptPageResponse listMyReceipts(String status, Pageable pageable) {
@@ -264,6 +333,10 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
                 .map(ImportReceiptSummaryResponse::from));
     }
 
+    /**
+     * Lấy chi tiết đầy đủ của một phiếu nhập, bao gồm danh sách sản phẩm sắp xếp theo ID tăng dần.
+     * ADMIN có thể xem mọi phiếu; EMPLOYEE chỉ xem được phiếu do mình tạo.
+     */
     @Override
     @Transactional(readOnly = true)
     public ImportReceiptDraftResponse getDetail(Long receiptId) {
@@ -286,6 +359,14 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
         return ImportReceiptDraftResponse.from(receipt, details);
     }
 
+    // =========================================================================
+    // NHÓM 4: PHƯƠNG THỨC PRIVATE DÙNG CHUNG (Helper Methods)
+    // =========================================================================
+
+    /**
+     * Xử lý logic chung cho saveDraft và updateEditable.
+     * @param allowRejected nếu {@code true}, cho phép sửa cả phiếu ở trạng thái TU_CHOI.
+     */
     private ImportReceiptDraftResponse updateReceipt(
             Long receiptId,
             SaveImportReceiptDraftRequest request,
@@ -340,6 +421,7 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
         }
     }
 
+    /** Kiểm tra kho hàng tồn tại và đang hoạt động. */
     private Warehouse validateWarehouse(Long warehouseId) {
         Warehouse warehouse = warehouseRepository.findById(warehouseId)
                 .orElseThrow(() -> new NotFoundException("Kho hang khong ton tai."));
@@ -349,6 +431,7 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
         return warehouse;
     }
 
+    /** Kiểm tra nhà cung cấp tồn tại, đang hoạt động và đúng loại đối tác (NHA_CUNG_CAP hoặc CA_HAI). */
     private Partner validateSupplier(Long supplierId) {
         Partner supplier = partnerRepository.findById(supplierId)
                 .orElseThrow(() -> new NotFoundException("Nha cung cap khong ton tai."));
@@ -361,6 +444,10 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
         return supplier;
     }
 
+    /**
+     * Xây dựng danh sách dòng chi tiết phiếu mới từ request, thay thế toàn bộ danh sách cũ.
+     * Kiểm tra trùng lặp sản phẩm và validate từng dòng trước khi tạo entity.
+     */
     private List<ImportReceiptDetail> buildReplacementDetails(
             ImportReceipt receipt,
             List<SaveImportReceiptDraftItemRequest> items
@@ -389,6 +476,10 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
         return details;
     }
 
+    /**
+     * Validate lại và tính tổng tiền dựa trên danh sách chi tiết hiện tại trong DB.
+     * Được gọi trước khi gửi duyệt để đảm bảo dữ liệu tài chính luôn chính xác.
+     */
     private BigDecimal validateAndRecalculateDetails(List<ImportReceiptDetail> details) {
         Set<Long> productIds = new LinkedHashSet<>();
         BigDecimal totalAmount = BigDecimal.ZERO;
@@ -418,6 +509,7 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
         return totalAmount;
     }
 
+    /** Lấy thông tin nhân viên đang đăng nhập từ SecurityContext. Ném lỗi 401 nếu chưa xác thực. */
     private Employee currentEmployee() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !(authentication.getPrincipal() instanceof Employee employee)) {
@@ -426,6 +518,7 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
         return employee;
     }
 
+    /** Chuẩn hóa trường tùy chọn: trả về {@code null} nếu blank, ngược lại trim whitespace hai đầu. */
     private String normalizeOptional(String input) {
         if (input == null || input.isBlank()) {
             return null;
@@ -433,22 +526,29 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
         return input.trim();
     }
 
+    // --- Các wrapper kiểm tra quyền cho từng hành động cụ thể ---
+
+    /** Kiểm tra quyền thêm sản phẩm vào phiếu nhập. */
     private void ensureCanAddItem(Employee actor, ImportReceipt receipt) {
         ensureCanModifyDraft(actor, receipt, "Khong co quyen them san pham vao phieu nhap.");
     }
 
+    /** Kiểm tra quyền lưu/cập nhật phiếu nhập nháp. */
     private void ensureCanSaveDraft(Employee actor, ImportReceipt receipt) {
         ensureCanModifyDraft(actor, receipt, "Khong co quyen luu phieu nhap.");
     }
 
+    /** Kiểm tra quyền hủy phiếu nhập. */
     private void ensureCanCancelDraft(Employee actor, ImportReceipt receipt) {
         ensureCanModifyDraft(actor, receipt, "Khong co quyen huy phieu nhap.");
     }
 
+    /** Kiểm tra quyền gửi phiếu nhập lên luồng duyệt. */
     private void ensureCanSubmitForApproval(Employee actor, ImportReceipt receipt) {
         ensureCanModifyDraft(actor, receipt, "Khong co quyen gui duyet phieu nhap.");
     }
 
+    /** Kiểm tra nhân viên có quyền xem danh sách phiếu nhập cá nhân (chỉ ADMIN hoặc EMPLOYEE). */
     private void ensureCanListOwnReceipts(Employee actor) {
         RoleCode roleCode = actor.getRole() != null ? actor.getRole().getCode() : null;
         if (roleCode != RoleCode.ADMIN && roleCode != RoleCode.EMPLOYEE) {
@@ -456,6 +556,7 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
         }
     }
 
+    /** Chuyển đổi chuỗi status từ request thành enum {@link ImportReceiptStatus}. Trả về null nếu không truyền. */
     private ImportReceiptStatus parseStatus(String status) {
         if (status == null || status.isBlank()) {
             return null;
@@ -467,6 +568,10 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
         }
     }
 
+    /**
+     * Luật kiểm tra quyền chung cho mọi thao tác ghi trên phiếu nhập.
+     * ADMIN được phép mọi thứ; EMPLOYEE chỉ được sửa phiếu do mình tạo.
+     */
     private void ensureCanModifyDraft(Employee actor, ImportReceipt receipt, String missingRoleMessage) {
         RoleCode roleCode = actor.getRole() != null ? actor.getRole().getCode() : null;
         if (roleCode == RoleCode.ADMIN) {
@@ -482,6 +587,10 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
         }
     }
 
+    /**
+     * Nhận diện lỗi vi phạm unique constraint trên bảng chi tiết phiếu nhập
+     * (sản phẩm bị thêm trùng lặp vào cùng một phiếu).
+     */
     private boolean isDuplicateImportReceiptDetailException(DataIntegrityViolationException exception) {
         Throwable cause = exception.getMostSpecificCause();
         String message = cause == null ? exception.getMessage() : cause.getMessage();

@@ -38,6 +38,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 
+import org.springframework.dao.OptimisticLockingFailureException;
+
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
@@ -101,8 +103,7 @@ class ImportReceiptServiceImplTest {
         supplier.setStatus(PartnerStatus.HOAT_DONG);
 
         SecurityContextHolder.getContext().setAuthentication(
-                new UsernamePasswordAuthenticationToken(creator, null, List.of())
-        );
+                new UsernamePasswordAuthenticationToken(creator, null, List.of()));
     }
 
     @AfterEach
@@ -124,8 +125,7 @@ class ImportReceiptServiceImplTest {
         });
 
         ImportReceiptResponse response = importReceiptService.createDraft(
-                new CreateImportReceiptRequest(1L, 10L, "  Phieu nhap du kien  ")
-        );
+                new CreateImportReceiptRequest(1L, 10L, "  Phieu nhap du kien  "));
 
         assertEquals(123L, response.id());
         assertEquals("PNK-20260618-ABC123DEF456", response.code());
@@ -156,8 +156,7 @@ class ImportReceiptServiceImplTest {
         when(warehouseRepository.findById(99L)).thenReturn(Optional.empty());
 
         assertThrows(NotFoundException.class, () -> importReceiptService.createDraft(
-                new CreateImportReceiptRequest(99L, 10L, null)
-        ));
+                new CreateImportReceiptRequest(99L, 10L, null)));
         verify(importReceiptRepository, never()).saveAndFlush(any());
     }
 
@@ -167,8 +166,7 @@ class ImportReceiptServiceImplTest {
         when(warehouseRepository.findById(1L)).thenReturn(Optional.of(warehouse));
 
         assertThrows(BadRequestException.class, () -> importReceiptService.createDraft(
-                new CreateImportReceiptRequest(1L, 10L, null)
-        ));
+                new CreateImportReceiptRequest(1L, 10L, null)));
         verify(importReceiptRepository, never()).saveAndFlush(any());
     }
 
@@ -178,8 +176,7 @@ class ImportReceiptServiceImplTest {
         when(partnerRepository.findById(99L)).thenReturn(Optional.empty());
 
         assertThrows(NotFoundException.class, () -> importReceiptService.createDraft(
-                new CreateImportReceiptRequest(1L, 99L, null)
-        ));
+                new CreateImportReceiptRequest(1L, 99L, null)));
         verify(importReceiptRepository, never()).saveAndFlush(any());
     }
 
@@ -190,8 +187,7 @@ class ImportReceiptServiceImplTest {
         when(partnerRepository.findById(10L)).thenReturn(Optional.of(supplier));
 
         assertThrows(BadRequestException.class, () -> importReceiptService.createDraft(
-                new CreateImportReceiptRequest(1L, 10L, null)
-        ));
+                new CreateImportReceiptRequest(1L, 10L, null)));
         verify(importReceiptRepository, never()).saveAndFlush(any());
     }
 
@@ -202,8 +198,7 @@ class ImportReceiptServiceImplTest {
         when(partnerRepository.findById(10L)).thenReturn(Optional.of(supplier));
 
         assertThrows(BadRequestException.class, () -> importReceiptService.createDraft(
-                new CreateImportReceiptRequest(1L, 10L, null)
-        ));
+                new CreateImportReceiptRequest(1L, 10L, null)));
         verify(importReceiptRepository, never()).saveAndFlush(any());
     }
 
@@ -214,9 +209,11 @@ class ImportReceiptServiceImplTest {
         when(codeGenerator.generate()).thenReturn("PNK-DUP", "PNK-OK");
         when(importReceiptRepository.existsByCodeIgnoreCase("PNK-DUP")).thenReturn(true);
         when(importReceiptRepository.existsByCodeIgnoreCase("PNK-OK")).thenReturn(false);
-        when(importReceiptRepository.saveAndFlush(any(ImportReceipt.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(importReceiptRepository.saveAndFlush(any(ImportReceipt.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
 
-        ImportReceiptResponse response = importReceiptService.createDraft(new CreateImportReceiptRequest(1L, 10L, null));
+        ImportReceiptResponse response = importReceiptService
+                .createDraft(new CreateImportReceiptRequest(1L, 10L, null));
 
         assertEquals("PNK-OK", response.code());
     }
@@ -229,8 +226,7 @@ class ImportReceiptServiceImplTest {
         when(importReceiptRepository.existsByCodeIgnoreCase("PNK-DUP")).thenReturn(true);
 
         assertThrows(ConflictException.class, () -> importReceiptService.createDraft(
-                new CreateImportReceiptRequest(1L, 10L, null)
-        ));
+                new CreateImportReceiptRequest(1L, 10L, null)));
     }
 
     @Test
@@ -261,7 +257,8 @@ class ImportReceiptServiceImplTest {
         ImportReceiptArrivalRequest request = new ImportReceiptArrivalRequest(arrivalTime);
 
         when(importReceiptRepository.findById(100L)).thenReturn(Optional.of(receipt));
-        when(importReceiptRepository.saveAndFlush(any(ImportReceipt.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(importReceiptRepository.saveAndFlush(any(ImportReceipt.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
         when(importReceiptDetailRepository.findByDocumentIdOrderByIdAsc(100L)).thenReturn(List.of());
 
         // Act
@@ -291,7 +288,8 @@ class ImportReceiptServiceImplTest {
         ImportReceiptArrivalRequest request = new ImportReceiptArrivalRequest(arrivalTime);
 
         when(importReceiptRepository.findById(100L)).thenReturn(Optional.of(receipt));
-        when(importReceiptRepository.saveAndFlush(any(ImportReceipt.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(importReceiptRepository.saveAndFlush(any(ImportReceipt.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
         when(importReceiptDetailRepository.findByDocumentIdOrderByIdAsc(100L)).thenReturn(List.of());
 
         // Act
@@ -364,5 +362,49 @@ class ImportReceiptServiceImplTest {
         // Act & Assert
         assertThrows(NotFoundException.class, () -> importReceiptService.recordArrival(999L, request));
         verify(importReceiptRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void recordArrival_withNullRole_shouldThrowMissingRoleException() {
+        // Arrange - role null không có quyền ghi nhận hàng về
+        creator.setRole(null);
+
+        ImportReceiptArrivalRequest request = new ImportReceiptArrivalRequest(java.time.LocalDateTime.now());
+
+        // Act & Assert
+        assertThrows(MissingRoleException.class, () -> importReceiptService.recordArrival(100L, request));
+        verify(importReceiptRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void recordArrival_withConcurrentUpdate_shouldThrowConflictException() {
+        // Arrange - mô phỏng kịch bản 2 phiên cùng cập nhật đồng thời (optimistic
+        // locking)
+        Role role = new Role();
+        role.setCode(RoleCode.EMPLOYEE);
+        creator.setRole(role);
+
+        ImportReceipt receipt = new ImportReceipt();
+        receipt.setId(100L);
+        receipt.setCode("PNK-20260618-CONCURRENT");
+        receipt.setStatus(ImportReceiptStatus.CHO_HANG_VE);
+        receipt.setVersion(1L);
+
+        ImportReceiptArrivalRequest request = new ImportReceiptArrivalRequest(
+                java.time.LocalDateTime.of(2026, 6, 22, 10, 0));
+
+        when(importReceiptRepository.findById(100L)).thenReturn(Optional.of(receipt));
+        // Giả lập DB ném ra OptimisticLockingFailureException khi version bị xung đột
+        when(importReceiptRepository.saveAndFlush(any(ImportReceipt.class)))
+                .thenThrow(new OptimisticLockingFailureException("Version mismatch"));
+
+        // Act & Assert
+        ConflictException thrown = assertThrows(ConflictException.class,
+                () -> importReceiptService.recordArrival(100L, request));
+
+        // Kiểm tra message khớp với thông báo được định nghĩa trong service
+        org.junit.jupiter.api.Assertions.assertTrue(
+                thrown.getMessage().contains("được cập nhật bởi một phiên làm việc khác"),
+                "Expected message about concurrent update but got: " + thrown.getMessage());
     }
 }

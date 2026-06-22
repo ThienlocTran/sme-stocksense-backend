@@ -12,6 +12,7 @@ import java.util.List;
 public interface ImportReceiptDetailRepository extends JpaRepository<ImportReceiptDetail, Long> {
 
     List<ImportReceiptDetail> findByDocumentId(Long documentId);
+    List<ImportReceiptDetail> findByDocumentIdOrderByIdAsc(Long documentId);
 
     @Modifying(flushAutomatically = true)
     @Query("delete from ImportReceiptDetail detail where detail.document.id = :documentId")

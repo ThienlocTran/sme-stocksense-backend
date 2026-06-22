@@ -275,6 +275,36 @@ class ImportReceiptServiceImplTest {
     }
 
     @Test
+    void recordArrival_withAdminRole_shouldUpdateStatusAndArrivalDate() {
+        // Arrange - ADMIN cũng có quyền ghi nhận hàng về, tương tự EMPLOYEE
+        Role role = new Role();
+        role.setCode(RoleCode.ADMIN);
+        creator.setRole(role);
+
+        ImportReceipt receipt = new ImportReceipt();
+        receipt.setId(100L);
+        receipt.setCode("PNK-20260618-ADMIN");
+        receipt.setStatus(ImportReceiptStatus.CHO_HANG_VE);
+        receipt.setVersion(1L);
+
+        java.time.LocalDateTime arrivalTime = java.time.LocalDateTime.of(2026, 6, 22, 10, 0);
+        ImportReceiptArrivalRequest request = new ImportReceiptArrivalRequest(arrivalTime);
+
+        when(importReceiptRepository.findById(100L)).thenReturn(Optional.of(receipt));
+        when(importReceiptRepository.saveAndFlush(any(ImportReceipt.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(importReceiptDetailRepository.findByDocumentIdOrderByIdAsc(100L)).thenReturn(List.of());
+
+        // Act
+        ImportReceiptDraftResponse response = importReceiptService.recordArrival(100L, request);
+
+        // Assert
+        assertNotNull(response);
+        assertEquals(ImportReceiptStatus.CHO_KIEM_HANG.name(), response.status());
+        assertEquals(arrivalTime, receipt.getActualArrivalDate());
+        verify(importReceiptRepository).saveAndFlush(receipt);
+    }
+
+    @Test
     void recordArrival_withInvalidStatus_shouldThrowConflictException() {
         // Arrange
         Role role = new Role();

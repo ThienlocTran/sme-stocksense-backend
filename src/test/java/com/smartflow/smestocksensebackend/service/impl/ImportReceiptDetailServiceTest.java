@@ -384,6 +384,68 @@ class ImportReceiptDetailServiceTest {
                 .hasMessageContaining("Bien ban chenh lech cho phieu nhap nay da ton tai.");
     }
 
+    // =========================================================================
+    // TEST GROUP: Auth errors for inspectReceipt
+    // =========================================================================
+
+    @Test
+    void inspectReceipt_error_whenActorIsManager() {
+        // Arrange
+        Employee manager = createEmployee(1L, RoleCode.MANAGER, EmployeeStatus.HOAT_DONG);
+        authenticateAs(manager);
+
+        InspectImportReceiptRequest request = new InspectImportReceiptRequest(Collections.emptyList());
+
+        // Act & Assert
+        assertThatThrownBy(() -> importReceiptService.inspectReceipt(100L, request))
+                .isInstanceOf(MissingRoleException.class)
+                .hasMessageContaining("Khong co quyen thuc hien kiem hang.");
+    }
+
+    @Test
+    void inspectReceipt_error_whenEmployeeNotActive() {
+        // Arrange
+        Employee inactiveEmployee = createEmployee(1L, RoleCode.EMPLOYEE, EmployeeStatus.TAM_KHOA);
+        authenticateAs(inactiveEmployee);
+
+        InspectImportReceiptRequest request = new InspectImportReceiptRequest(Collections.emptyList());
+
+        // Act & Assert
+        assertThatThrownBy(() -> importReceiptService.inspectReceipt(100L, request))
+                .isInstanceOf(AccountInactiveException.class);
+    }
+
+    // =========================================================================
+    // TEST GROUP: Auth errors for createDiscrepancyReport
+    // =========================================================================
+
+    @Test
+    void createDiscrepancyReport_error_whenActorIsManager() {
+        // Arrange
+        Employee manager = createEmployee(1L, RoleCode.MANAGER, EmployeeStatus.HOAT_DONG);
+        authenticateAs(manager);
+
+        CreateDiscrepancyReportRequest request = new CreateDiscrepancyReportRequest("Ghi chu", List.of());
+
+        // Act & Assert
+        assertThatThrownBy(() -> importReceiptService.createDiscrepancyReport(100L, request))
+                .isInstanceOf(MissingRoleException.class)
+                .hasMessageContaining("Khong co quyen lap bien ban.");
+    }
+
+    @Test
+    void createDiscrepancyReport_error_whenEmployeeNotActive() {
+        // Arrange
+        Employee inactiveEmployee = createEmployee(1L, RoleCode.EMPLOYEE, EmployeeStatus.TAM_KHOA);
+        authenticateAs(inactiveEmployee);
+
+        CreateDiscrepancyReportRequest request = new CreateDiscrepancyReportRequest("Ghi chu", List.of());
+
+        // Act & Assert
+        assertThatThrownBy(() -> importReceiptService.createDiscrepancyReport(100L, request))
+                .isInstanceOf(AccountInactiveException.class);
+    }
+
     private Employee createEmployee(Long id, RoleCode code, EmployeeStatus status) {
         Employee employee = new Employee();
         employee.setId(id);

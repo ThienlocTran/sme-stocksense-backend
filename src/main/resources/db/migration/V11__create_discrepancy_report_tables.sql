@@ -32,8 +32,9 @@ ALTER TABLE "chi_tiet_bien_ban_chenh_lech" ADD FOREIGN KEY ("san_pham_id") REFER
 
 CREATE UNIQUE INDEX ON "chi_tiet_bien_ban_chenh_lech" ("bien_ban_id", "san_pham_id");
 
-CREATE INDEX IF NOT EXISTS "idx_bb_cl_phieu_nhap_id" ON "bien_ban_chenh_lech" ("phieu_nhap_id");
-CREATE INDEX IF NOT EXISTS "idx_ct_bb_cl_bien_ban_id" ON "chi_tiet_bien_ban_chenh_lech" ("bien_ban_id");
+ALTER TABLE "chi_tiet_bien_ban_chenh_lech"
+    ADD CONSTRAINT "ck_ct_bbcl_qty_non_negative" CHECK ("so_luong_chung_tu" >= 0 AND "so_luong_thuc_te" >= 0),
+    ADD CONSTRAINT "ck_ct_bbcl_qty_delta" CHECK ("so_luong_lech" = "so_luong_thuc_te" - "so_luong_chung_tu");
 
 COMMENT ON TABLE "bien_ban_chenh_lech" IS 'Bien ban ghi nhan chenh lech giua thuc te kiem hang va chung tu goc.';
 COMMENT ON TABLE "chi_tiet_bien_ban_chenh_lech" IS 'Chi tiet san pham chenh lech kem ly do va huong xu ly.';

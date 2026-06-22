@@ -1,6 +1,7 @@
 package com.smartflow.smestocksensebackend.dto.inbound;
 
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -20,6 +21,7 @@ import lombok.Setter;
 public class CreateDiscrepancyReportItemRequest {
 
     @NotNull(message = "productId không được để trống.")
+    @Positive(message = "productId phải lớn hơn 0.")
     private Long productId;
 
     @Size(max = 255, message = "reason không được vượt quá 255 ký tự.")

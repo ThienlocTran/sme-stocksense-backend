@@ -57,8 +57,11 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 @Service
@@ -508,6 +511,14 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
         ImportReceipt receipt = importReceiptRepository.findById(receiptId)
                 .orElseThrow(() -> new NotFoundException("Phieu nhap khong ton tai."));
 
+        // Kiểm tra quyền sở hữu: EMPLOYEE chỉ được kiểm hàng phiếu do chính mình tạo
+        if (roleCode == RoleCode.EMPLOYEE) {
+            Employee creator = receipt.getCreatedBy();
+            if (creator == null || !actor.getId().equals(creator.getId())) {
+                throw new MissingRoleException("Khong co quyen tac dong vao phieu nhap cua nguoi khac.");
+            }
+        }
+
         // Lỗi: Phiếu nhập không ở trạng thái CHO_KIEM_HANG -> Báo lỗi.
         if (receipt.getStatus() != ImportReceiptStatus.CHO_KIEM_HANG) {
             throw new BadRequestException("Phieu nhap khong o trang thai CHO_KIEM_HANG.");
@@ -528,11 +539,22 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
          * Chỉ kiểm đếm lưu số lượng thực tế, không thực hiện cộng tồn kho ở bước này.
          * Logic này sẽ được thực hiện khi hoàn thành phiếu nhập kho ở các task sau (T104/T102).
          */
+        // Xây dựng Map để tra cứu nhanh chi tiết theo productId (tránh O(n²))
+        Map<Long, ImportReceiptDetail> detailByProductId = new HashMap<>();
+        for (ImportReceiptDetail d : details) {
+            detailByProductId.put(d.getProduct().getId(), d);
+        }
+
+        // Track các productId đã được kiểm để phát hiện trùng lặp và kiểm tra đủ dòng
+        Set<Long> inspectedProductIds = new HashSet<>();
         for (InspectImportReceiptItemRequest item : request.items()) {
-            ImportReceiptDetail detail = details.stream()
-                    .filter(d -> d.getProduct().getId().equals(item.productId()))
-                    .findFirst()
-                    .orElseThrow(() -> new BadRequestException("San pham co ID " + item.productId() + " khong co trong phieu nhap."));
+            if (!inspectedProductIds.add(item.productId())) {
+                throw new BadRequestException("Danh sach san pham kiem hang bi trung san pham ID: " + item.productId() + ".");
+            }
+            ImportReceiptDetail detail = detailByProductId.get(item.productId());
+            if (detail == null) {
+                throw new BadRequestException("San pham co ID " + item.productId() + " khong co trong phieu nhap.");
+            }
 
             detail.setActualReceivedQuantity(item.actualReceivedQuantity());
             detail.setPhysicalStatus(normalizeOptional(item.physicalStatus()));
@@ -544,6 +566,11 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
             } else {
                 detail.setRowStatus("CHENH_LECH");
             }
+        }
+
+        // Bắt buộc kiểm tra đầy đủ: Số dòng request phải bằng số dòng trong phiếu
+        if (inspectedProductIds.size() != details.size()) {
+            throw new BadRequestException("Yeu cau kiem hang phai bao gom day du tat ca san pham trong phieu nhap.");
         }
 
         try {
@@ -572,12 +599,17 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
         ImportReceipt receipt = importReceiptRepository.findById(receiptId)
                 .orElseThrow(() -> new NotFoundException("Phieu nhap khong ton tai."));
 
-        // Ràng buộc: Phiếu nhập phải ở trạng thái CHO_KIEM_HANG
+        if (roleCode == RoleCode.EMPLOYEE) {
+            Employee creator = receipt.getCreatedBy();
+            if (creator == null || !actor.getId().equals(creator.getId())) {
+                throw new MissingRoleException("Khong co quyen tac dong vao phieu nhap cua nguoi khac.");
+            }
+        }
+
         if (receipt.getStatus() != ImportReceiptStatus.CHO_KIEM_HANG) {
             throw new BadRequestException("Phieu nhap khong o trang thai CHO_KIEM_HANG.");
         }
 
-        // Ràng buộc: Một phiếu nhập chỉ có tối đa một biên bản chênh lệch
         if (discrepancyReportRepository.existsByImportReceiptId(receiptId)) {
             throw new ConflictException("Bien ban chenh lech cho phieu nhap nay da ton tai.");
         }
@@ -626,7 +658,12 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
         }
         report.setDetails(reportDetails);
 
-        DiscrepancyReport savedReport = discrepancyReportRepository.save(report);
+        DiscrepancyReport savedReport;
+        try {
+            savedReport = discrepancyReportRepository.saveAndFlush(report);
+        } catch (DataIntegrityViolationException e) {
+            throw new ConflictException("Bien ban chenh lech cho phieu nhap nay da ton tai.");
+        }
         return DiscrepancyReportResponse.from(savedReport);
     }
 

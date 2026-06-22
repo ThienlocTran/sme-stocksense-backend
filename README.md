@@ -33,16 +33,16 @@ Tính năng **Kiểm hàng** hỗ trợ nhân viên kho thực hiện đối chi
 
 ### Yêu Cầu Hệ Thống
 * Java JDK 21
-* Maven 3.9+ (hoặc sử dụng `.\mvnw.cmd`)
+* Maven 3.9+ (hoặc sử dụng `./mvnw` trên Linux/Mac, `.\mvnw.cmd` trên Windows)
 
 ### Lệnh Chạy Bộ Test Tự Động
 Chạy riêng các test case cho luồng kiểm hàng và chi tiết phiếu nhập:
 ```bash
-.\mvnw.cmd test -pl . -Dtest=ImportReceiptDetailServiceTest
+./mvnw test -pl . -Dtest=ImportReceiptDetailServiceTest
 ```
 
 Chạy toàn bộ test suite của dự án:
 ```bash
-.\mvnw.cmd test
+./mvnw test
 ```
 *(Lưu ý: Một số integration test yêu cầu cấu hình kết nối thực tế đến PostgreSQL để khởi chạy ứng dụng thành công).*

@@ -322,4 +322,23 @@ class InventoryServiceImplTest {
                 "Kế thừa T73, track biến động kho phục vụ đối soát"
         );
     }
+
+    /**
+     * Kiểm thử guard clause: phiếu nhập không ở trạng thái HOAN_THANH.
+     * Kỳ vọng: Ném IllegalStateException với message đúng, không gọi saveAndFlush.
+     */
+    @Test
+    void increaseInventory_error_whenImportReceiptNotCompleted() {
+        ImportReceipt receipt = new ImportReceipt();
+        receipt.setId(5L);
+        receipt.setStatus(ImportReceiptStatus.NHAP); // Không phải HOAN_THANH
+
+        IllegalStateException ex = assertThrows(
+                IllegalStateException.class,
+                () -> inventoryService.increaseInventory(1L, 1L, 50, receipt)
+        );
+
+        assertEquals("Chỉ cập nhật tồn kho khi phiếu nhập đã COMPLETED.", ex.getMessage());
+        Mockito.verify(inventoryLevelRepository, Mockito.never()).saveAndFlush(any());
+    }
 }

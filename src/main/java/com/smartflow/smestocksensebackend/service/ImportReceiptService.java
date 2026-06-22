@@ -100,4 +100,15 @@ public interface ImportReceiptService {
      * @return Biên bản chênh lệch đã lập thành công
      */
     DiscrepancyReportResponse createDiscrepancyReport(Long receiptId, CreateDiscrepancyReportRequest request);
+
+    /**
+     * Hoàn tất phiếu nhập kho (T104).
+     * Bọc toàn bộ các khâu vào 1 giao dịch an toàn (ACID):
+     * Lấy phiếu -> Update kiểm hàng (T100) -> Tăng tồn kho (T102) -> Ghi log (T103) -> Đổi status phiếu sang HOAN_THANH.
+     *
+     * @param receiptId ID của phiếu nhập kho cần hoàn tất
+     * @param request Yêu cầu kiểm hàng chứa thông tin thực tế nhận được
+     * @return Thông tin phiếu nhập kho sau khi hoàn tất
+     */
+    ImportReceiptDraftResponse completeImport(Long receiptId, InspectImportReceiptRequest request);
 }

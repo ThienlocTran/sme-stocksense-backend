@@ -93,7 +93,8 @@ class ImportReceiptTotalServiceTest {
                 itemValidator,
                 amountCalculator,
                 discrepancyReportRepository,
-                discrepancyReportDetailRepository
+                discrepancyReportDetailRepository,
+                null
         );
         owner = employee(5L, RoleCode.EMPLOYEE);
         receipt = receipt(123L, owner);

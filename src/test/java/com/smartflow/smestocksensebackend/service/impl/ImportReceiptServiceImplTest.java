@@ -21,6 +21,7 @@ import com.smartflow.smestocksensebackend.repository.PartnerRepository;
 import com.smartflow.smestocksensebackend.repository.ProductRepository;
 import com.smartflow.smestocksensebackend.repository.WarehouseRepository;
 import com.smartflow.smestocksensebackend.service.ImportReceiptCodeGenerator;
+import com.smartflow.smestocksensebackend.service.InventoryService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -68,6 +69,9 @@ class ImportReceiptServiceImplTest {
 
     @Mock
     private ImportReceiptAmountCalculator amountCalculator;
+
+    @Mock
+    private InventoryService inventoryService;
 
     @InjectMocks
     private ImportReceiptServiceImpl importReceiptService;

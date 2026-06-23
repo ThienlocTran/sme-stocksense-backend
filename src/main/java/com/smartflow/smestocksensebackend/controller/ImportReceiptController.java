@@ -8,6 +8,7 @@ import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptPageResponse;
 import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptResponse;
 import com.smartflow.smestocksensebackend.dto.inbound.SaveImportReceiptDraftRequest;
 import com.smartflow.smestocksensebackend.dto.inbound.InspectImportReceiptRequest;
+import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptArrivalRequest;
 import com.smartflow.smestocksensebackend.service.ImportReceiptService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;

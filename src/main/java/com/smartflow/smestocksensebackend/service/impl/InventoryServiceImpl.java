@@ -138,5 +138,136 @@ public class InventoryServiceImpl implements InventoryService {
         } catch (ArithmeticException ex) {
             throw new IllegalArgumentException("Tong so luong ton kho vuot gioi han cho phep.", ex);
         }
+            existingInventory.setQuantity(existingInventory.getQuantity() + quantity);
+            inventoryLevelRepository.saveAndFlush(existingInventory);
+        }
+    }
+
+    /**
+     * Lấy danh sách tồn kho với các bộ lọc chi tiết.
+     * 
+     * Hỗ trợ lọc theo:
+     * - Kho hàng (warehouseId)
+     * - Sản phẩm (productId)
+     * - Từ khóa tìm kiếm (keyword: mã/tên sản phẩm, mã/tên kho, mã vạch)
+     * - Trạng thái tồn kho (stockStatus)
+     * - Trạng thái kho (warehouseStatus)
+     * - Trạng thái sản phẩm (productStatus)
+     * 
+     * @param warehouseId ID kho (null để không lọc)
+     * @param productId ID sản phẩm (null để không lọc)
+     * @param keyword từ khóa tìm kiếm (null để không lọc)
+     * @param stockStatus trạng thái tồn: LOW_STOCK, OUT_OF_STOCK, NORMAL, OVER_STOCK (null để không lọc)
+     * @param warehouseStatus trạng thái kho: HOAT_DONG, NGUNG_HOAT_DONG (null để không lọc)
+     * @param productStatus trạng thái sản phẩm: HOAT_DONG, NGUNG_HOAT_DONG (null để không lọc)
+     * @param pageable thông tin phân trang và sắp xếp
+     * @return danh sách tồn kho phân trang
+     * @throws NotFoundException nếu warehouseId hoặc productId không tồn tại
+     * @throws BadRequestException nếu stockStatus, warehouseStatus hoặc productStatus không hợp lệ
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public Page<InventoryLevelResponse> listInventory(Long warehouseId, Long productId, String keyword,
+            String stockStatus, String warehouseStatus, String productStatus, Pageable pageable) {
+        if (warehouseId != null && !warehouseRepository.existsById(warehouseId)) {
+            throw new com.smartflow.smestocksensebackend.exception.NotFoundException("Kho hàng không tồn tại.");
+        }
+        if (productId != null && !productRepository.existsById(productId)) {
+            throw new com.smartflow.smestocksensebackend.exception.NotFoundException("Sản phẩm không tồn tại.");
+        }
+
+        String normalizedStockStatus;
+        String normalizedWarehouseStatus;
+        String normalizedProductStatus;
+
+        try {
+            normalizedStockStatus = normalizeStockStatus(stockStatus);
+            normalizedWarehouseStatus = normalizeActiveStatus(warehouseStatus);
+            normalizedProductStatus = normalizeActiveStatus(productStatus);
+        } catch (IllegalArgumentException e) {
+            throw new BadRequestException(e.getMessage());
+        }
+
+        String keywordParam = (keyword == null || keyword.isBlank()) ? null : "%" + keyword.trim() + "%";
+        Page<InventoryLevelProjection> result = inventoryLevelRepository.findInventory(warehouseId, productId,
+                keywordParam, normalizedStockStatus, normalizedWarehouseStatus, normalizedProductStatus, pageable);
+
+        return result.map(this::mapProjectionToResponse);
+    }
+
+    /**
+     * Chuẩn hóa trạng thái tồn kho từ input người dùng.
+     * 
+     * Chấp nhận các giá trị:
+     * - ZERO, OUT_OF_STOCK, OUT_OFSTOCK → OUT_OF_STOCK
+     * - LOW, LOW_STOCK → LOW_STOCK
+     * - HIGH, OVER_STOCK, OVERSTOCK → OVER_STOCK
+     * - NORMAL → NORMAL
+     * 
+     * @param stockStatus giá trị input (không phân biệt chữ hoa/thường, hỗ trợ '-' và '_')
+     * @return giá trị chuẩn hóa hoặc null nếu input null/blank
+     * @throws IllegalArgumentException nếu giá trị không hợp lệ
+     */
+    private String normalizeStockStatus(String stockStatus) {
+        if (stockStatus == null || stockStatus.isBlank()) {
+            return null;
+        }
+
+        String normalized = stockStatus.trim().toUpperCase().replace('-', '_');
+        return switch (normalized) {
+            case "ZERO", "OUT_OF_STOCK", "OUT_OFSTOCK" -> "OUT_OF_STOCK";
+            case "LOW", "LOW_STOCK" -> "LOW_STOCK";
+            case "HIGH", "OVER_STOCK", "OVERSTOCK" -> "OVER_STOCK";
+            case "NORMAL" -> "NORMAL";
+            default -> throw new IllegalArgumentException("Trạng thái tồn kho không hợp lệ: " + stockStatus);
+        };
+    }
+
+    /**
+     * Chuẩn hóa trạng thái hoạt động (kho/sản phẩm) từ input người dùng.
+     * 
+     * Chấp nhận các giá trị:
+     * - ACTIVE, HOAT_DONG → HOAT_DONG
+     * - INACTIVE, NGUNG_HOAT_DONG → NGUNG_HOAT_DONG
+     * 
+     * @param status giá trị input (không phân biệt chữ hoa/thường)
+     * @return giá trị chuẩn hóa hoặc null nếu input null/blank
+     * @throws IllegalArgumentException nếu giá trị không hợp lệ
+     */
+    private String normalizeActiveStatus(String status) {
+        if (status == null || status.isBlank()) {
+            return null;
+        }
+
+        return switch (status.trim().toUpperCase()) {
+            case "ACTIVE", "HOAT_DONG" -> "HOAT_DONG";
+            case "INACTIVE", "NGUNG_HOAT_DONG" -> "NGUNG_HOAT_DONG";
+            default -> throw new IllegalArgumentException("Trạng thái hoạt động không hợp lệ: " + status);
+        };
+    }
+
+    /**
+     * Ánh xạ từ InventoryLevelProjection (native query result) sang InventoryLevelResponse DTO.
+     * 
+     * @param projection kết quả từ native query
+     * @return DTO response để trả về client
+     */
+    private InventoryLevelResponse mapProjectionToResponse(InventoryLevelProjection projection) {
+        return new InventoryLevelResponse(
+                projection.getInventoryId(),
+                projection.getProductId(),
+                projection.getProductCode(),
+                projection.getProductName(),
+                projection.getBarcode(),
+                projection.getWarehouseId(),
+                projection.getWarehouseCode(),
+                projection.getWarehouse(),
+                projection.getCurrentQuantity(),
+                projection.getMinStock(),
+                projection.getMaxStock(),
+                projection.getProductStatus(),
+                projection.getWarehouseStatus(),
+                projection.getStatus(),
+                projection.getLastUpdatedAt());
     }
 }

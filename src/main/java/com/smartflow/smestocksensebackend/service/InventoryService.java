@@ -28,4 +28,9 @@ public interface InventoryService {
      * @throws com.smartflow.smestocksensebackend.exception.NotFoundException nếu không tìm thấy sản phẩm hoặc kho hàng
      */
     void increaseInventory(Long productId, Long warehouseId, Integer quantity, ImportReceipt importReceipt);
+
+
+    Page<InventoryLevelResponse> listInventory(Long warehouseId, Long productId, String keyword, String stockStatus,
+            String warehouseStatus, String productStatus, Pageable pageable);
+
 }

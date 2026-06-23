@@ -7,6 +7,10 @@ import com.smartflow.smestocksensebackend.exception.NotFoundException;
 import com.smartflow.smestocksensebackend.repository.InventoryLevelRepository;
 import com.smartflow.smestocksensebackend.repository.ProductRepository;
 import com.smartflow.smestocksensebackend.repository.WarehouseRepository;
+import com.smartflow.smestocksensebackend.entity.ImportReceipt;
+import com.smartflow.smestocksensebackend.entity.ImportReceiptStatus;
+import com.smartflow.smestocksensebackend.entity.InventoryTransactionType;
+import com.smartflow.smestocksensebackend.service.InventoryTransactionService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -38,6 +42,9 @@ class InventoryServiceImplTest {
 
     @Mock
     private WarehouseRepository warehouseRepository;
+
+    @Mock
+    private InventoryTransactionService inventoryTransactionService;
 
     @InjectMocks
     private InventoryServiceImpl inventoryService;
@@ -157,6 +164,60 @@ class InventoryServiceImplTest {
     }
 
     /**
+     * Kiểm thử ngoại lệ: productId = 0 (không hợp lệ vì phải > 0).
+     * Kỳ vọng: Ném IllegalArgumentException ngay trước khi truy vấn DB.
+     */
+    @Test
+    void increaseInventory_error_whenProductIdInvalid() {
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
+                inventoryService.increaseInventory(0L, 1L, 50)
+        );
+
+        assertEquals("productId, warehouseId, quantity phải > 0", exception.getMessage());
+        Mockito.verify(inventoryLevelRepository, Mockito.never()).saveAndFlush(any());
+    }
+
+    /**
+     * Kiểm thử ngoại lệ: warehouseId = -1 (âm, không hợp lệ vì phải > 0).
+     * Kỳ vọng: Ném IllegalArgumentException ngay trước khi truy vấn DB.
+     */
+    @Test
+    void increaseInventory_error_whenWarehouseIdInvalid() {
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
+                inventoryService.increaseInventory(1L, -1L, 50)
+        );
+
+        assertEquals("productId, warehouseId, quantity phải > 0", exception.getMessage());
+        Mockito.verify(inventoryLevelRepository, Mockito.never()).saveAndFlush(any());
+    }
+
+    /**
+     * Kiểm thử ngoại lệ: Tổng số lượng tồn kho vượt Integer.MAX_VALUE (Integer Overflow).
+     * Kỳ vọng: Ném IllegalArgumentException với message đúng, không gọi saveAndFlush.
+     */
+    @Test
+    void increaseInventory_error_whenQuantityOverflow() {
+        InventoryLevel existingInventory = new InventoryLevel();
+        existingInventory.setId(10L);
+        existingInventory.setProduct(product);
+        existingInventory.setWarehouse(warehouse);
+        existingInventory.setQuantity(Integer.MAX_VALUE);
+
+        Mockito.when(productRepository.findById(1L)).thenReturn(Optional.of(product));
+        Mockito.when(warehouseRepository.findById(1L)).thenReturn(Optional.of(warehouse));
+        Mockito.when(inventoryLevelRepository.findByProductIdAndWarehouseIdForUpdate(1L, 1L))
+                .thenReturn(Optional.of(existingInventory));
+
+        IllegalArgumentException ex = assertThrows(
+                IllegalArgumentException.class,
+                () -> inventoryService.increaseInventory(1L, 1L, 1)
+        );
+
+        assertEquals("Tong so luong ton kho vuot gioi han cho phep.", ex.getMessage());
+        Mockito.verify(inventoryLevelRepository, Mockito.never()).saveAndFlush(any());
+    }
+
+    /**
      * Kiểm thử race condition: lần insert đầu bị DataIntegrityViolationException
      * (transaction khác đã insert trước). Kỳ vọng: fallback sang update, cộng dồn đúng.
      */
@@ -200,7 +261,7 @@ class InventoryServiceImplTest {
     @Test
     void increaseInventory_error_whenInsertRacesAndFallbackMissingRecord() {
         DataIntegrityViolationException expectedException =
-                new DataIntegrityViolationException("duplicate key");
+                new DataIntegrityViolationException("duplicate key – fallback empty");
 
         Mockito.when(productRepository.findById(1L)).thenReturn(Optional.of(product));
         Mockito.when(warehouseRepository.findById(1L)).thenReturn(Optional.of(warehouse));
@@ -224,5 +285,60 @@ class InventoryServiceImplTest {
 
         // saveAndFlush chỉ được gọi đúng 1 lần (không có lần 2 vì fallback đã throw)
         Mockito.verify(inventoryLevelRepository, Mockito.times(1)).saveAndFlush(any());
+    }
+
+    /**
+     * Kiểm thử luồng: Tăng tồn kho kèm phiếu nhập.
+     * Kỳ vọng: Tăng tồn kho thành công và gọi service ghi log giao dịch kho loại NHAP_KHO.
+     */
+    @Test
+    void increaseInventory_withImportReceipt_shouldLogTransaction() {
+        ImportReceipt receipt = new ImportReceipt();
+        receipt.setId(5L);
+        receipt.setStatus(ImportReceiptStatus.HOAN_THANH);
+
+        Mockito.when(productRepository.findById(1L)).thenReturn(Optional.of(product));
+        Mockito.when(warehouseRepository.findById(1L)).thenReturn(Optional.of(warehouse));
+        Mockito.when(inventoryLevelRepository.findByProductIdAndWarehouseIdForUpdate(1L, 1L))
+                .thenReturn(Optional.empty());
+
+        inventoryService.increaseInventory(1L, 1L, 50, receipt);
+
+        ArgumentCaptor<InventoryLevel> inventoryCaptor = ArgumentCaptor.forClass(InventoryLevel.class);
+        Mockito.verify(inventoryLevelRepository).saveAndFlush(inventoryCaptor.capture());
+
+        InventoryLevel savedInventory = inventoryCaptor.getValue();
+        assertNotNull(savedInventory);
+        assertEquals(50, savedInventory.getQuantity());
+
+        Mockito.verify(inventoryTransactionService).recordTransaction(
+                1L,
+                1L,
+                InventoryTransactionType.NHAP_KHO,
+                50,
+                0,
+                50,
+                receipt,
+                "Kế thừa T73, track biến động kho phục vụ đối soát"
+        );
+    }
+
+    /**
+     * Kiểm thử guard clause: phiếu nhập không ở trạng thái HOAN_THANH.
+     * Kỳ vọng: Ném IllegalStateException với message đúng, không gọi saveAndFlush.
+     */
+    @Test
+    void increaseInventory_error_whenImportReceiptNotCompleted() {
+        ImportReceipt receipt = new ImportReceipt();
+        receipt.setId(5L);
+        receipt.setStatus(ImportReceiptStatus.NHAP); // Không phải HOAN_THANH
+
+        IllegalStateException ex = assertThrows(
+                IllegalStateException.class,
+                () -> inventoryService.increaseInventory(1L, 1L, 50, receipt)
+        );
+
+        assertEquals("Chỉ cập nhật tồn kho khi phiếu nhập đã COMPLETED.", ex.getMessage());
+        Mockito.verify(inventoryLevelRepository, Mockito.never()).saveAndFlush(any());
     }
 }

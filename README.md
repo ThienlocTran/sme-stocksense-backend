@@ -10,10 +10,11 @@ Tài liệu này tổng hợp toàn bộ các module tính năng, kiến trúc m
 
 Để xem hướng dẫn chi tiết của từng module cụ thể, vui lòng truy cập các liên kết dưới đây:
 
-* ⚙️ **[Hướng dẫn cài đặt & Cấu trúc gốc](file:///d:/DATN_BE/README_backend.md)**: Chi tiết cấu trúc thư mục, môi trường phát triển, Docker PostgreSQL, và lộ trình triển khai tổng thể.
-* 📦 **[Module Quản lý Kho hàng (Warehouses)](file:///d:/DATN_BE/README_warehouses.md)**: Các API Danh sách, Tạo mới, Cập nhật, và Kích hoạt/Hủy kích hoạt kho hàng.
-* 🤝 **[Module Quản lý Đối tác (Partners)](file:///d:/DATN_BE/README_partners.md)**: Các API quản lý Nhà cung cấp/Khách hàng, ràng buộc kiểm tra loại đối tác, phân quyền truy cập.
-* ⚖️ **[Tính năng Lập Biên bản Chênh lệch (T101)](file:///d:/DATN_BE/README_T101.md)**: Quy trình kiểm hàng thực tế (T100), lập biên bản chênh lệch (T101), thiết kế database và ví dụ JSON.
+* ⚙️ **[Hướng dẫn cài đặt & Cấu trúc gốc](./README_backend.md)**: Chi tiết cấu trúc thư mục, môi trường phát triển, Docker PostgreSQL, và lộ trình triển khai tổng thể.
+* 📦 **[Module Quản lý Kho hàng (Warehouses)](./README_warehouses.md)**: Các API Danh sách, Tạo mới, Cập nhật, và Kích hoạt/Hủy kích hoạt kho hàng.
+* 🤝 **[Module Quản lý Đối tác (Partners)](./README_partners.md)**: Các API quản lý Nhà cung cấp/Khách hàng, ràng buộc kiểm tra loại đối tác, phân quyền truy cập.
+* ⚖️ **[Tính năng Lập Biên bản Chênh lệch (T101)](./README_T101.md)**: Quy trình kiểm hàng thực tế (T100), lập biên bản chênh lệch (T101), thiết kế database và ví dụ JSON.
+* 📜 **[Ghi Giao dịch Nhập kho (T103)](./README_T103.md)**: Thiết kế và logic ghi log giao dịch kho loại `NHAP_KHO` sau khi hoàn tất, liên kết phiếu nhập và theo dõi tồn kho trước/sau.
 
 ---
 
@@ -41,6 +42,11 @@ Quy trình này gồm hai bước nghiệp vụ chặt chẽ:
    * Cho phép nhân viên lập biên bản đối với các phiếu nhập có dòng trạng thái `CHENH_LECH`.
    * Ghi nhận lý do chênh lệch (`reason`) và hướng xử lý đề xuất (`action`) cho từng dòng sản phẩm bị lệch.
    * Tự động sinh mã biên bản: `BBCL-[Mã Phiếu Nhập]`.
+
+### 4. Giao Dịch Nhập Kho (Inventory Transaction Logs - T103)
+* Ghi nhận giao dịch biến động tồn kho (`giao_dich_kho`) loại `NHAP_KHO` khi hoàn tất nhập kho.
+* Tự động đo lường và ghi vết số lượng tồn kho trước/sau (`so_luong_truoc`, `so_luong_sau`), người tạo, liên kết phiếu nhập và ghi chú đối soát.
+* Kế thừa từ thiết kế Task T73 để phục vụ nghiệp vụ đối soát.
 
 ---
 
@@ -86,7 +92,7 @@ sme-stocksense-backend/
 * Tạo database PostgreSQL và cấu hình chuỗi kết nối trong file `.env` hoặc `src/main/resources/application.yml` (hoặc thông qua profile `application-neon.yml`).
 
 ### 2. Chạy ứng dụng Spring Boot
-Chạy lệnh sau tại thư mục gốc `d:\DATN_BE`:
+Chạy lệnh sau tại thư mục gốc của dự án:
 
 ```bash
 # Trên Windows:

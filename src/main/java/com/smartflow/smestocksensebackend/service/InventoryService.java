@@ -1,5 +1,7 @@
 package com.smartflow.smestocksensebackend.service;
 
+import com.smartflow.smestocksensebackend.entity.ImportReceipt;
+
 public interface InventoryService {
 
     /**
@@ -15,6 +17,17 @@ public interface InventoryService {
      */
     void increaseInventory(Long productId, Long warehouseId, Integer quantity);
 
+    /**
+     * Core service tăng số lượng tồn kho và ghi nhận lịch sử giao dịch kho (T103).
+     * Kế thừa T73, track biến động kho phục vụ đối soát.
+     *
+     * @param productId ID sản phẩm
+     * @param warehouseId ID kho hàng
+     * @param quantity Số lượng thực nhận cần cộng thêm vào tồn kho
+     * @param importReceipt Phiếu nhập liên kết phục vụ ghi log giao dịch
+     * @throws com.smartflow.smestocksensebackend.exception.NotFoundException nếu không tìm thấy sản phẩm hoặc kho hàng
+     */
+    void increaseInventory(Long productId, Long warehouseId, Integer quantity, ImportReceipt importReceipt);
 
 
     Page<InventoryLevelResponse> listInventory(Long warehouseId, Long productId, String keyword, String stockStatus,

@@ -17,6 +17,10 @@ import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
 
+/**
+ * Thực thể InventoryLevel ánh xạ trực tiếp đến bảng "ton_kho" trong cơ sở dữ liệu.
+ * Lưu trữ số lượng tồn kho của một sản phẩm tại một kho hàng cụ thể.
+ */
 @Getter
 @Setter
 @NoArgsConstructor
@@ -28,11 +32,11 @@ public class InventoryLevel {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "san_pham_id", nullable = false)
     private Product product;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "kho_id", nullable = false)
     private Warehouse warehouse;
 

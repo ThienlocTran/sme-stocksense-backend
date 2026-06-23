@@ -605,6 +605,9 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
     @Override
     @Transactional
     public ImportReceiptDraftResponse inspectReceipt(Long receiptId, InspectImportReceiptRequest request) {
+        if (request == null || request.items() == null) {
+            throw new BadRequestException("Yeu cau kiem hang khong hop le.");
+        }
         Employee actor = currentEmployee();
         if (actor.getStatus() != EmployeeStatus.HOAT_DONG) {
             throw new AccountInactiveException();
@@ -655,6 +658,9 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
         // Track các productId đã được kiểm để phát hiện trùng lặp và kiểm tra đủ dòng
         Set<Long> inspectedProductIds = new HashSet<>();
         for (InspectImportReceiptItemRequest item : request.items()) {
+            if (item == null || item.productId() == null || item.actualReceivedQuantity() == null) {
+                throw new BadRequestException("Thong tin san pham kiem hang khong hop le.");
+            }
             if (!inspectedProductIds.add(item.productId())) {
                 throw new BadRequestException("Danh sach san pham kiem hang bi trung san pham ID: " + item.productId() + ".");
             }
@@ -702,6 +708,9 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
     @Override
     @Transactional
     public DiscrepancyReportResponse createDiscrepancyReport(Long receiptId, CreateDiscrepancyReportRequest request) {
+        if (request == null) {
+            throw new BadRequestException("Yeu cau lap bien ban khong hop le.");
+        }
         Employee actor = currentEmployee();
         if (actor.getStatus() != EmployeeStatus.HOAT_DONG) {
             throw new AccountInactiveException();
@@ -755,9 +764,17 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
         }
         report.setCode(code);
 
+        // Validate danh sách items: tránh NullPointerException khi item hoặc productId là null
+        List<CreateDiscrepancyReportItemRequest> items = request.getItems() != null ? request.getItems() : List.of();
+        for (CreateDiscrepancyReportItemRequest item : items) {
+            if (item == null || item.getProductId() == null) {
+                throw new BadRequestException("Thong tin san pham bien ban khong hop le.");
+            }
+        }
+
         List<DiscrepancyReportDetail> reportDetails = new ArrayList<>();
         for (ImportReceiptDetail diff : discrepancyDetails) {
-            CreateDiscrepancyReportItemRequest itemReq = request.getItems().stream()
+            CreateDiscrepancyReportItemRequest itemReq = items.stream()
                     .filter(i -> i.getProductId().equals(diff.getProduct().getId()))
                     .findFirst()
                     .orElse(null);

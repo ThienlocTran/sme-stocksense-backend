@@ -15,6 +15,9 @@ import com.smartflow.smestocksensebackend.dto.inbound.SaveImportReceiptDraftItem
 import com.smartflow.smestocksensebackend.dto.inbound.SaveImportReceiptDraftRequest;
 import com.smartflow.smestocksensebackend.dto.inbound.InspectImportReceiptRequest;
 import com.smartflow.smestocksensebackend.dto.inbound.InspectImportReceiptItemRequest;
+import com.smartflow.smestocksensebackend.dto.inbound.CreateDiscrepancyReportRequest;
+import com.smartflow.smestocksensebackend.dto.inbound.CreateDiscrepancyReportItemRequest;
+import com.smartflow.smestocksensebackend.dto.inbound.DiscrepancyReportResponse;
 import com.smartflow.smestocksensebackend.entity.Employee;
 import com.smartflow.smestocksensebackend.entity.EmployeeStatus;
 import com.smartflow.smestocksensebackend.entity.ImportReceipt;
@@ -36,6 +39,10 @@ import com.smartflow.smestocksensebackend.repository.ImportReceiptDetailReposito
 import com.smartflow.smestocksensebackend.repository.ImportReceiptRepository;
 import com.smartflow.smestocksensebackend.repository.PartnerRepository;
 import com.smartflow.smestocksensebackend.repository.WarehouseRepository;
+import com.smartflow.smestocksensebackend.repository.DiscrepancyReportRepository;
+import com.smartflow.smestocksensebackend.repository.DiscrepancyReportDetailRepository;
+import com.smartflow.smestocksensebackend.entity.DiscrepancyReport;
+import com.smartflow.smestocksensebackend.entity.DiscrepancyReportDetail;
 import com.smartflow.smestocksensebackend.service.ImportReceiptCodeGenerator;
 import com.smartflow.smestocksensebackend.service.ImportReceiptService;
 import lombok.RequiredArgsConstructor;
@@ -51,8 +58,11 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -85,19 +95,12 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
     private final ImportReceiptDetailRepository importReceiptDetailRepository;
     private final WarehouseRepository warehouseRepository;
     private final PartnerRepository partnerRepository;
-    private final ImportReceiptCodeGenerator codeGenerator;     // Sinh mã phiếu dạng PNK-XXXXXXXX
-    private final ImportReceiptItemValidator itemValidator;      // Validate sản phẩm và các trường số lượng/đơn giá
-    private final ImportReceiptAmountCalculator amountCalculator; // Tính tổng tiền dòng và tổng phiếu
+    private final ImportReceiptCodeGenerator codeGenerator;
+    private final ImportReceiptItemValidator itemValidator;
+    private final ImportReceiptAmountCalculator amountCalculator;
+    private final DiscrepancyReportRepository discrepancyReportRepository;
+    private final DiscrepancyReportDetailRepository discrepancyReportDetailRepository;
 
-    // =========================================================================
-    // NHÓM 1: TẠO VÀ QUẢN LÝ PHIẾU NHÁP (Trạng thái: NHAP)
-    // =========================================================================
-
-    /**
-     * Tạo phiếu nhập kho ở trạng thái nháp (NHAP).
-     * Mã phiếu được sinh tự động với tối đa {@code MAX_CODE_ATTEMPTS} lần thử
-     * để tránh xung đột mã trùng lặp trong môi trường concurrent.
-     */
     @Override
     @Transactional
     public ImportReceiptResponse createDraft(CreateImportReceiptRequest request) {
@@ -589,6 +592,16 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
         }
     }
 
+    /**
+     * Thực hiện kiểm hàng thực tế cho phiếu nhập kho (T100).
+     * Ghi nhận số lượng thực đếm, tình trạng sản phẩm và đối chiếu khớp/lệch với chứng từ gốc.
+     * Chỉ áp dụng cho phiếu nhập từ Nhà cung cấp đang ở trạng thái CHO_KIEM_HANG.
+     * Cập nhật trạng thái dòng là KHOP hoặc CHENH_LECH.
+     *
+     * @param receiptId ID của phiếu nhập kho
+     * @param request Yêu cầu kiểm hàng chứa danh sách sản phẩm và số lượng thực tế kiểm đếm
+     * @return Kết quả kiểm hàng và chi tiết phiếu nhập
+     */
     @Override
     @Transactional
     public ImportReceiptDraftResponse inspectReceipt(Long receiptId, InspectImportReceiptRequest request) {
@@ -604,6 +617,14 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
 
         ImportReceipt receipt = importReceiptRepository.findById(receiptId)
                 .orElseThrow(() -> new NotFoundException("Phieu nhap khong ton tai."));
+
+        // Kiểm tra quyền sở hữu: EMPLOYEE chỉ được kiểm hàng phiếu do chính mình tạo
+        if (roleCode == RoleCode.EMPLOYEE) {
+            Employee creator = receipt.getCreatedBy();
+            if (creator == null || !actor.getId().equals(creator.getId())) {
+                throw new MissingRoleException("Khong co quyen tac dong vao phieu nhap cua nguoi khac.");
+            }
+        }
 
         // Lỗi: Phiếu nhập không ở trạng thái CHO_KIEM_HANG -> Báo lỗi.
         if (receipt.getStatus() != ImportReceiptStatus.CHO_KIEM_HANG) {
@@ -625,18 +646,22 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
          * Chỉ kiểm đếm lưu số lượng thực tế, không thực hiện cộng tồn kho ở bước này.
          * Logic này sẽ được thực hiện khi hoàn thành phiếu nhập kho ở các task sau (T104/T102).
          */
-        Set<Long> seenProductIds = new LinkedHashSet<>();
+        // Xây dựng Map để tra cứu nhanh chi tiết theo productId (tránh O(n²))
+        Map<Long, ImportReceiptDetail> detailByProductId = new HashMap<>();
+        for (ImportReceiptDetail d : details) {
+            detailByProductId.put(d.getProduct().getId(), d);
+        }
+
+        // Track các productId đã được kiểm để phát hiện trùng lặp và kiểm tra đủ dòng
+        Set<Long> inspectedProductIds = new HashSet<>();
         for (InspectImportReceiptItemRequest item : request.items()) {
-            if (item == null) {
-                throw new BadRequestException("items khong hop le.");
-            }
-            if (!seenProductIds.add(item.productId())) {
+            if (!inspectedProductIds.add(item.productId())) {
                 throw new BadRequestException("Danh sach san pham kiem hang bi trung san pham ID: " + item.productId() + ".");
             }
-            ImportReceiptDetail detail = details.stream()
-                    .filter(d -> d.getProduct().getId().equals(item.productId()))
-                    .findFirst()
-                    .orElseThrow(() -> new BadRequestException("San pham co ID " + item.productId() + " khong co trong phieu nhap."));
+            ImportReceiptDetail detail = detailByProductId.get(item.productId());
+            if (detail == null) {
+                throw new BadRequestException("San pham co ID " + item.productId() + " khong co trong phieu nhap.");
+            }
 
             detail.setActualReceivedQuantity(item.actualReceivedQuantity());
             detail.setPhysicalStatus(normalizeOptional(item.physicalStatus()));
@@ -650,6 +675,11 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
             }
         }
 
+        // Bắt buộc kiểm tra đầy đủ: Số dòng request phải bằng số dòng trong phiếu
+        if (inspectedProductIds.size() != details.size()) {
+            throw new BadRequestException("Yeu cau kiem hang phai bao gom day du tat ca san pham trong phieu nhap.");
+        }
+
         try {
             importReceiptDetailRepository.saveAllAndFlush(details);
             receipt.setUpdatedAt(LocalDateTime.now());
@@ -658,6 +688,101 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
         } catch (OptimisticLockingFailureException exception) {
             throw new ConflictException("Phieu nhap da duoc cap nhat boi request khac.");
         }
+    }
+
+    /**
+     * Lập biên bản chênh lệch cho phiếu nhập kho (T101).
+     * Được gọi khi phiếu nhập có các sản phẩm bị lệch số lượng (CHENH_LECH) sau kiểm hàng.
+     * Tự động tạo mã biên bản, lưu thông tin lý do và hướng xử lý đề xuất cho các sản phẩm bị lệch.
+     *
+     * @param receiptId ID của phiếu nhập kho
+     * @param request Yêu cầu lập biên bản chứa ghi chú và các chi tiết xử lý
+     * @return Biên bản chênh lệch đã lập thành công
+     */
+    @Override
+    @Transactional
+    public DiscrepancyReportResponse createDiscrepancyReport(Long receiptId, CreateDiscrepancyReportRequest request) {
+        Employee actor = currentEmployee();
+        if (actor.getStatus() != EmployeeStatus.HOAT_DONG) {
+            throw new AccountInactiveException();
+        }
+
+        RoleCode roleCode = actor.getRole() != null ? actor.getRole().getCode() : null;
+        if (roleCode != RoleCode.ADMIN && roleCode != RoleCode.EMPLOYEE) {
+            throw new MissingRoleException("Khong co quyen lap bien ban.");
+        }
+
+        ImportReceipt receipt = importReceiptRepository.findById(receiptId)
+                .orElseThrow(() -> new NotFoundException("Phieu nhap khong ton tai."));
+
+        if (roleCode == RoleCode.EMPLOYEE) {
+            Employee creator = receipt.getCreatedBy();
+            if (creator == null || !actor.getId().equals(creator.getId())) {
+                throw new MissingRoleException("Khong co quyen tac dong vao phieu nhap cua nguoi khac.");
+            }
+        }
+
+        if (receipt.getStatus() != ImportReceiptStatus.CHO_KIEM_HANG) {
+            throw new BadRequestException("Phieu nhap khong o trang thai CHO_KIEM_HANG.");
+        }
+
+        if (discrepancyReportRepository.existsByImportReceiptId(receiptId)) {
+            throw new ConflictException("Bien ban chenh lech cho phieu nhap nay da ton tai.");
+        }
+
+        List<ImportReceiptDetail> details = importReceiptDetailRepository.findByDocumentId(receiptId);
+
+        // Lọc các dòng bị lệch được đánh dấu ở bước kiểm đếm
+        List<ImportReceiptDetail> discrepancyDetails = details.stream()
+                .filter(d -> "CHENH_LECH".equals(d.getRowStatus()))
+                .toList();
+
+        // Lỗi: Nếu phiếu không có dòng nào chênh lệch mà gọi API -> Báo lỗi.
+        if (discrepancyDetails.isEmpty()) {
+            throw new BadRequestException("Phieu nhap khong co san pham nao bi chenh lech de lap bien ban.");
+        }
+
+        // Biên bản tự động sinh ra dựa vào dữ liệu lệch đã được mark ở bước kiểm đếm
+        DiscrepancyReport report = new DiscrepancyReport();
+        report.setImportReceipt(receipt);
+        report.setCreatedBy(actor);
+        report.setReportDate(LocalDateTime.now());
+        report.setNote(normalizeOptional(request.getNote()));
+
+        String code = "BBCL-" + receipt.getCode();
+        if (discrepancyReportRepository.existsByCodeIgnoreCase(code)) {
+            throw new ConflictException("Ma bien ban chenh lech " + code + " da ton tai.");
+        }
+        report.setCode(code);
+
+        List<DiscrepancyReportDetail> reportDetails = new ArrayList<>();
+        for (ImportReceiptDetail diff : discrepancyDetails) {
+            CreateDiscrepancyReportItemRequest itemReq = request.getItems().stream()
+                    .filter(i -> i.getProductId().equals(diff.getProduct().getId()))
+                    .findFirst()
+                    .orElse(null);
+
+            DiscrepancyReportDetail reportDetail = new DiscrepancyReportDetail();
+            reportDetail.setReport(report);
+            reportDetail.setProduct(diff.getProduct());
+            reportDetail.setDocumentQuantity(diff.getExpectedQuantity());
+            reportDetail.setActualQuantity(diff.getActualReceivedQuantity());
+            reportDetail.setDiscrepancyQuantity(diff.getActualReceivedQuantity() - diff.getExpectedQuantity());
+            String reason = itemReq != null ? normalizeOptional(itemReq.getReason()) : null;
+            String action = itemReq != null ? normalizeOptional(itemReq.getAction()) : null;
+            reportDetail.setReason(reason != null ? reason : "Chua xac dinh");
+            reportDetail.setAction(action != null ? action : "Chua xac dinh");
+            reportDetails.add(reportDetail);
+        }
+        report.setDetails(reportDetails);
+
+        DiscrepancyReport savedReport;
+        try {
+            savedReport = discrepancyReportRepository.saveAndFlush(report);
+        } catch (DataIntegrityViolationException e) {
+            throw new ConflictException("Bien ban chenh lech cho phieu nhap nay da ton tai.");
+        }
+        return DiscrepancyReportResponse.from(savedReport);
     }
 
     private boolean isDuplicateImportReceiptDetailException(DataIntegrityViolationException exception) {

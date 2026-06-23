@@ -1,51 +1,116 @@
-# SME StockSense - Backend Service
+# SME StockSense - Tổng Hợp Hệ Thống Backend
 
-Hệ thống quản lý và dự báo tồn kho thông minh dành cho doanh nghiệp vừa và nhỏ (SME).
+Chào mừng bạn đến với tài liệu tổng hợp hệ thống Backend của dự án **SME StockSense** – Hệ thống quản lý tồn kho thông minh và dự báo nhu cầu dành cho doanh nghiệp vừa và nhỏ (SME).
 
-## 📌 Tổng Quan Dự Án
-Repository này chứa mã nguồn Backend cho hệ thống **SME StockSense**, được phát triển dựa trên framework **Spring Boot** cùng kiến trúc Clean Architecture/Domain-Driven Design rút gọn, tích hợp cơ sở dữ liệu **PostgreSQL (Neon)**.
-
-### Tài Liệu Chi Tiết Các Phân Hệ
-* 📦 **Tổng quan Backend & Thiết lập**: [README_backend.md](./README_backend.md)
-* 🤝 **Quản lý Đối tác (Khách hàng & Nhà cung cấp)**: [README_partners.md](./README_partners.md)
-* 🏢 **Quản lý Kho hàng**: [README_warehouses.md](./README_warehouses.md)
+Tài liệu này tổng hợp toàn bộ các module tính năng, kiến trúc mã nguồn, cơ sở dữ liệu và các liên kết hướng dẫn chi tiết của dự án bằng tiếng Việt.
 
 ---
 
-## 🚀 Luồng Nghiệp Vụ Mới Nhất: Kiểm Hàng (T100)
+## 📌 Các Tài Liệu Chi Tiết
 
-Tính năng **Kiểm hàng** hỗ trợ nhân viên kho thực hiện đối chiếu hàng hóa thực tế nhận từ nhà cung cấp so với chứng từ dự kiến ban đầu, ghi nhận các chênh lệch và tình trạng vật lý trước khi chính thức đưa hàng vào kho.
+Để xem hướng dẫn chi tiết của từng module cụ thể, vui lòng truy cập các liên kết dưới đây:
 
-### Các File Code Chính Tham Gia Luồng Kiểm Hàng
-1. **DTO Requests**:
-   * [InspectImportReceiptRequest.java](./src/main/java/com/smartflow/smestocksensebackend/dto/inbound/InspectImportReceiptRequest.java) - Chứa thông tin danh sách sản phẩm cần kiểm hàng (được bổ sung Validation kiểm tra giá trị null/rỗng).
-   * [InspectImportReceiptItemRequest.java](./src/main/java/com/smartflow/smestocksensebackend/dto/inbound/InspectImportReceiptItemRequest.java) - Biểu diễn thông tin thực nhận cụ thể cho từng sản phẩm (ID, số lượng thực nhận, tình trạng vật lý, hạn sử dụng).
-2. **Logic Nghiệp vụ (Service)**:
-   * [ImportReceiptServiceImpl.java](./src/main/java/com/smartflow/smestocksensebackend/service/impl/ImportReceiptServiceImpl.java) - Thực hiện xác thực trạng thái phiếu nhập (`CHO_KIEM_HANG`), đối chiếu chênh lệch, phân loại dòng thành `KHOP` hoặc `CHENH_LECH`, và lưu lại kết quả kiểm đếm thực tế.
-3. **Database Migration**:
-   * [V10__add_inspection_columns.sql](./src/main/resources/db/migration/V10__add_inspection_columns.sql) - Thêm các cột phục vụ kiểm hàng (`tinh_trang`, `han_su_dung`, `trang_thai_dong`) kèm theo ràng buộc kiểm tra giá trị (`CHECK constraint`) ở tầng DB.
-4. **Kiểm Thử (Unit Tests)**:
-   * [ImportReceiptDetailServiceTest.java](./src/test/java/com/smartflow/smestocksensebackend/service/impl/ImportReceiptDetailServiceTest.java) - Bộ kiểm thử tự động xác minh toàn bộ các kịch bản thành công (khớp/chênh lệch) và các kịch bản lỗi (sai trạng thái phiếu, trùng ID sản phẩm đầu vào).
+* ⚙️ **[Hướng dẫn cài đặt & Cấu trúc gốc](file:///d:/DATN_BE/README_backend.md)**: Chi tiết cấu trúc thư mục, môi trường phát triển, Docker PostgreSQL, và lộ trình triển khai tổng thể.
+* 📦 **[Module Quản lý Kho hàng (Warehouses)](file:///d:/DATN_BE/README_warehouses.md)**: Các API Danh sách, Tạo mới, Cập nhật, và Kích hoạt/Hủy kích hoạt kho hàng.
+* 🤝 **[Module Quản lý Đối tác (Partners)](file:///d:/DATN_BE/README_partners.md)**: Các API quản lý Nhà cung cấp/Khách hàng, ràng buộc kiểm tra loại đối tác, phân quyền truy cập.
+* ⚖️ **[Tính năng Lập Biên bản Chênh lệch (T101)](file:///d:/DATN_BE/README_T101.md)**: Quy trình kiểm hàng thực tế (T100), lập biên bản chênh lệch (T101), thiết kế database và ví dụ JSON.
 
 ---
 
-## 🛠️ Hướng Dẫn Phát Triển & Chạy Test
+## 🚀 Các Tính Năng Đã Triển Khai (Features)
 
-### Yêu Cầu Hệ Thống
-* Java JDK 21
-* Maven 3.9+ (hoặc sử dụng `./mvnw` trên Linux/Mac, `.\mvnw.cmd` trên Windows)
+Hệ thống đã hoàn thiện các nghiệp vụ cốt lõi sau:
 
-### Lệnh Chạy Bộ Test Tự Động
+### 1. Xác Thực & Phân Quyền (Security & Auth)
+* Tích hợp **Spring Security** bảo mật các REST API endpoint.
+* Phân quyền chặt chẽ dựa trên 3 vai trò chính: `ADMIN` (Quản trị viên), `MANAGER` (Quản lý), và `EMPLOYEE` (Nhân viên/Thủ kho).
+* Xác thực trạng thái hoạt động của tài khoản nhân viên trước khi xử lý nghiệp vụ.
 
-Chạy riêng các test case cho luồng kiểm hàng và chi tiết phiếu nhập:
+### 2. Quản Lý Dữ Liệu Nền (Master Data)
+* **Danh mục sản phẩm (Categories)**: Xem danh sách, thêm, sửa, ngưng hoạt động danh mục.
+* **Đối tác (Partners)**: Lưu trữ đối tác với các phân loại `NHA_CUNG_CAP` (Nhà cung cấp), `KHACH_HANG` (Khách hàng), và `CA_HAI` (Cả hai).
+* **Kho hàng (Warehouses)**: Hỗ trợ tạo và chỉnh sửa thông tin kho chứa, tự động khóa/mở kho.
 
-```bash
-./mvnw test -Dtest=ImportReceiptDetailServiceTest,ImportReceiptInspectControllerTest
+### 3. Quy Trình Kiểm Hàng & Biên Bản Chênh Lệch (Inbound Inspection & Discrepancies)
+Quy trình này gồm hai bước nghiệp vụ chặt chẽ:
+1. **Kiểm hàng thực tế (T100 - Inspect)**:
+   * Ghi nhận số lượng thực tế nhận được (`actualReceivedQuantity`), tình trạng vật lý sản phẩm (`physicalStatus`), và hạn sử dụng (`expiryDate`).
+   * Tự động đối chiếu số lượng thực tế với số lượng trên chứng từ gốc của `ImportReceipt`.
+   * Đánh dấu dòng sản phẩm là `KHOP` hoặc `CHENH_LECH`.
+2. **Lập biên bản chênh lệch (T101 - Discrepancy Report)**:
+   * Cho phép nhân viên lập biên bản đối với các phiếu nhập có dòng trạng thái `CHENH_LECH`.
+   * Ghi nhận lý do chênh lệch (`reason`) và hướng xử lý đề xuất (`action`) cho từng dòng sản phẩm bị lệch.
+   * Tự động sinh mã biên bản: `BBCL-[Mã Phiếu Nhập]`.
+
+---
+
+## 🛠️ Công Nghệ Sử Dụng
+
+* **Core**: Java 21, Spring Boot 4.0.6 (Spring Web MVC, Spring Security).
+* **Database**: PostgreSQL (Neon Cloud / Docker local), JPA/Hibernate.
+* **Database Migration**: Flyway Migration.
+* **Tiện ích & Validation**: Lombok, Jakarta Validation.
+* **Kiểm thử**: JUnit 5, Mockito, Spring Boot Test.
+
+---
+
+## 📂 Cấu Trúc Mã Nguồn Quan Trọng
+
+```text
+sme-stocksense-backend/
+├── src/main/java/com/smartflow/smestocksensebackend/
+│   ├── config/             # Cấu hình Spring Security, JWT, CORS...
+│   ├── controller/         # Các REST Controller định nghĩa API endpoint
+│   │   └── ImportReceiptController.java     # API Kiểm hàng & Lập biên bản chênh lệch
+│   ├── dto/                # Các đối tượng truyền dữ liệu (Request/Response)
+│   │   └── inbound/        # DTO cho luồng Nhập kho
+│   ├── entity/             # Các JPA Entity ánh xạ với Database
+│   │   ├── ImportReceipt.java
+│   │   ├── DiscrepancyReport.java           # Biên bản chênh lệch
+│   │   └── DiscrepancyReportDetail.java     # Chi tiết sản phẩm chênh lệch
+│   ├── repository/         # Giao tiếp với database qua Spring Data JPA
+│   └── service/            # Lớp chứa xử lý logic nghiệp vụ chính
+│       └── impl/
+│           └── ImportReceiptServiceImpl.java # Logic xử lý kiểm đếm, đối chiếu & tạo biên bản
+└── src/main/resources/
+    ├── application.yml     # Cấu hình chung của ứng dụng
+    └── db/migration/       # Các file migration SQL của Flyway
 ```
 
-Chạy toàn bộ test suite của dự án:
+---
+
+## 💻 Hướng Dẫn Chạy Dự Án Nhanh
+
+### 1. Chuẩn bị môi trường
+* Đảm bảo đã cài đặt **Java 21** và **Maven**.
+* Tạo database PostgreSQL và cấu hình chuỗi kết nối trong file `.env` hoặc `src/main/resources/application.yml` (hoặc thông qua profile `application-neon.yml`).
+
+### 2. Chạy ứng dụng Spring Boot
+Chạy lệnh sau tại thư mục gốc `d:\DATN_BE`:
 
 ```bash
-./mvnw test
+# Trên Windows:
+.\mvnw.cmd spring-boot:run
+
+# Trên macOS/Linux:
+./mvnw spring-boot:run
 ```
-*(Lưu ý: Một số integration test yêu cầu cấu hình kết nối thực tế đến PostgreSQL để khởi chạy ứng dụng thành công).*
+
+Ứng dụng sẽ khởi chạy tại cổng mặc định `8080`: `http://localhost:8080`.
+
+---
+
+## 🧪 Lệnh Chạy Bộ Test Tự Động
+
+Để chạy kiểm thử tự động cho toàn bộ ứng dụng hoặc các lớp dịch vụ chính của luồng Nhập kho:
+
+* **Chạy toàn bộ kiểm thử (Test suite)**:
+  ```bash
+  ./mvnw test
+  ```
+  *(Hoặc sử dụng `.\mvnw.cmd test` trên Windows)*
+
+* **Chạy kiểm thử riêng cho luồng kiểm hàng & lập biên bản chênh lệch**:
+  ```bash
+  ./mvnw test -Dtest=ImportReceiptDetailServiceTest,ImportReceiptInspectControllerTest,ImportReceiptDiscrepancyReportControllerTest
+  ```

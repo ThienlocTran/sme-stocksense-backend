@@ -194,7 +194,7 @@ class ImportReceiptDetailServiceTest {
         InspectImportReceiptRequest request = new InspectImportReceiptRequest(List.of(itemRequest));
 
         when(importReceiptRepository.findById(100L)).thenReturn(Optional.of(receipt));
-        when(importReceiptDetailRepository.findByDocumentId(100L)).thenReturn(details);
+        when(importReceiptDetailRepository.findByDocumentIdOrderByIdAsc(100L)).thenReturn(details);
         when(importReceiptDetailRepository.saveAllAndFlush(details)).thenReturn(details);
         when(importReceiptRepository.saveAndFlush(receipt)).thenReturn(receipt);
 
@@ -236,7 +236,7 @@ class ImportReceiptDetailServiceTest {
         InspectImportReceiptRequest request = new InspectImportReceiptRequest(List.of(itemRequest));
 
         when(importReceiptRepository.findById(100L)).thenReturn(Optional.of(receipt));
-        when(importReceiptDetailRepository.findByDocumentId(100L)).thenReturn(details);
+        when(importReceiptDetailRepository.findByDocumentIdOrderByIdAsc(100L)).thenReturn(details);
         when(importReceiptDetailRepository.saveAllAndFlush(details)).thenReturn(details);
         when(importReceiptRepository.saveAndFlush(receipt)).thenReturn(receipt);
 

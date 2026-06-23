@@ -228,6 +228,7 @@ Các endpoint dưới đây là roadmap API, chưa phải API đang chạy.
 | PATCH | `/api/stock-in/{id}/approve` | Duyệt phiếu nhập |
 | PATCH | `/api/stock-in/{id}/reject` | Từ chối phiếu nhập |
 | PATCH | `/api/stock-in/{id}/complete` | Hoàn thành phiếu nhập |
+| PUT | `/api/import-receipts/{id}/arrival` | Ghi nhận ngày hàng về thực tế (Task T99) |
 | POST | `/api/stock-out` | Tạo phiếu xuất kho |
 | PATCH | `/api/stock-out/{id}/submit` | Gửi duyệt phiếu xuất |
 | PATCH | `/api/stock-out/{id}/approve` | Duyệt phiếu xuất |

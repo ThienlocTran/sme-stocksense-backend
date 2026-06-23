@@ -21,6 +21,7 @@ public record ImportReceiptResponse(
         BigDecimal totalAmount,
         String note,
         LocalDateTime createdAt,
+        LocalDateTime actualArrivalDate,
         Long version
 ) {
     public static ImportReceiptResponse from(ImportReceipt receipt) {
@@ -41,6 +42,7 @@ public record ImportReceiptResponse(
                 receipt.getTotalAmount(),
                 receipt.getNote(),
                 receipt.getCreatedAt(),
+                receipt.getActualArrivalDate(),
                 receipt.getVersion()
         );
     }

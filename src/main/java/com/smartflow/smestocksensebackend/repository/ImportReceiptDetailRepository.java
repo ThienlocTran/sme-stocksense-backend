@@ -13,6 +13,8 @@ public interface ImportReceiptDetailRepository extends JpaRepository<ImportRecei
 
     List<ImportReceiptDetail> findByDocumentId(Long documentId);
 
+    List<ImportReceiptDetail> findByDocumentIdOrderByIdAsc(Long documentId);
+
     @Modifying(flushAutomatically = true)
     @Query("delete from ImportReceiptDetail detail where detail.document.id = :documentId")
     void deleteByDocumentId(@Param("documentId") Long documentId);

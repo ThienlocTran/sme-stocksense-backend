@@ -85,7 +85,9 @@ class ImportReceiptItemServiceTest {
                 partnerRepository,
                 codeGenerator,
                 itemValidator,
-                amountCalculator
+                amountCalculator,
+                null,
+                null
         );
         owner = employee(5L, RoleCode.EMPLOYEE);
         receipt = receipt(123L, owner, ImportReceiptStatus.NHAP);

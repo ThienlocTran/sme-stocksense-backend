@@ -223,11 +223,12 @@ Các endpoint dưới đây là roadmap API, chưa phải API đang chạy.
 | DELETE | `/api/products/{id}` | Xóa hoặc ngưng hoạt động sản phẩm |
 | GET | `/api/inventory` | Lấy tồn kho hiện tại |
 | GET | `/api/inventory/transactions` | Lấy lịch sử giao dịch kho |
-| POST | `/api/stock-in` | Tạo phiếu nhập kho |
-| PATCH | `/api/stock-in/{id}/submit` | Gửi duyệt phiếu nhập |
-| PATCH | `/api/stock-in/{id}/approve` | Duyệt phiếu nhập |
-| PATCH | `/api/stock-in/{id}/reject` | Từ chối phiếu nhập |
-| PATCH | `/api/stock-in/{id}/complete` | Hoàn thành phiếu nhập |
+| POST | `/api/import-receipts` | Tạo phiếu nhập kho |
+| PUT | `/api/import-receipts/{id}/draft` | Lưu tạm phiếu nhập kho |
+| PUT | `/api/import-receipts/{id}/submit` | Gửi duyệt phiếu nhập |
+| PUT | `/api/import-receipts/{id}/inspect` | Kiểm tra hàng thực tế (ghi nhận số lượng thực tế, tình trạng, hạn sử dụng và đối chiếu khớp/lệch) |
+| POST | `/api/import-receipts/{receiptId}/discrepancy-report` | Lập biên bản chênh lệch khi kiểm đếm lệch số lượng |
+| PATCH | `/api/import-receipts/{id}/complete` | Hoàn thành phiếu nhập (cộng tồn kho) |
 | POST | `/api/stock-out` | Tạo phiếu xuất kho |
 | PATCH | `/api/stock-out/{id}/submit` | Gửi duyệt phiếu xuất |
 | PATCH | `/api/stock-out/{id}/approve` | Duyệt phiếu xuất |

@@ -9,6 +9,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -16,15 +17,11 @@ import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
 
-/**
- * Thực thể InventoryLevel ánh xạ trực tiếp đến bảng "ton_kho" trong cơ sở dữ liệu.
- * Lưu trữ số lượng tồn kho của một sản phẩm tại một kho hàng cụ thể.
- */
 @Getter
 @Setter
 @NoArgsConstructor
 @Entity
-@Table(name = "ton_kho")
+@Table(name = "ton_kho", uniqueConstraints = {@UniqueConstraint(columnNames = {"san_pham_id", "kho_id"})})
 public class InventoryLevel {
 
     @Id

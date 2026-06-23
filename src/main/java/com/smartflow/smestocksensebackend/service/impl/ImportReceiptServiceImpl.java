@@ -45,6 +45,7 @@ import com.smartflow.smestocksensebackend.entity.DiscrepancyReport;
 import com.smartflow.smestocksensebackend.entity.DiscrepancyReportDetail;
 import com.smartflow.smestocksensebackend.service.ImportReceiptCodeGenerator;
 import com.smartflow.smestocksensebackend.service.ImportReceiptService;
+import com.smartflow.smestocksensebackend.service.InventoryService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
@@ -100,6 +101,7 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
     private final ImportReceiptAmountCalculator amountCalculator;
     private final DiscrepancyReportRepository discrepancyReportRepository;
     private final DiscrepancyReportDetailRepository discrepancyReportDetailRepository;
+    private final InventoryService inventoryService;
 
     @Override
     @Transactional
@@ -661,6 +663,9 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
             if (item == null || item.productId() == null || item.actualReceivedQuantity() == null) {
                 throw new BadRequestException("Thong tin san pham kiem hang khong hop le.");
             }
+            if (item.actualReceivedQuantity() < 0) {
+                throw new BadRequestException("So luong thuc nhan khong duoc am.");
+            }
             if (!inspectedProductIds.add(item.productId())) {
                 throw new BadRequestException("Danh sach san pham kiem hang bi trung san pham ID: " + item.productId() + ".");
             }
@@ -774,6 +779,11 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
 
         List<DiscrepancyReportDetail> reportDetails = new ArrayList<>();
         for (ImportReceiptDetail diff : discrepancyDetails) {
+            List<CreateDiscrepancyReportItemRequest> items =
+                    request.getItems() != null ? request.getItems() : List.of();
+            if (items.stream().anyMatch(i -> i == null || i.getProductId() == null)) {
+                throw new BadRequestException("Chi tiet bien ban khong hop le.");
+            }
             CreateDiscrepancyReportItemRequest itemReq = items.stream()
                     .filter(i -> i.getProductId().equals(diff.getProduct().getId()))
                     .findFirst()
@@ -800,6 +810,56 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
             throw new ConflictException("Bien ban chenh lech cho phieu nhap nay da ton tai.");
         }
         return DiscrepancyReportResponse.from(savedReport);
+    }
+
+    /**
+     * Hoàn tất phiếu nhập kho (T104).
+     * Bọc toàn bộ các khâu vào 1 giao dịch an toàn (ACID):
+     * Lấy phiếu -> Update kiểm hàng (T100) -> Tăng tồn kho (T102) -> Ghi log (T103) -> Đổi status phiếu sang HOAN_THANH.
+     * Bất kỳ lỗi nào xảy ra sẽ kích hoạt Rollback toàn bộ trạng thái của giao dịch này.
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public ImportReceiptDraftResponse completeImport(Long receiptId, InspectImportReceiptRequest request) {
+        // Ghi chú đậm: **Transaction cốt lõi. Tránh lỗi phiếu chuyển Hoàn Thành nhưng tồn kho bị sai**
+
+        // 1. Lấy phiếu nhập kho
+        ImportReceipt receipt = importReceiptRepository.findById(receiptId)
+                .orElseThrow(() -> new NotFoundException("Phieu nhap khong ton tai."));
+
+        Employee actor = currentEmployee();
+        if (actor.getStatus() != EmployeeStatus.HOAT_DONG) {
+            throw new AccountInactiveException();
+        }
+
+        // 2. Update kiểm hàng (T100)
+        // Gọi inspectReceipt để thực hiện validation nghiệp vụ kiểm hàng và cập nhật số lượng thực tế
+        inspectReceipt(receiptId, request);
+
+        // Nạp lại chi tiết phiếu nhập sau khi đã được cập nhật kiểm hàng
+        List<ImportReceiptDetail> details = importReceiptDetailRepository.findByDocumentId(receiptId);
+
+        // 3. Tăng tồn kho (T102) & Ghi log (T103) cho từng dòng sản phẩm
+        for (ImportReceiptDetail detail : details) {
+            if (detail.getActualReceivedQuantity() != null && detail.getActualReceivedQuantity() > 0) {
+                inventoryService.increaseInventory(
+                        detail.getProduct().getId(),
+                        receipt.getWarehouse().getId(),
+                        detail.getActualReceivedQuantity(),
+                        receipt
+                );
+            }
+        }
+
+        // 4. Đổi status phiếu sang HOAN_THANH
+        receipt.setStatus(ImportReceiptStatus.HOAN_THANH);
+        receipt.setCompletedBy(actor);
+        receipt.setCompletedAt(LocalDateTime.now());
+        receipt.setUpdatedAt(LocalDateTime.now());
+
+        ImportReceipt savedReceipt = importReceiptRepository.saveAndFlush(receipt);
+
+        return ImportReceiptDraftResponse.from(savedReceipt, details);
     }
 
     private boolean isDuplicateImportReceiptDetailException(DataIntegrityViolationException exception) {

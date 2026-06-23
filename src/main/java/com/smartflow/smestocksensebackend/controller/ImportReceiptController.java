@@ -127,4 +127,20 @@ public class ImportReceiptController {
     ) {
         return importReceiptService.createDiscrepancyReport(receiptId, request);
     }
+
+    /**
+     * API hoàn tất nhập kho (T104).
+     * Bọc toàn bộ các khâu (kiểm hàng, tăng tồn, ghi log, đổi trạng thái) trong 1 giao dịch an toàn (ACID).
+     *
+     * @param id ID của phiếu nhập kho cần hoàn tất
+     * @param request DTO chứa thông tin kiểm hàng thực nhận
+     * @return Thông tin phiếu nhập kho sau khi hoàn tất
+     */
+    @PutMapping("/{id}/hoan-tat")
+    public ImportReceiptDraftResponse complete(
+            @PathVariable Long id,
+            @Valid @RequestBody InspectImportReceiptRequest request
+    ) {
+        return importReceiptService.completeImport(id, request);
+    }
 }

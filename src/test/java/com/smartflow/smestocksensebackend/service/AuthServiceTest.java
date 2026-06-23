@@ -91,7 +91,6 @@ class AuthServiceTest {
         authenticateAs(employee);
         Mockito.when(employeeRepository.findById(employee.getId())).thenReturn(Optional.of(employee));
         Mockito.when(passwordEncoder.matches("oldpass123", employee.getPasswordHash())).thenReturn(true);
-        Mockito.when(passwordEncoder.matches("newpass123", employee.getPasswordHash())).thenReturn(false);
         Mockito.when(passwordEncoder.encode("newpass123")).thenReturn("encoded-newpass123");
 
         authService.changeOwnPassword(new ChangePasswordRequest("oldpass123", "newpass123", "newpass123"));

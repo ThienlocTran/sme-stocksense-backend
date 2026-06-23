@@ -84,7 +84,10 @@ class ImportReceiptCancelServiceTest {
                 partnerRepository,
                 codeGenerator,
                 itemValidator,
-                amountCalculator
+                amountCalculator,
+                null,
+                null,
+                null
         );
         owner = employee(5L, RoleCode.EMPLOYEE);
         warehouse = warehouse(1L);

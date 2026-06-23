@@ -78,7 +78,10 @@ class ImportReceiptListServiceTest {
                 partnerRepository,
                 codeGenerator,
                 itemValidator,
-                amountCalculator
+                amountCalculator,
+                null,
+                null,
+                null
         );
         owner = employee(5L, RoleCode.EMPLOYEE);
         pageable = PageRequest.of(0, 10);

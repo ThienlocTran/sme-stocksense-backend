@@ -7,6 +7,9 @@ import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptItemResponse;
 import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptPageResponse;
 import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptResponse;
 import com.smartflow.smestocksensebackend.dto.inbound.SaveImportReceiptDraftRequest;
+import com.smartflow.smestocksensebackend.dto.inbound.InspectImportReceiptRequest;
+import com.smartflow.smestocksensebackend.dto.inbound.CreateDiscrepancyReportRequest;
+import com.smartflow.smestocksensebackend.dto.inbound.DiscrepancyReportResponse;
 import com.smartflow.smestocksensebackend.service.ImportReceiptService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -88,5 +91,56 @@ public class ImportReceiptController {
     @PutMapping("/{receiptId}/submit")
     public ImportReceiptDraftResponse submitForApproval(@PathVariable Long receiptId) {
         return importReceiptService.submitForApproval(receiptId);
+    }
+
+    /**
+     * API kiểm hàng thực tế cho phiếu nhập kho (T100).
+     * Ghi nhận số lượng thực tế kiểm đếm, tình trạng vật lý và hạn sử dụng của từng sản phẩm.
+     * Đối chiếu số lượng thực tế với số lượng trên chứng từ gốc để phân loại khớp hoặc chênh lệch.
+     *
+     * @param receiptId ID của phiếu nhập kho cần kiểm hàng
+     * @param request DTO chứa danh sách thông tin kiểm hàng chi tiết
+     * @return Thông tin chi tiết phiếu nhập sau khi cập nhật kết quả kiểm đếm
+     */
+    @PutMapping("/{receiptId}/inspect")
+    public ImportReceiptDraftResponse inspect(
+            @PathVariable Long receiptId,
+            @Valid @RequestBody InspectImportReceiptRequest request
+    ) {
+        return importReceiptService.inspectReceipt(receiptId, request);
+    }
+
+    /**
+     * API lập biên bản chênh lệch nhập kho (T101).
+     * Được gọi khi phiếu nhập có các sản phẩm chênh lệch sau bước kiểm hàng.
+     * Tự động lọc ra các sản phẩm lệch, yêu cầu người lập nhập lý do và hướng xử lý đề xuất.
+     *
+     * @param receiptId ID của phiếu nhập kho cần lập biên bản chênh lệch
+     * @param request DTO chứa ghi chú biên bản và thông tin chi tiết xử lý chênh lệch của các sản phẩm
+     * @return Biên bản chênh lệch đã lập thành công
+     */
+    @PostMapping("/{receiptId}/discrepancy-report")
+    @ResponseStatus(HttpStatus.CREATED)
+    public DiscrepancyReportResponse createDiscrepancyReport(
+            @PathVariable Long receiptId,
+            @Valid @RequestBody CreateDiscrepancyReportRequest request
+    ) {
+        return importReceiptService.createDiscrepancyReport(receiptId, request);
+    }
+
+    /**
+     * API hoàn tất nhập kho (T104).
+     * Bọc toàn bộ các khâu (kiểm hàng, tăng tồn, ghi log, đổi trạng thái) trong 1 giao dịch an toàn (ACID).
+     *
+     * @param id ID của phiếu nhập kho cần hoàn tất
+     * @param request DTO chứa thông tin kiểm hàng thực nhận
+     * @return Thông tin phiếu nhập kho sau khi hoàn tất
+     */
+    @PutMapping("/{id}/hoan-tat")
+    public ImportReceiptDraftResponse complete(
+            @PathVariable Long id,
+            @Valid @RequestBody InspectImportReceiptRequest request
+    ) {
+        return importReceiptService.completeImport(id, request);
     }
 }

@@ -7,7 +7,7 @@ import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptItemResponse;
 import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptPageResponse;
 import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptResponse;
 import com.smartflow.smestocksensebackend.dto.inbound.SaveImportReceiptDraftRequest;
-import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptArrivalRequest;
+import com.smartflow.smestocksensebackend.dto.inbound.InspectImportReceiptRequest;
 import org.springframework.data.domain.Pageable;
 
 public interface ImportReceiptService {
@@ -28,5 +28,5 @@ public interface ImportReceiptService {
 
     ImportReceiptDraftResponse getDetail(Long receiptId);
 
-    ImportReceiptDraftResponse recordArrival(Long receiptId, ImportReceiptArrivalRequest request);
+    ImportReceiptDraftResponse inspectReceipt(Long receiptId, InspectImportReceiptRequest request);
 }

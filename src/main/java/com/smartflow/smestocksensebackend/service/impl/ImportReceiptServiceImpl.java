@@ -13,6 +13,8 @@ import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptResponse;
 import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptSummaryResponse;
 import com.smartflow.smestocksensebackend.dto.inbound.SaveImportReceiptDraftItemRequest;
 import com.smartflow.smestocksensebackend.dto.inbound.SaveImportReceiptDraftRequest;
+import com.smartflow.smestocksensebackend.dto.inbound.InspectImportReceiptRequest;
+import com.smartflow.smestocksensebackend.dto.inbound.InspectImportReceiptItemRequest;
 import com.smartflow.smestocksensebackend.entity.Employee;
 import com.smartflow.smestocksensebackend.entity.EmployeeStatus;
 import com.smartflow.smestocksensebackend.entity.ImportReceipt;
@@ -587,10 +589,77 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
         }
     }
 
-    /**
-     * Nhận diện lỗi vi phạm unique constraint trên bảng chi tiết phiếu nhập
-     * (sản phẩm bị thêm trùng lặp vào cùng một phiếu).
-     */
+    @Override
+    @Transactional
+    public ImportReceiptDraftResponse inspectReceipt(Long receiptId, InspectImportReceiptRequest request) {
+        Employee actor = currentEmployee();
+        if (actor.getStatus() != EmployeeStatus.HOAT_DONG) {
+            throw new AccountInactiveException();
+        }
+
+        RoleCode roleCode = actor.getRole() != null ? actor.getRole().getCode() : null;
+        if (roleCode != RoleCode.ADMIN && roleCode != RoleCode.EMPLOYEE) {
+            throw new MissingRoleException("Khong co quyen thuc hien kiem hang.");
+        }
+
+        ImportReceipt receipt = importReceiptRepository.findById(receiptId)
+                .orElseThrow(() -> new NotFoundException("Phieu nhap khong ton tai."));
+
+        // Lỗi: Phiếu nhập không ở trạng thái CHO_KIEM_HANG -> Báo lỗi.
+        if (receipt.getStatus() != ImportReceiptStatus.CHO_KIEM_HANG) {
+            throw new BadRequestException("Phieu nhap khong o trang thai CHO_KIEM_HANG.");
+        }
+
+        // Áp dụng khi nhập hàng NCC, không áp dụng đơn khách mua/đặt hàng.
+        Partner supplier = receipt.getSupplier();
+        if (supplier == null || (supplier.getType() != PartnerType.NHA_CUNG_CAP && supplier.getType() != PartnerType.CA_HAI)) {
+            throw new BadRequestException("Chi ap dung kiem hang cho phieu nhap tu nha cung cap.");
+        }
+
+        List<ImportReceiptDetail> details = importReceiptDetailRepository.findByDocumentIdOrderByIdAsc(receiptId);
+        if (details.isEmpty()) {
+            throw new BadRequestException("Phieu nhap khong co san pham nao de kiem hang.");
+        }
+
+        /*
+         * Chỉ kiểm đếm lưu số lượng thực tế, không thực hiện cộng tồn kho ở bước này.
+         * Logic này sẽ được thực hiện khi hoàn thành phiếu nhập kho ở các task sau (T104/T102).
+         */
+        Set<Long> seenProductIds = new LinkedHashSet<>();
+        for (InspectImportReceiptItemRequest item : request.items()) {
+            if (item == null) {
+                throw new BadRequestException("items khong hop le.");
+            }
+            if (!seenProductIds.add(item.productId())) {
+                throw new BadRequestException("Danh sach san pham kiem hang bi trung san pham ID: " + item.productId() + ".");
+            }
+            ImportReceiptDetail detail = details.stream()
+                    .filter(d -> d.getProduct().getId().equals(item.productId()))
+                    .findFirst()
+                    .orElseThrow(() -> new BadRequestException("San pham co ID " + item.productId() + " khong co trong phieu nhap."));
+
+            detail.setActualReceivedQuantity(item.actualReceivedQuantity());
+            detail.setPhysicalStatus(normalizeOptional(item.physicalStatus()));
+            detail.setExpiryDate(item.expiryDate());
+
+            // Logic đối chiếu khớp/lệch: So sánh số lượng thực nhận và số lượng dự kiến trên chứng từ gốc
+            if (detail.getExpectedQuantity().equals(item.actualReceivedQuantity())) {
+                detail.setRowStatus("KHOP");
+            } else {
+                detail.setRowStatus("CHENH_LECH");
+            }
+        }
+
+        try {
+            importReceiptDetailRepository.saveAllAndFlush(details);
+            receipt.setUpdatedAt(LocalDateTime.now());
+            ImportReceipt savedReceipt = importReceiptRepository.saveAndFlush(receipt);
+            return ImportReceiptDraftResponse.from(savedReceipt, details);
+        } catch (OptimisticLockingFailureException exception) {
+            throw new ConflictException("Phieu nhap da duoc cap nhat boi request khac.");
+        }
+    }
+
     private boolean isDuplicateImportReceiptDetailException(DataIntegrityViolationException exception) {
         Throwable cause = exception.getMostSpecificCause();
         String message = cause == null ? exception.getMessage() : cause.getMessage();

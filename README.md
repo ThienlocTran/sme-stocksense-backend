@@ -1,135 +1,51 @@
-# SME StockSense — Backend Service
+# SME StockSense - Backend Service
 
-> Hệ thống quản lý và dự báo tồn kho thông minh dành cho doanh nghiệp vừa và nhỏ (SME).
+Hệ thống quản lý và dự báo tồn kho thông minh dành cho doanh nghiệp vừa và nhỏ (SME).
 
-## Tài liệu chi tiết theo phân hệ
+## 📌 Tổng Quan Dự Án
+Repository này chứa mã nguồn Backend cho hệ thống **SME StockSense**, được phát triển dựa trên framework **Spring Boot** cùng kiến trúc Clean Architecture/Domain-Driven Design rút gọn, tích hợp cơ sở dữ liệu **PostgreSQL (Neon)**.
 
-| Phân hệ | File |
-|---|---|
-| Tổng quan backend & thiết lập môi trường | [README_backend.md](./README_backend.md) |
-| Quản lý Đối tác (Khách hàng & Nhà cung cấp) | [README_partners.md](./README_partners.md) |
-| Quản lý Kho hàng | [README_warehouses.md](./README_warehouses.md) |
-
----
-
-## Luồng trạng thái Phiếu Nhập Kho
-
-```
-NHAP ──► CHO_DUYET_CAP_1 ──► CHO_DUYET_CAP_2 ──► CHO_HANG_VE ──► CHO_KIEM_HANG ──► [HOAN_THANH]
-  │              │
-  └──► HUY       └──► TU_CHOI (quay lại NHAP để sửa)
-```
-
-| Trạng thái | Ý nghĩa |
-|---|---|
-| `NHAP` | Phiếu vừa tạo, đang soạn thảo |
-| `CHO_DUYET_CAP_1` | Đã gửi duyệt lần 1 |
-| `CHO_DUYET_CAP_2` | Đã được duyệt lần 1, chờ duyệt lần 2 |
-| `TU_CHOI` | Bị từ chối, có thể sửa và gửi lại |
-| `CHO_HANG_VE` | Đã được duyệt hoàn toàn, đang chờ hàng về |
-| `CHO_KIEM_HANG` | Hàng đã về, đang chờ kiểm đếm |
-| `HOAN_THANH` | Kiểm hàng xong, nhập kho chính thức |
-| `HUY` | Phiếu đã bị hủy |
+### Tài Liệu Chi Tiết Các Phân Hệ
+* 📦 **Tổng quan Backend & Thiết lập**: [README_backend.md](./README_backend.md)
+* 🤝 **Quản lý Đối tác (Khách hàng & Nhà cung cấp)**: [README_partners.md](./README_partners.md)
+* 🏢 **Quản lý Kho hàng**: [README_warehouses.md](./README_warehouses.md)
 
 ---
 
-## Phân quyền
+## 🚀 Luồng Nghiệp Vụ Mới Nhất: Kiểm Hàng (T100)
 
-| Role | Quyền hạn |
-|---|---|
-| `ADMIN` | Toàn quyền thao tác trên mọi phiếu |
-| `EMPLOYEE` | Tạo, chỉnh sửa, gửi duyệt phiếu do chính mình tạo |
-| `MANAGER` | Duyệt phiếu qua luồng approval (không tạo phiếu trực tiếp) |
+Tính năng **Kiểm hàng** hỗ trợ nhân viên kho thực hiện đối chiếu hàng hóa thực tế nhận từ nhà cung cấp so với chứng từ dự kiến ban đầu, ghi nhận các chênh lệch và tình trạng vật lý trước khi chính thức đưa hàng vào kho.
 
----
-
-## Các Tính Năng Đã Triển Khai
-
-### T100 — Quản lý Phiếu Nháp (NHAP)
-
-**Service**: [`ImportReceiptServiceImpl.java`](./src/main/java/com/smartflow/smestocksensebackend/service/impl/ImportReceiptServiceImpl.java)
-
-| Method | Mô tả |
-|---|---|
-| `createDraft` | Tạo phiếu nhập mới ở trạng thái `NHAP`, sinh mã tự động |
-| `addItem` | Thêm dòng sản phẩm vào phiếu, tự tính lại tổng tiền |
-| `saveDraft` | Lưu/cập nhật toàn bộ phiếu khi đang ở trạng thái `NHAP` |
-| `updateEditable` | Cập nhật phiếu ở trạng thái `NHAP` hoặc `TU_CHOI` (sau khi bị từ chối) |
-| `cancelDraft` | Hủy phiếu, chuyển sang trạng thái `HUY` |
-| `submitForApproval` | Gửi phiếu vào luồng duyệt (`NHAP` → `CHO_DUYET_CAP_1`) |
-| `listMyReceipts` | Lấy danh sách phiếu của nhân viên đang đăng nhập (có phân trang) |
-| `getDetail` | Xem chi tiết đầy đủ một phiếu nhập kèm danh sách sản phẩm |
-
-**Các file liên quan:**
-- DTO Request: [`CreateImportReceiptRequest`](./src/main/java/com/smartflow/smestocksensebackend/dto/inbound/CreateImportReceiptRequest.java), [`SaveImportReceiptDraftRequest`](./src/main/java/com/smartflow/smestocksensebackend/dto/inbound/SaveImportReceiptDraftRequest.java), [`AddImportReceiptItemRequest`](./src/main/java/com/smartflow/smestocksensebackend/dto/inbound/AddImportReceiptItemRequest.java)
-- DTO Response: [`ImportReceiptDraftResponse`](./src/main/java/com/smartflow/smestocksensebackend/dto/inbound/ImportReceiptDraftResponse.java)
-- Domain: [`ImportReceiptStatePolicy`](./src/main/java/com/smartflow/smestocksensebackend/domain/inbound/ImportReceiptStatePolicy.java) (kiểm soát luồng chuyển trạng thái), [`ImportReceiptAmountCalculator`](./src/main/java/com/smartflow/smestocksensebackend/domain/inbound/ImportReceiptAmountCalculator.java) (tính tổng tiền)
+### Các File Code Chính Tham Gia Luồng Kiểm Hàng
+1. **DTO Requests**:
+   * [InspectImportReceiptRequest.java](./src/main/java/com/smartflow/smestocksensebackend/dto/inbound/InspectImportReceiptRequest.java) - Chứa thông tin danh sách sản phẩm cần kiểm hàng (được bổ sung Validation kiểm tra giá trị null/rỗng).
+   * [InspectImportReceiptItemRequest.java](./src/main/java/com/smartflow/smestocksensebackend/dto/inbound/InspectImportReceiptItemRequest.java) - Biểu diễn thông tin thực nhận cụ thể cho từng sản phẩm (ID, số lượng thực nhận, tình trạng vật lý, hạn sử dụng).
+2. **Logic Nghiệp vụ (Service)**:
+   * [ImportReceiptServiceImpl.java](./src/main/java/com/smartflow/smestocksensebackend/service/impl/ImportReceiptServiceImpl.java) - Thực hiện xác thực trạng thái phiếu nhập (`CHO_KIEM_HANG`), đối chiếu chênh lệch, phân loại dòng thành `KHOP` hoặc `CHENH_LECH`, và lưu lại kết quả kiểm đếm thực tế.
+3. **Database Migration**:
+   * [V10__add_inspection_columns.sql](./src/main/resources/db/migration/V10__add_inspection_columns.sql) - Thêm các cột phục vụ kiểm hàng (`tinh_trang`, `han_su_dung`, `trang_thai_dong`) kèm theo ràng buộc kiểm tra giá trị (`CHECK constraint`) ở tầng DB.
+4. **Kiểm Thử (Unit Tests)**:
+   * [ImportReceiptDetailServiceTest.java](./src/test/java/com/smartflow/smestocksensebackend/service/impl/ImportReceiptDetailServiceTest.java) - Bộ kiểm thử tự động xác minh toàn bộ các kịch bản thành công (khớp/chênh lệch) và các kịch bản lỗi (sai trạng thái phiếu, trùng ID sản phẩm đầu vào).
 
 ---
 
-### T102 — Ghi Nhận Hàng Về (CHO_HANG_VE → CHO_KIEM_HANG)
+## 🛠️ Hướng Dẫn Phát Triển & Chạy Test
 
-**Method**: `recordArrival` trong [`ImportReceiptServiceImpl.java`](./src/main/java/com/smartflow/smestocksensebackend/service/impl/ImportReceiptServiceImpl.java)
+### Yêu Cầu Hệ Thống
+* Java JDK 21
+* Maven 3.9+ (hoặc sử dụng `./mvnw` trên Linux/Mac, `.\mvnw.cmd` trên Windows)
 
-**Mô tả**: Sau khi phiếu được duyệt hoàn toàn và hàng về thực tế, nhân viên kho ghi nhận ngày hàng về (`actualArrivalDate`) để chuyển phiếu sang trạng thái `CHO_KIEM_HANG`.
+### Lệnh Chạy Bộ Test Tự Động
 
-| Điều kiện | Mô tả |
-|---|---|
-| Trạng thái yêu cầu | Phiếu phải ở trạng thái `CHO_HANG_VE` |
-| Quyền hạn | `ADMIN` hoặc `EMPLOYEE` |
-| Đầu vào | `actualArrivalDate` — ngày hàng về thực tế |
-| Đầu ra | Phiếu nhập với trạng thái `CHO_KIEM_HANG` kèm danh sách sản phẩm |
-
-**DTO**: [`ImportReceiptArrivalRequest`](./src/main/java/com/smartflow/smestocksensebackend/dto/inbound/ImportReceiptArrivalRequest.java)
-
----
-
-### T100 (Review Fixes) — Kiểm Hàng (Validation & SQL)
-
-Các sửa đổi theo đề xuất CodeRabbit:
-
-| File | Sửa đổi |
-|---|---|
-| [`InspectImportReceiptRequest.java`](./src/main/java/com/smartflow/smestocksensebackend/dto/inbound/InspectImportReceiptRequest.java) | Thêm `@NotNull` vào generic type: `List<@NotNull @Valid InspectImportReceiptItemRequest>` |
-| [`V10__add_inspection_columns.sql`](./src/main/resources/db/migration/V10__add_inspection_columns.sql) | Thêm DB constraint: `CHECK ("trang_thai_dong" IN ('KHOP', 'CHENH_LECH'))` |
-
----
-
-## Kiến Trúc & Pattern
-
-### Package Structure
-```
-com.smartflow.smestocksensebackend/
-├── config/          # SecurityConfig, CorsConfig, ...
-├── controller/      # REST Controllers (ánh xạ HTTP endpoint)
-├── domain/          # Domain logic thuần (Validator, Calculator, StatePolicy)
-├── dto/             # Request/Response DTOs
-│   └── inbound/     # DTOs cho phiếu nhập
-├── entity/          # JPA Entities (ánh xạ bảng DB)
-├── exception/       # Custom exceptions (BadRequest, NotFound, Conflict, ...)
-├── repository/      # Spring Data JPA Repositories
-└── service/         # Service interfaces + impl/
-```
-
-### Nguyên tắc Code
-
-- **Validation**: Dùng Bean Validation (`@NotNull`, `@NotEmpty`, `@Valid`) ở tầng DTO.
-- **Error Handling**: Dùng custom exception (`BadRequestException`, `NotFoundException`, `ConflictException`, `MissingRoleException`, `AccountInactiveException`).
-- **Concurrency**: Dùng `OptimisticLockingFailureException` để phát hiện ghi đồng thời, `saveAndFlush` để flush ngay trong transaction.
-- **Transaction**: Các method đọc dùng `@Transactional(readOnly = true)`, các method ghi dùng `@Transactional`.
-- **Migration**: Dùng Flyway, `ddl-auto = none`. File đặt tại `src/main/resources/db/migration/`.
-
----
-
-## Lệnh Phát Triển
+Chạy riêng các test case cho luồng kiểm hàng và chi tiết phiếu nhập:
 
 ```bash
-# Chạy toàn bộ test suite
-.\mvnw.cmd test
-
-# Chạy riêng test cho phiếu nhập
-.\mvnw.cmd test -Dtest=ImportReceiptDetailServiceTest
-
-# Build (không chạy test)
-.\mvnw.cmd package -DskipTests
+./mvnw test -Dtest=ImportReceiptDetailServiceTest,ImportReceiptInspectControllerTest
 ```
+
+Chạy toàn bộ test suite của dự án:
+
+```bash
+./mvnw test
+```
+*(Lưu ý: Một số integration test yêu cầu cấu hình kết nối thực tế đến PostgreSQL để khởi chạy ứng dụng thành công).*

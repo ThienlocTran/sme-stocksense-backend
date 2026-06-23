@@ -204,9 +204,13 @@ class ImportReceiptTotalServiceTest {
                 "productCode",
                 "productName",
                 "quantity",
+                "actualReceivedQuantity",
                 "unitPrice",
                 "lineTotal",
-                "note"
+                "note",
+                "physicalStatus",
+                "expiryDate",
+                "rowStatus"
         ), fields);
     }
 

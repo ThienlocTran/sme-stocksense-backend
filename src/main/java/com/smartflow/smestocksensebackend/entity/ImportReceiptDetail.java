@@ -53,6 +53,15 @@ public class ImportReceiptDetail {
     @Column(name = "ghi_chu", length = 255)
     private String note;
 
+    @Column(name = "tinh_trang", length = 255)
+    private String physicalStatus;
+
+    @Column(name = "han_su_dung")
+    private java.time.LocalDateTime expiryDate;
+
+    @Column(name = "trang_thai_dong", length = 50)
+    private String rowStatus;
+
     @CreationTimestamp
     @Column(name = "ngay_tao", updatable = false)
     private LocalDateTime createdAt;

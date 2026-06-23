@@ -101,6 +101,9 @@ public class ImportReceipt {
     @Column(name = "ngay_hoan_thanh")
     private LocalDateTime completedAt;
 
+    @Column(name = "ngay_hang_ve")
+    private LocalDateTime actualArrivalDate;
+
     @OneToMany(mappedBy = "document")
     private List<ImportReceiptDetail> details = new ArrayList<>();
 

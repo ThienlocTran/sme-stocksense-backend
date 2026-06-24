@@ -17,6 +17,7 @@ logs/
 application-neon.yml
 application-prod.yml
 src/main/resources/application.yml
+repair-flyway.cmd
 
 # OS files
 .DS_Store

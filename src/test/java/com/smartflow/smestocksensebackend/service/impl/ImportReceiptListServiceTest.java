@@ -128,6 +128,7 @@ class ImportReceiptListServiceTest {
         assertEquals("Nguyen Van A", response.content().getFirst().createdByName());
         assertEquals(new BigDecimal("1250000.00"), response.content().getFirst().totalAmount());
         assertEquals("Can xu ly", response.content().getFirst().note());
+        assertEquals("Sai don gia nhap.", response.content().getFirst().rejectionReason());
         assertEquals(LocalDateTime.of(2026, 6, 18, 9, 0), response.content().getFirst().createdAt());
         assertEquals(LocalDateTime.of(2026, 6, 18, 10, 0), response.content().getFirst().updatedAt());
         assertEquals(LocalDateTime.of(2026, 6, 18, 11, 0), response.content().getFirst().submittedAt());
@@ -245,6 +246,9 @@ class ImportReceiptListServiceTest {
         receipt.setSupplier(supplier());
         receipt.setCreatedBy(creator);
         receipt.setStatus(status);
+        if (status == ImportReceiptStatus.TU_CHOI) {
+            receipt.setRejectionReason("Sai don gia nhap.");
+        }
         receipt.setTotalAmount(new BigDecimal("1250000.00"));
         receipt.setNote("Can xu ly");
         receipt.setSubmittedAt(LocalDateTime.of(2026, 6, 18, 11, 0));

@@ -779,11 +779,6 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
 
         List<DiscrepancyReportDetail> reportDetails = new ArrayList<>();
         for (ImportReceiptDetail diff : discrepancyDetails) {
-            List<CreateDiscrepancyReportItemRequest> items =
-                    request.getItems() != null ? request.getItems() : List.of();
-            if (items.stream().anyMatch(i -> i == null || i.getProductId() == null)) {
-                throw new BadRequestException("Chi tiet bien ban khong hop le.");
-            }
             CreateDiscrepancyReportItemRequest itemReq = items.stream()
                     .filter(i -> i.getProductId().equals(diff.getProduct().getId()))
                     .findFirst()

@@ -2,6 +2,7 @@ package com.smartflow.smestocksensebackend.dto.inbound;
 
 import com.smartflow.smestocksensebackend.entity.Employee;
 import com.smartflow.smestocksensebackend.entity.ImportReceipt;
+import com.smartflow.smestocksensebackend.entity.ImportReceiptStatus;
 import com.smartflow.smestocksensebackend.entity.Partner;
 import com.smartflow.smestocksensebackend.entity.Warehouse;
 
@@ -20,6 +21,7 @@ public record ImportReceiptSummaryResponse(
         String status,
         BigDecimal totalAmount,
         String note,
+        String rejectionReason,
         LocalDateTime createdAt,
         LocalDateTime updatedAt,
         LocalDateTime submittedAt,
@@ -57,6 +59,48 @@ public record ImportReceiptSummaryResponse(
                 status,
                 totalAmount,
                 note,
+                null,
+                createdAt,
+                updatedAt,
+                submittedAt,
+                cancelledAt,
+                null,
+                version
+        );
+    }
+
+    public ImportReceiptSummaryResponse(
+            Long id,
+            String code,
+            Long warehouseId,
+            String warehouseName,
+            Long supplierId,
+            String supplierName,
+            Long createdById,
+            String createdByName,
+            String status,
+            BigDecimal totalAmount,
+            String note,
+            String rejectionReason,
+            LocalDateTime createdAt,
+            LocalDateTime updatedAt,
+            LocalDateTime submittedAt,
+            LocalDateTime cancelledAt,
+            Long version
+    ) {
+        this(
+                id,
+                code,
+                warehouseId,
+                warehouseName,
+                supplierId,
+                supplierName,
+                createdById,
+                createdByName,
+                status,
+                totalAmount,
+                note,
+                rejectionReason,
                 createdAt,
                 updatedAt,
                 submittedAt,
@@ -83,6 +127,7 @@ public record ImportReceiptSummaryResponse(
                 receipt.getStatus() != null ? receipt.getStatus().name() : null,
                 receipt.getTotalAmount(),
                 receipt.getNote(),
+                rejectionReason(receipt),
                 receipt.getCreatedAt(),
                 receipt.getUpdatedAt(),
                 receipt.getSubmittedAt(),
@@ -90,5 +135,9 @@ public record ImportReceiptSummaryResponse(
                 receipt.getActualArrivalDate(),
                 receipt.getVersion()
         );
+    }
+
+    private static String rejectionReason(ImportReceipt receipt) {
+        return receipt.getStatus() == ImportReceiptStatus.TU_CHOI ? receipt.getRejectionReason() : null;
     }
 }

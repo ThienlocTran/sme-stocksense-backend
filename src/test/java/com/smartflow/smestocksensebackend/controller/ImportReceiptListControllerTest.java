@@ -91,7 +91,8 @@ class ImportReceiptListControllerTest {
                         .param("status", "TU_CHOI")
                         .with(user("employee@example.com").roles("EMPLOYEE")))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.content[0].status").value("TU_CHOI"));
+                .andExpect(jsonPath("$.content[0].status").value("TU_CHOI"))
+                .andExpect(jsonPath("$.content[0].rejectionReason").value("Sai don gia nhap."));
 
         verify(importReceiptService).listMyReceipts(eq("TU_CHOI"), org.mockito.ArgumentMatchers.any(Pageable.class));
     }
@@ -155,6 +156,7 @@ class ImportReceiptListControllerTest {
                         status,
                         new BigDecimal("1250000"),
                         "Can xu ly",
+                        "TU_CHOI".equals(status) ? "Sai don gia nhap." : null,
                         LocalDateTime.of(2026, 6, 18, 9, 0),
                         LocalDateTime.of(2026, 6, 18, 10, 0),
                         LocalDateTime.of(2026, 6, 18, 11, 0),

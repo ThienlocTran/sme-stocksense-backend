@@ -6,6 +6,7 @@ import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptDraftResponse
 import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptItemResponse;
 import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptPageResponse;
 import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptResponse;
+import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptArrivalRequest;
 import com.smartflow.smestocksensebackend.dto.inbound.SaveImportReceiptDraftRequest;
 import com.smartflow.smestocksensebackend.dto.inbound.InspectImportReceiptRequest;
 import com.smartflow.smestocksensebackend.dto.inbound.CreateDiscrepancyReportRequest;
@@ -81,6 +82,8 @@ public interface ImportReceiptService {
      * @return Chi tiết phiếu nhập cùng danh sách sản phẩm bên trong
      */
     ImportReceiptDraftResponse getDetail(Long receiptId);
+
+    ImportReceiptDraftResponse recordArrival(Long receiptId, ImportReceiptArrivalRequest request);
 
     /**
      * Thực hiện kiểm hàng thực tế cho phiếu nhập kho (T100).

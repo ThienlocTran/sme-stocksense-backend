@@ -11,9 +11,14 @@ import com.smartflow.smestocksensebackend.service.InventoryService;
 import com.smartflow.smestocksensebackend.entity.ImportReceipt;
 import com.smartflow.smestocksensebackend.entity.ImportReceiptStatus;
 import com.smartflow.smestocksensebackend.entity.InventoryTransactionType;
+import com.smartflow.smestocksensebackend.dto.inventory.InventoryLevelProjection;
+import com.smartflow.smestocksensebackend.dto.inventory.InventoryLevelResponse;
+import com.smartflow.smestocksensebackend.exception.BadRequestException;
 import com.smartflow.smestocksensebackend.service.InventoryTransactionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -137,9 +142,6 @@ public class InventoryServiceImpl implements InventoryService {
             return Math.addExact(current, delta);
         } catch (ArithmeticException ex) {
             throw new IllegalArgumentException("Tong so luong ton kho vuot gioi han cho phep.", ex);
-        }
-            existingInventory.setQuantity(existingInventory.getQuantity() + quantity);
-            inventoryLevelRepository.saveAndFlush(existingInventory);
         }
     }
 

@@ -117,6 +117,8 @@ public class SecurityConfig {
                                                 .hasAnyRole("ADMIN", "MANAGER")
                                                 .requestMatchers(HttpMethod.GET, "/api/categories")
                                                 .hasAnyRole("ADMIN", "MANAGER", "EMPLOYEE")
+                                                .requestMatchers(HttpMethod.GET, "/api/excel-imports/template")
+                                                .hasRole("ADMIN")
                                                 .requestMatchers(HttpMethod.GET, "/api/partners")
                                                 .hasAnyRole("ADMIN", "MANAGER", "EMPLOYEE")
                                                 .requestMatchers(HttpMethod.POST, "/api/partners").hasAnyRole("ADMIN", "MANAGER")

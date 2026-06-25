@@ -1,6 +1,8 @@
 package com.smartflow.smestocksensebackend.controller;
 
 import com.smartflow.smestocksensebackend.dto.excelimport.ExcelImportUploadResponse;
+import com.smartflow.smestocksensebackend.dto.excelimport.ExcelImportValidationResponse;
+import com.smartflow.smestocksensebackend.excelimport.ExcelImportValidationService;
 import com.smartflow.smestocksensebackend.excelimport.ExcelImportUploadService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -19,6 +21,7 @@ import org.springframework.web.multipart.MultipartFile;
 public class ExcelImportController {
 
     private final ExcelImportUploadService excelImportUploadService;
+    private final ExcelImportValidationService excelImportValidationService;
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasRole('ADMIN')")
@@ -29,5 +32,16 @@ public class ExcelImportController {
     ) {
         ExcelImportUploadResponse response = excelImportUploadService.upload(file, loaiImport, khoId);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @PostMapping(value = "/validate", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER','EMPLOYEE')")
+    public ResponseEntity<ExcelImportValidationResponse> validate(
+            @RequestParam(required = false) MultipartFile file,
+            @RequestParam(required = false) String loaiImport,
+            @RequestParam(required = false) Long khoId
+    ) {
+        ExcelImportValidationResponse response = excelImportValidationService.validate(file, loaiImport, khoId);
+        return ResponseEntity.ok(response);
     }
 }

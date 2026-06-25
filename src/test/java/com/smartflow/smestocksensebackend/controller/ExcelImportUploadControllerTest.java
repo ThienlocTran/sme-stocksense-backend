@@ -29,7 +29,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@WebMvcTest(controllers = ExcelImportTemplateController.class)
+@WebMvcTest(controllers = ExcelImportController.class)
 @Import({SecurityConfig.class, JwtAuthenticationFilter.class, ApiExceptionHandler.class})
 class ExcelImportUploadControllerTest {
 
@@ -52,14 +52,13 @@ class ExcelImportUploadControllerTest {
     void upload_withoutTokenShouldReturn401() throws Exception {
         mockMvc.perform(multipart("/api/excel-imports")
                         .file(xlsxFile())
-                        .param("loaiImport", ExcelImportMode.PRODUCT_ONLY.name())
-                        .param("khoId", "10"))
+                        .param("loaiImport", ExcelImportMode.PRODUCT_ONLY.name()))
                 .andExpect(status().isUnauthorized());
     }
 
     @Test
-    void upload_authenticatedEmployeeShouldReturnCreatedMetadata() throws Exception {
-        when(excelImportUploadService.upload(any(), eq(ExcelImportMode.PRODUCT_ONLY.name()), eq(10L)))
+    void upload_productOnlyWithoutWarehouseShouldReturnCreatedMetadata() throws Exception {
+        when(excelImportUploadService.upload(any(), eq(ExcelImportMode.PRODUCT_ONLY.name()), eq(null)))
                 .thenReturn(new ExcelImportUploadResponse(
                         99L,
                         "products.xlsx",
@@ -74,7 +73,6 @@ class ExcelImportUploadControllerTest {
         mockMvc.perform(multipart("/api/excel-imports")
                         .file(xlsxFile())
                         .param("loaiImport", ExcelImportMode.PRODUCT_ONLY.name())
-                        .param("khoId", "10")
                         .with(user("employee@example.com").roles("EMPLOYEE")))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").value(99))
@@ -84,6 +82,29 @@ class ExcelImportUploadControllerTest {
                 .andExpect(jsonPath("$.tongSoDong").value(0))
                 .andExpect(jsonPath("$.soDongHopLe").value(0))
                 .andExpect(jsonPath("$.soDongLoi").value(0));
+    }
+
+    @Test
+    void upload_openingStockWithoutWarehouseShouldReturnCreatedMetadata() throws Exception {
+        when(excelImportUploadService.upload(any(), eq(ExcelImportMode.PRODUCT_WITH_OPENING_STOCK.name()), eq(null)))
+                .thenReturn(new ExcelImportUploadResponse(
+                        100L,
+                        "opening-stock.xlsx",
+                        ExcelImportMode.PRODUCT_WITH_OPENING_STOCK.name(),
+                        ExcelImportStatus.CHO_XU_LY.name(),
+                        0,
+                        0,
+                        0,
+                        LocalDateTime.of(2026, 6, 25, 9, 0)
+                ));
+
+        mockMvc.perform(multipart("/api/excel-imports")
+                        .file(xlsxFile())
+                        .param("loaiImport", ExcelImportMode.PRODUCT_WITH_OPENING_STOCK.name())
+                        .with(user("employee@example.com").roles("EMPLOYEE")))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.id").value(100))
+                .andExpect(jsonPath("$.loaiImport").value(ExcelImportMode.PRODUCT_WITH_OPENING_STOCK.name()));
     }
 
     @Test

@@ -4,7 +4,6 @@ import com.smartflow.smestocksensebackend.config.JwtAuthenticationFilter;
 import com.smartflow.smestocksensebackend.config.SecurityConfig;
 import com.smartflow.smestocksensebackend.excelimport.ExcelImportTemplateConstants;
 import com.smartflow.smestocksensebackend.excelimport.ExcelImportTemplateService;
-import com.smartflow.smestocksensebackend.excelimport.ExcelImportUploadService;
 import com.smartflow.smestocksensebackend.repository.EmployeeRepository;
 import com.smartflow.smestocksensebackend.service.JwtService;
 import org.junit.jupiter.api.Test;
@@ -32,9 +31,6 @@ class ExcelImportTemplateControllerTest {
 
     @MockitoBean
     private ExcelImportTemplateService excelImportTemplateService;
-
-    @MockitoBean
-    private ExcelImportUploadService excelImportUploadService;
 
     @MockitoBean
     private JwtService jwtService;

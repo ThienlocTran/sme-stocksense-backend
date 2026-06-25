@@ -37,11 +37,7 @@ class ExcelImportUploadServiceTest {
     private ExcelImportUploadService excelImportUploadService;
 
     @Test
-    void upload_validXlsxShouldCreatePendingMetadata() {
-        Warehouse warehouse = new Warehouse();
-        warehouse.setId(10L);
-
-        when(warehouseRepository.findById(10L)).thenReturn(Optional.of(warehouse));
+    void upload_productOnlyWithoutWarehouseShouldCreatePendingMetadata() {
         when(excelImportRepository.save(any(ExcelImport.class))).thenAnswer(invocation -> {
             ExcelImport saved = invocation.getArgument(0);
             saved.setId(99L);
@@ -50,8 +46,8 @@ class ExcelImportUploadServiceTest {
 
         ExcelImportUploadResponse response = excelImportUploadService.upload(
                 xlsxFile("products.xlsx", new byte[]{1, 2, 3}),
-                ExcelImportMode.PRODUCT_WITH_OPENING_STOCK.name(),
-                10L
+                ExcelImportMode.PRODUCT_ONLY.name(),
+                null
         );
 
         ArgumentCaptor<ExcelImport> captor = ArgumentCaptor.forClass(ExcelImport.class);
@@ -60,14 +56,51 @@ class ExcelImportUploadServiceTest {
 
         assertThat(saved.getFileName()).isEqualTo("products.xlsx");
         assertThat(saved.getFilePath()).startsWith("metadata-only/");
-        assertThat(saved.getImportType()).isEqualTo(ExcelImportMode.PRODUCT_WITH_OPENING_STOCK.name());
-        assertThat(saved.getWarehouse()).isSameAs(warehouse);
+        assertThat(saved.getImportType()).isEqualTo(ExcelImportMode.PRODUCT_ONLY.name());
+        assertThat(saved.getWarehouse()).isNull();
         assertThat(saved.getStatus()).isEqualTo(ExcelImportStatus.CHO_XU_LY);
         assertThat(saved.getTotalRows()).isZero();
         assertThat(saved.getValidRows()).isZero();
         assertThat(saved.getErrorRows()).isZero();
         assertThat(response.id()).isEqualTo(99L);
         assertThat(response.trangThai()).isEqualTo(ExcelImportStatus.CHO_XU_LY.name());
+    }
+
+    @Test
+    void upload_openingStockWithoutWarehouseShouldCreatePendingMetadata() {
+        when(excelImportRepository.save(any(ExcelImport.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        excelImportUploadService.upload(
+                xlsxFile("opening-stock.xlsx", new byte[]{1, 2, 3}),
+                ExcelImportMode.PRODUCT_WITH_OPENING_STOCK.name(),
+                null
+        );
+
+        ArgumentCaptor<ExcelImport> captor = ArgumentCaptor.forClass(ExcelImport.class);
+        verify(excelImportRepository).save(captor.capture());
+
+        assertThat(captor.getValue().getImportType()).isEqualTo(ExcelImportMode.PRODUCT_WITH_OPENING_STOCK.name());
+        assertThat(captor.getValue().getWarehouse()).isNull();
+    }
+
+    @Test
+    void upload_withWarehouseShouldStoreWarehouseMetadata() {
+        Warehouse warehouse = new Warehouse();
+        warehouse.setId(10L);
+
+        when(warehouseRepository.findById(10L)).thenReturn(Optional.of(warehouse));
+        when(excelImportRepository.save(any(ExcelImport.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        excelImportUploadService.upload(
+                xlsxFile("products.xlsx", new byte[]{1, 2, 3}),
+                ExcelImportMode.PRODUCT_ONLY.name(),
+                10L
+        );
+
+        ArgumentCaptor<ExcelImport> captor = ArgumentCaptor.forClass(ExcelImport.class);
+        verify(excelImportRepository).save(captor.capture());
+
+        assertThat(captor.getValue().getWarehouse()).isSameAs(warehouse);
     }
 
     @Test
@@ -118,14 +151,16 @@ class ExcelImportUploadServiceTest {
     }
 
     @Test
-    void upload_missingWarehouseShouldReturnBadRequestBecauseCurrentSchemaRequiresIt() {
+    void upload_invalidWarehouseShouldReturnBadRequestWhenProvided() {
+        when(warehouseRepository.findById(404L)).thenReturn(Optional.empty());
+
         assertThatThrownBy(() -> excelImportUploadService.upload(
                 xlsxFile("products.xlsx", new byte[]{1}),
                 ExcelImportMode.PRODUCT_ONLY.name(),
-                null
+                404L
         ))
                 .isInstanceOf(BadRequestException.class)
-                .hasMessage("khoId is required by current import metadata schema.");
+                .hasMessage("khoId is invalid.");
 
         verify(excelImportRepository, never()).save(any());
     }

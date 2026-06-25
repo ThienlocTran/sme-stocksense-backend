@@ -31,7 +31,7 @@ public class ExcelImportUploadService {
     public ExcelImportUploadResponse upload(MultipartFile file, String loaiImport, Long khoId) {
         validateFile(file);
         ExcelImportMode importMode = parseImportMode(loaiImport);
-        Warehouse warehouse = findWarehouse(khoId);
+        Warehouse warehouse = findWarehouseIfProvided(khoId);
 
         ExcelImport excelImport = new ExcelImport();
         excelImport.setFileName(safeOriginalFileName(file));
@@ -77,9 +77,9 @@ public class ExcelImportUploadService {
         }
     }
 
-    private Warehouse findWarehouse(Long khoId) {
+    private Warehouse findWarehouseIfProvided(Long khoId) {
         if (khoId == null) {
-            throw new BadRequestException("khoId is required by current import metadata schema.");
+            return null;
         }
 
         return warehouseRepository.findById(khoId)

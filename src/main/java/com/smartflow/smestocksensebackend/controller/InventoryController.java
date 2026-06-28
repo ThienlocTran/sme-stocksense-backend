@@ -34,14 +34,17 @@ public class InventoryController {
      * - OVER_STOCK: so_luong >= max_stock
      * - NORMAL: các trường hợp khác
      * 
-     * @param warehouseId ID của kho (optional)
-     * @param productId ID của sản phẩm (optional)
-     * @param keyword Từ khóa tìm kiếm (optional, tìm theo mã/tên sản phẩm, mã/tên kho, mã vạch)
-     * @param stockStatus Trạng thái tồn: LOW_STOCK, OUT_OF_STOCK, NORMAL, OVER_STOCK (optional)
+     * @param warehouseId     ID của kho (optional)
+     * @param productId       ID của sản phẩm (optional)
+     * @param keyword         Từ khóa tìm kiếm (optional, tìm theo mã/tên sản phẩm,
+     *                        mã/tên kho, mã vạch)
+     * @param stockStatus     Trạng thái tồn: LOW_STOCK, OUT_OF_STOCK, NORMAL,
+     *                        OVER_STOCK (optional)
      * @param warehouseStatus Trạng thái kho: HOAT_DONG, NGUNG_HOAT_DONG (optional)
-     * @param productStatus Trạng thái sản phẩm: HOAT_DONG, NGUNG_HOAT_DONG (optional)
-     * @param page Số trang (0-indexed, default 0)
-     * @param size Số bản ghi trên một trang (1-100, default 20)
+     * @param productStatus   Trạng thái sản phẩm: HOAT_DONG, NGUNG_HOAT_DONG
+     *                        (optional)
+     * @param page            Số trang (0-indexed, default 0)
+     * @param size            Số bản ghi trên một trang (1-100, default 20)
      * @return Danh sách tồn kho với phân trang
      */
     @GetMapping
@@ -65,13 +68,15 @@ public class InventoryController {
      * 
      * Điều kiện: current_quantity <= min_stock
      * 
-     * @param warehouseId ID của kho (optional, dùng để lọc theo kho)
-     * @param productId ID của sản phẩm (optional, dùng để lọc theo sản phẩm)
-     * @param keyword Từ khóa tìm kiếm (optional, tìm theo mã/tên sản phẩm, mã/tên kho, mã vạch)
+     * @param warehouseId     ID của kho (optional, dùng để lọc theo kho)
+     * @param productId       ID của sản phẩm (optional, dùng để lọc theo sản phẩm)
+     * @param keyword         Từ khóa tìm kiếm (optional, tìm theo mã/tên sản phẩm,
+     *                        mã/tên kho, mã vạch)
      * @param warehouseStatus Trạng thái kho: HOAT_DONG, NGUNG_HOAT_DONG (optional)
-     * @param productStatus Trạng thái sản phẩm: HOAT_DONG, NGUNG_HOAT_DONG (optional)
-     * @param page Số trang (0-indexed, default 0)
-     * @param size Số bản ghi trên một trang (1-100, default 20)
+     * @param productStatus   Trạng thái sản phẩm: HOAT_DONG, NGUNG_HOAT_DONG
+     *                        (optional)
+     * @param page            Số trang (0-indexed, default 0)
+     * @param size            Số bản ghi trên một trang (1-100, default 20)
      * @return Danh sách sản phẩm tồn kho thấp với phân trang
      */
     @GetMapping("/low-stock")

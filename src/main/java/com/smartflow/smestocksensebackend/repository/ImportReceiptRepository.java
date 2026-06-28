@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
+import java.util.Collection;
 import java.util.Optional;
 
 public interface ImportReceiptRepository extends JpaRepository<ImportReceipt, Long>, JpaSpecificationExecutor<ImportReceipt> {
@@ -23,4 +24,10 @@ public interface ImportReceiptRepository extends JpaRepository<ImportReceipt, Lo
 
     @EntityGraph(attributePaths = {"warehouse", "supplier", "createdBy"})
     Page<ImportReceipt> findByCreatedByIdAndStatus(Long createdById, ImportReceiptStatus status, Pageable pageable);
+
+    @EntityGraph(attributePaths = {"warehouse", "supplier", "createdBy"})
+    Page<ImportReceipt> findByStatus(ImportReceiptStatus status, Pageable pageable);
+
+    @EntityGraph(attributePaths = {"warehouse", "supplier", "createdBy"})
+    Page<ImportReceipt> findByStatusIn(Collection<ImportReceiptStatus> statuses, Pageable pageable);
 }

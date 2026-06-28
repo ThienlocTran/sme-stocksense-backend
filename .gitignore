@@ -22,3 +22,9 @@ repair-flyway.cmd
 # OS files
 .DS_Store
 Thumbs.db
+
+# Local AI Agent / Skills Harness files
+feature_list.json
+init.sh
+progress.md
+session-handoff.md

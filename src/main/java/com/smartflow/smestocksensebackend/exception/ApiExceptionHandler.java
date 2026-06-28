@@ -28,11 +28,12 @@ public class ApiExceptionHandler {
 
     @ExceptionHandler(AuthenticationCredentialsNotFoundException.class)
     @ResponseStatus(HttpStatus.UNAUTHORIZED)
-    public ApiErrorResponse handleAuthenticationCredentialsNotFound(AuthenticationCredentialsNotFoundException exception) {
+    public ApiErrorResponse handleAuthenticationCredentialsNotFound(
+            AuthenticationCredentialsNotFoundException exception) {
         return new ApiErrorResponse(exception.getMessage());
     }
 
-    @ExceptionHandler({AccountInactiveException.class, MissingRoleException.class})
+    @ExceptionHandler({ AccountInactiveException.class, MissingRoleException.class })
     @ResponseStatus(HttpStatus.FORBIDDEN)
     public ApiErrorResponse handleForbidden(RuntimeException exception) {
         return new ApiErrorResponse(exception.getMessage());
@@ -84,14 +85,14 @@ public class ApiExceptionHandler {
     public ApiErrorResponse handleMalformedJson() {
         return new ApiErrorResponse(
                 "Dữ liệu không hợp lệ.",
-                Map.of("body", "JSON không hợp lệ hoặc request body bị thiếu.")
-        );
+                Map.of("body", "JSON không hợp lệ hoặc request body bị thiếu."));
     }
 
     @ExceptionHandler(Exception.class)
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     public ApiErrorResponse handleUnexpected(Exception exception) {
-        log.error("Unexpected API error", exception);
+        log.error("Unexpected API error class={} message={}", exception.getClass().getName(), exception.getMessage(),
+                exception);
         return new ApiErrorResponse("Lỗi hệ thống. Vui lòng thử lại sau.");
     }
 }

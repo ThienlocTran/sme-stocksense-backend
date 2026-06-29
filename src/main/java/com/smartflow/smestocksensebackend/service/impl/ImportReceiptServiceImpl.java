@@ -18,6 +18,7 @@ import com.smartflow.smestocksensebackend.dto.inbound.InspectImportReceiptItemRe
 import com.smartflow.smestocksensebackend.dto.inbound.CreateDiscrepancyReportRequest;
 import com.smartflow.smestocksensebackend.dto.inbound.CreateDiscrepancyReportItemRequest;
 import com.smartflow.smestocksensebackend.dto.inbound.DiscrepancyReportResponse;
+import com.smartflow.smestocksensebackend.dto.inbound.RejectImportReceiptRequest;
 import com.smartflow.smestocksensebackend.entity.Employee;
 import com.smartflow.smestocksensebackend.entity.EmployeeStatus;
 import com.smartflow.smestocksensebackend.entity.ImportReceipt;
@@ -91,6 +92,12 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
     private static final int MAX_CODE_ATTEMPTS = 3;
     // Tên unique index trong DB để nhận diện lỗi sản phẩm trùng lặp trong cùng một phiếu nhập
     private static final String IMPORT_RECEIPT_DETAIL_UNIQUE_INDEX = "chi_tiet_phieu_nhap_phieu_nhap_id_san_pham_id_idx";
+
+    // Tập trạng thái phiếu nhập đang chờ duyệt (dùng cho luồng duyệt/từ chối T91..T94)
+    private static final List<ImportReceiptStatus> PENDING_APPROVAL_STATUSES = List.of(
+            ImportReceiptStatus.CHO_DUYET_CAP_1,
+            ImportReceiptStatus.CHO_DUYET_CAP_2
+    );
 
     private final ImportReceiptRepository importReceiptRepository;
     private final ImportReceiptDetailRepository importReceiptDetailRepository;
@@ -367,6 +374,141 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
     }
 
     // =========================================================================
+    // NHÓM 3B: LUỒNG DUYỆT PHIẾU NHẬP THEO CẤP (Approval Flow - T91..T94)
+    // =========================================================================
+
+    /**
+     * Lấy danh sách phiếu nhập đang chờ duyệt cho quản lý (T91).
+     * Chỉ MANAGER/ADMIN được xem. Khi không truyền status thì trả về cả hai cấp chờ duyệt
+     * (CHO_DUYET_CAP_1 và CHO_DUYET_CAP_2); khi truyền status thì chỉ chấp nhận đúng hai cấp này.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public ImportReceiptPageResponse listPendingApproval(String status, Pageable pageable) {
+        Employee actor = currentEmployee();
+        if (actor.getStatus() != EmployeeStatus.HOAT_DONG) {
+            throw new AccountInactiveException();
+        }
+        ensureCanApprove(actor);
+
+        ImportReceiptStatus parsedStatus = parseStatus(status);
+        if (parsedStatus == null) {
+            return ImportReceiptPageResponse.from(importReceiptRepository
+                    .findByStatusIn(PENDING_APPROVAL_STATUSES, pageable)
+                    .map(ImportReceiptSummaryResponse::from));
+        }
+        if (!PENDING_APPROVAL_STATUSES.contains(parsedStatus)) {
+            throw new BadRequestException("Chi duoc loc theo trang thai cho duyet (CHO_DUYET_CAP_1 hoac CHO_DUYET_CAP_2).");
+        }
+        return ImportReceiptPageResponse.from(importReceiptRepository
+                .findByStatus(parsedStatus, pageable)
+                .map(ImportReceiptSummaryResponse::from));
+    }
+
+    /**
+     * Lấy chi tiết phiếu nhập phục vụ duyệt/từ chối (T92).
+     * Khác getDetail: MANAGER/ADMIN xem được chi tiết phiếu của bất kỳ nhân viên nào.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public ImportReceiptDraftResponse getApprovalDetail(Long receiptId) {
+        Employee actor = currentEmployee();
+        if (actor.getStatus() != EmployeeStatus.HOAT_DONG) {
+            throw new AccountInactiveException();
+        }
+        ensureCanApprove(actor);
+
+        ImportReceipt receipt = importReceiptRepository.findById(receiptId)
+                .orElseThrow(() -> new NotFoundException("Phieu nhap khong ton tai."));
+        List<ImportReceiptDetail> details = importReceiptDetailRepository.findByDocumentIdOrderByIdAsc(receiptId);
+        return ImportReceiptDraftResponse.from(receipt, details);
+    }
+
+    /**
+     * Duyệt phiếu nhập theo cấp (T93).
+     * Cấp 1: CHO_DUYET_CAP_1 → CHO_DUYET_CAP_2. Cấp 2: CHO_DUYET_CAP_2 → CHO_HANG_VE.
+     * Tuyệt đối không cộng tồn kho ở bước này (chỉ tăng tồn khi hoàn tất - T104).
+     */
+    @Override
+    @Transactional
+    public ImportReceiptDraftResponse approve(Long receiptId) {
+        Employee actor = currentEmployee();
+        if (actor.getStatus() != EmployeeStatus.HOAT_DONG) {
+            throw new AccountInactiveException();
+        }
+        ensureCanApprove(actor);
+
+        ImportReceipt receipt = importReceiptRepository.findById(receiptId)
+                .orElseThrow(() -> new NotFoundException("Phieu nhap khong ton tai."));
+
+        ImportReceiptStatus current = receipt.getStatus();
+        LocalDateTime now = LocalDateTime.now();
+
+        ImportReceiptStatus nextStatus;
+        if (current == ImportReceiptStatus.CHO_DUYET_CAP_1) {
+            nextStatus = ImportReceiptStatus.CHO_DUYET_CAP_2;
+            receipt.setLevel1ApprovedBy(actor);
+            receipt.setLevel1ApprovedAt(now);
+        } else if (current == ImportReceiptStatus.CHO_DUYET_CAP_2) {
+            nextStatus = ImportReceiptStatus.CHO_HANG_VE;
+            receipt.setLevel2ApprovedBy(actor);
+            receipt.setLevel2ApprovedAt(now);
+        } else {
+            throw new ConflictException("Chi duoc duyet phieu nhap o trang thai cho duyet (CHO_DUYET_CAP_1 hoac CHO_DUYET_CAP_2).");
+        }
+
+        // Chốt chặn bằng state machine để đảm bảo transition hợp lệ.
+        if (!ImportReceiptStatePolicy.canTransition(current, nextStatus)) {
+            throw new ConflictException("Khong the chuyen trang thai phieu nhap tu " + current + " sang " + nextStatus + ".");
+        }
+
+        try {
+            receipt.setStatus(nextStatus);
+            ImportReceipt savedReceipt = importReceiptRepository.saveAndFlush(receipt);
+            List<ImportReceiptDetail> details = importReceiptDetailRepository.findByDocumentIdOrderByIdAsc(receiptId);
+            return ImportReceiptDraftResponse.from(savedReceipt, details);
+        } catch (OptimisticLockingFailureException exception) {
+            throw new ConflictException("Phieu nhap da duoc cap nhat boi request khac.");
+        }
+    }
+
+    /**
+     * Từ chối phiếu nhập đang chờ duyệt (T94).
+     * Áp dụng cho CHO_DUYET_CAP_1/CHO_DUYET_CAP_2; bắt buộc lý do; chuyển sang TU_CHOI.
+     */
+    @Override
+    @Transactional
+    public ImportReceiptDraftResponse reject(Long receiptId, RejectImportReceiptRequest request) {
+        if (request == null || request.reason() == null || request.reason().isBlank()) {
+            throw new BadRequestException("Ly do tu choi khong duoc de trong.");
+        }
+        Employee actor = currentEmployee();
+        if (actor.getStatus() != EmployeeStatus.HOAT_DONG) {
+            throw new AccountInactiveException();
+        }
+        ensureCanApprove(actor);
+
+        ImportReceipt receipt = importReceiptRepository.findById(receiptId)
+                .orElseThrow(() -> new NotFoundException("Phieu nhap khong ton tai."));
+
+        ImportReceiptStatus current = receipt.getStatus();
+        if (!PENDING_APPROVAL_STATUSES.contains(current)
+                || !ImportReceiptStatePolicy.canTransition(current, ImportReceiptStatus.TU_CHOI)) {
+            throw new ConflictException("Chi duoc tu choi phieu nhap o trang thai cho duyet (CHO_DUYET_CAP_1 hoac CHO_DUYET_CAP_2).");
+        }
+
+        try {
+            receipt.setStatus(ImportReceiptStatus.TU_CHOI);
+            receipt.setRejectionReason(request.reason().trim());
+            ImportReceipt savedReceipt = importReceiptRepository.saveAndFlush(receipt);
+            List<ImportReceiptDetail> details = importReceiptDetailRepository.findByDocumentIdOrderByIdAsc(receiptId);
+            return ImportReceiptDraftResponse.from(savedReceipt, details);
+        } catch (OptimisticLockingFailureException exception) {
+            throw new ConflictException("Phieu nhap da duoc cap nhat boi request khac.");
+        }
+    }
+
+    // =========================================================================
     // NHÓM 4: PHƯƠNG THỨC PRIVATE DÙNG CHUNG (Helper Methods)
     // =========================================================================
 
@@ -560,6 +702,14 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
         RoleCode roleCode = actor.getRole() != null ? actor.getRole().getCode() : null;
         if (roleCode != RoleCode.ADMIN && roleCode != RoleCode.EMPLOYEE) {
             throw new MissingRoleException("Khong co quyen xem danh sach phieu nhap ca nhan.");
+        }
+    }
+
+    /** Kiểm tra nhân viên có quyền duyệt/từ chối phiếu nhập (chỉ ADMIN hoặc MANAGER). */
+    private void ensureCanApprove(Employee actor) {
+        RoleCode roleCode = actor.getRole() != null ? actor.getRole().getCode() : null;
+        if (roleCode != RoleCode.ADMIN && roleCode != RoleCode.MANAGER) {
+            throw new MissingRoleException("Khong co quyen duyet phieu nhap.");
         }
     }
 

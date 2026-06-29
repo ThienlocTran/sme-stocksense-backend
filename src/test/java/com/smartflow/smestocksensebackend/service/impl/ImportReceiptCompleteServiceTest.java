@@ -112,6 +112,7 @@ class ImportReceiptCompleteServiceTest {
 
         when(importReceiptRepository.findById(123L)).thenReturn(Optional.of(receipt));
         when(importReceiptDetailRepository.findByDocumentId(123L)).thenReturn(List.of(detail));
+        when(importReceiptDetailRepository.findByDocumentIdOrderByIdAsc(123L)).thenReturn(List.of(detail));
         when(importReceiptRepository.saveAndFlush(any(ImportReceipt.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         ImportReceiptDraftResponse response = importReceiptService.completeImport(123L, request);
@@ -134,6 +135,7 @@ class ImportReceiptCompleteServiceTest {
 
         when(importReceiptRepository.findById(123L)).thenReturn(Optional.of(receipt));
         when(importReceiptDetailRepository.findByDocumentId(123L)).thenReturn(List.of(detail));
+        when(importReceiptDetailRepository.findByDocumentIdOrderByIdAsc(123L)).thenReturn(List.of(detail));
         when(importReceiptRepository.saveAndFlush(any(ImportReceipt.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         ImportReceiptDraftResponse response = importReceiptService.completeImport(123L, request);
@@ -190,6 +192,7 @@ class ImportReceiptCompleteServiceTest {
 
         when(importReceiptRepository.findById(123L)).thenReturn(Optional.of(receipt));
         when(importReceiptDetailRepository.findByDocumentId(123L)).thenReturn(List.of(detail));
+        when(importReceiptDetailRepository.findByDocumentIdOrderByIdAsc(123L)).thenReturn(List.of(detail));
         when(importReceiptRepository.saveAndFlush(any(ImportReceipt.class))).thenAnswer(invocation -> invocation.getArgument(0));
         
         // Mock inventoryService throwing an exception

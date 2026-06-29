@@ -2,6 +2,7 @@ package com.smartflow.smestocksensebackend.controller;
 
 import com.smartflow.smestocksensebackend.dto.inbound.AddImportReceiptItemRequest;
 import com.smartflow.smestocksensebackend.dto.inbound.CreateImportReceiptRequest;
+import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptArrivalRequest;
 import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptDraftResponse;
 import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptItemResponse;
 import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptPageResponse;
@@ -10,6 +11,7 @@ import com.smartflow.smestocksensebackend.dto.inbound.SaveImportReceiptDraftRequ
 import com.smartflow.smestocksensebackend.dto.inbound.InspectImportReceiptRequest;
 import com.smartflow.smestocksensebackend.dto.inbound.CreateDiscrepancyReportRequest;
 import com.smartflow.smestocksensebackend.dto.inbound.DiscrepancyReportResponse;
+import com.smartflow.smestocksensebackend.dto.inbound.RejectImportReceiptRequest;
 import com.smartflow.smestocksensebackend.service.ImportReceiptService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -52,6 +54,70 @@ public class ImportReceiptController {
         return importReceiptService.getDetail(receiptId);
     }
 
+    /**
+     * API danh sách phiếu nhập chờ duyệt cho quản lý (T91).
+     * Chỉ MANAGER/ADMIN xem được. Lọc theo trạng thái chờ duyệt (CHO_DUYET_CAP_1/CHO_DUYET_CAP_2).
+     *
+     * @param page  Số trang (mặc định 0)
+     * @param size  Kích thước trang (mặc định 10)
+     * @param status Trạng thái chờ duyệt cần lọc (tùy chọn)
+     * @return Danh sách phiếu nhập chờ duyệt phân trang
+     */
+    @GetMapping("/pending-approval")
+    public ImportReceiptPageResponse listPendingApproval(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) String status
+    ) {
+        PageRequest pageable = PageRequest.of(
+                page,
+                size,
+                Sort.by(Sort.Order.asc("submittedAt"), Sort.Order.asc("id"))
+        );
+        return importReceiptService.listPendingApproval(status, pageable);
+    }
+
+    /**
+     * API xem chi tiết phiếu nhập chờ duyệt cho quản lý (T92).
+     * Cho phép MANAGER/ADMIN xem chi tiết phiếu của bất kỳ nhân viên nào trước khi duyệt/từ chối.
+     *
+     * @param receiptId ID của phiếu nhập kho
+     * @return Chi tiết phiếu nhập cùng danh sách sản phẩm
+     */
+    @GetMapping("/{receiptId}/approval-detail")
+    public ImportReceiptDraftResponse getApprovalDetail(@PathVariable Long receiptId) {
+        return importReceiptService.getApprovalDetail(receiptId);
+    }
+
+    /**
+     * API duyệt phiếu nhập kho theo cấp (T93).
+     * Cấp 1: CHO_DUYET_CAP_1 → CHO_DUYET_CAP_2. Cấp 2: CHO_DUYET_CAP_2 → CHO_HANG_VE.
+     * Không cộng tồn kho ở bước duyệt.
+     *
+     * @param receiptId ID của phiếu nhập kho cần duyệt
+     * @return Phiếu nhập sau khi duyệt
+     */
+    @PutMapping("/{receiptId}/approve")
+    public ImportReceiptDraftResponse approve(@PathVariable Long receiptId) {
+        return importReceiptService.approve(receiptId);
+    }
+
+    /**
+     * API từ chối phiếu nhập kho đang chờ duyệt (T94).
+     * Bắt buộc nhập lý do từ chối; phiếu chuyển sang trạng thái TU_CHOI.
+     *
+     * @param receiptId ID của phiếu nhập kho cần từ chối
+     * @param request Lý do từ chối
+     * @return Phiếu nhập sau khi bị từ chối
+     */
+    @PutMapping("/{receiptId}/reject")
+    public ImportReceiptDraftResponse reject(
+            @PathVariable Long receiptId,
+            @Valid @RequestBody RejectImportReceiptRequest request
+    ) {
+        return importReceiptService.reject(receiptId, request);
+    }
+
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public ImportReceiptResponse createDraft(@Valid @RequestBody CreateImportReceiptRequest request) {
@@ -91,6 +157,23 @@ public class ImportReceiptController {
     @PutMapping("/{receiptId}/submit")
     public ImportReceiptDraftResponse submitForApproval(@PathVariable Long receiptId) {
         return importReceiptService.submitForApproval(receiptId);
+    }
+
+    /**
+     * API ghi nhận hàng về thực tế cho phiếu nhập kho.
+     * Chỉ phiếu đang ở trạng thái CHO_HANG_VE mới được ghi nhận; sau khi ghi nhận
+     * phiếu chuyển sang CHO_KIEM_HANG.
+     *
+     * @param receiptId ID của phiếu nhập kho
+     * @param request DTO chứa ngày hàng về thực tế
+     * @return Thông tin chi tiết phiếu sau khi cập nhật
+     */
+    @PutMapping("/{receiptId}/arrival")
+    public ImportReceiptDraftResponse recordArrival(
+            @PathVariable Long receiptId,
+            @Valid @RequestBody ImportReceiptArrivalRequest request
+    ) {
+        return importReceiptService.recordArrival(receiptId, request);
     }
 
     /**

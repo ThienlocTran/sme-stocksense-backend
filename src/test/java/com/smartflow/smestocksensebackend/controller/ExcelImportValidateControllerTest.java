@@ -4,6 +4,7 @@ import com.smartflow.smestocksensebackend.config.JwtAuthenticationFilter;
 import com.smartflow.smestocksensebackend.config.SecurityConfig;
 import com.smartflow.smestocksensebackend.dto.excelimport.ExcelImportValidationResponse;
 import com.smartflow.smestocksensebackend.exception.ApiExceptionHandler;
+import com.smartflow.smestocksensebackend.exception.NotFoundException;
 import com.smartflow.smestocksensebackend.excelimport.ExcelImportMode;
 import com.smartflow.smestocksensebackend.excelimport.ExcelImportTemplateService;
 import com.smartflow.smestocksensebackend.excelimport.ExcelImportUploadService;
@@ -79,6 +80,60 @@ class ExcelImportValidateControllerTest {
                 .andExpect(jsonPath("$.tongSoDong").value(1))
                 .andExpect(jsonPath("$.soDongHopLe").value(1))
                 .andExpect(jsonPath("$.soDongLoi").value(0));
+    }
+
+    @Test
+    void validateErrors_adminShouldPersistValidationResult() throws Exception {
+        when(excelImportValidationService.validateAndPersistErrors(eq(99L), any(), eq(ExcelImportMode.PRODUCT_ONLY.name()), eq(null)))
+                .thenReturn(new ExcelImportValidationResponse(
+                        false,
+                        ExcelImportMode.PRODUCT_ONLY.name(),
+                        1,
+                        0,
+                        1,
+                        List.of()
+                ));
+
+        mockMvc.perform(multipart("/api/excel-imports/99/validate-errors")
+                        .file(ExcelImportUploadControllerTestSupport.xlsxFile())
+                        .param("loaiImport", ExcelImportMode.PRODUCT_ONLY.name())
+                        .with(user("admin@example.com").roles("ADMIN")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.valid").value(false))
+                .andExpect(jsonPath("$.tongSoDong").value(1))
+                .andExpect(jsonPath("$.soDongHopLe").value(0))
+                .andExpect(jsonPath("$.soDongLoi").value(1));
+    }
+
+    @Test
+    void validateErrors_managerShouldReturn403() throws Exception {
+        mockMvc.perform(multipart("/api/excel-imports/99/validate-errors")
+                        .file(ExcelImportUploadControllerTestSupport.xlsxFile())
+                        .param("loaiImport", ExcelImportMode.PRODUCT_ONLY.name())
+                        .with(user("manager@example.com").roles("MANAGER")))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void validateErrors_employeeShouldReturn403() throws Exception {
+        mockMvc.perform(multipart("/api/excel-imports/99/validate-errors")
+                        .file(ExcelImportUploadControllerTestSupport.xlsxFile())
+                        .param("loaiImport", ExcelImportMode.PRODUCT_ONLY.name())
+                        .with(user("employee@example.com").roles("EMPLOYEE")))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void validateErrors_missingSessionShouldReturn404() throws Exception {
+        when(excelImportValidationService.validateAndPersistErrors(eq(404L), any(), eq(ExcelImportMode.PRODUCT_ONLY.name()), eq(null)))
+                .thenThrow(new NotFoundException("Lan import khong ton tai."));
+
+        mockMvc.perform(multipart("/api/excel-imports/404/validate-errors")
+                        .file(ExcelImportUploadControllerTestSupport.xlsxFile())
+                        .param("loaiImport", ExcelImportMode.PRODUCT_ONLY.name())
+                        .with(user("admin@example.com").roles("ADMIN")))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("Lan import khong ton tai."));
     }
 
     @Test

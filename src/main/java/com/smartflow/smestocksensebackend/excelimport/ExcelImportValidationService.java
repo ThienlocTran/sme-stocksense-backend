@@ -2,8 +2,14 @@ package com.smartflow.smestocksensebackend.excelimport;
 
 import com.smartflow.smestocksensebackend.dto.excelimport.ExcelImportValidationErrorResponse;
 import com.smartflow.smestocksensebackend.dto.excelimport.ExcelImportValidationResponse;
+import com.smartflow.smestocksensebackend.entity.ExcelImport;
+import com.smartflow.smestocksensebackend.entity.ExcelImportError;
+import com.smartflow.smestocksensebackend.entity.ExcelImportStatus;
 import com.smartflow.smestocksensebackend.exception.BadRequestException;
+import com.smartflow.smestocksensebackend.exception.NotFoundException;
 import com.smartflow.smestocksensebackend.repository.CategoryRepository;
+import com.smartflow.smestocksensebackend.repository.ExcelImportErrorRepository;
+import com.smartflow.smestocksensebackend.repository.ExcelImportRepository;
 import com.smartflow.smestocksensebackend.repository.ProductRepository;
 import com.smartflow.smestocksensebackend.repository.WarehouseRepository;
 import lombok.RequiredArgsConstructor;
@@ -14,6 +20,7 @@ import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStream;
@@ -36,6 +43,8 @@ public class ExcelImportValidationService {
     private final CategoryRepository categoryRepository;
     private final ProductRepository productRepository;
     private final WarehouseRepository warehouseRepository;
+    private final ExcelImportRepository excelImportRepository;
+    private final ExcelImportErrorRepository excelImportErrorRepository;
 
     public ExcelImportValidationResponse validate(MultipartFile file, String loaiImport, Long khoId) {
         validateRequest(file, loaiImport);
@@ -52,6 +61,45 @@ public class ExcelImportValidationService {
         } catch (Exception exception) {
             throw new BadRequestException("File Excel không hợp lệ.");
         }
+    }
+
+    @Transactional
+    public ExcelImportValidationResponse validateAndPersistErrors(Long importId, MultipartFile file, String loaiImport, Long khoId) {
+        ExcelImport excelImport = excelImportRepository.findById(importId)
+                .orElseThrow(() -> new NotFoundException("Lan import khong ton tai."));
+        ExcelImportValidationResponse response = validate(file, loaiImport, khoId);
+
+        excelImportErrorRepository.deleteByExcelImportId(importId);
+        excelImport.setTotalRows(response.tongSoDong());
+        excelImport.setValidRows(response.soDongHopLe());
+        excelImport.setErrorRows(response.soDongLoi());
+        excelImport.setStatus(response.valid() ? ExcelImportStatus.SAN_SANG_IMPORT : ExcelImportStatus.CO_LOI);
+        excelImportRepository.save(excelImport);
+        persistValidationErrors(excelImport, response.errors());
+
+        return response;
+    }
+
+    private void persistValidationErrors(ExcelImport excelImport, List<ExcelImportValidationErrorResponse> errors) {
+        if (errors == null || errors.isEmpty()) {
+            return;
+        }
+
+        List<ExcelImportError> importErrors = errors.stream()
+                .map(error -> toImportError(excelImport, error))
+                .toList();
+        excelImportErrorRepository.saveAll(importErrors);
+    }
+
+    private ExcelImportError toImportError(ExcelImport excelImport, ExcelImportValidationErrorResponse error) {
+        ExcelImportError importError = new ExcelImportError();
+        importError.setExcelImport(excelImport);
+        importError.setRowNumber(error.rowNumber());
+        importError.setColumnName(error.columnName());
+        importError.setOriginalValue(error.rawValue());
+        importError.setMessage(error.message());
+        importError.setSuggestion(error.suggestion());
+        return importError;
     }
 
     private void validateRequest(MultipartFile file, String loaiImport) {

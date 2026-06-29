@@ -10,4 +10,6 @@ import java.util.List;
 public interface ExcelImportErrorRepository extends JpaRepository<ExcelImportError, Long> {
 
     List<ExcelImportError> findByExcelImportIdOrderByRowNumberAscIdAsc(Long excelImportId);
+
+    void deleteByExcelImportId(Long excelImportId);
 }

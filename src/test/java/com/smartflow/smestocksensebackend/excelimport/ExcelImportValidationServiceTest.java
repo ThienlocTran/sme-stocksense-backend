@@ -2,9 +2,15 @@ package com.smartflow.smestocksensebackend.excelimport;
 
 import com.smartflow.smestocksensebackend.dto.excelimport.ExcelImportValidationErrorResponse;
 import com.smartflow.smestocksensebackend.dto.excelimport.ExcelImportValidationResponse;
+import com.smartflow.smestocksensebackend.entity.ExcelImport;
+import com.smartflow.smestocksensebackend.entity.ExcelImportError;
+import com.smartflow.smestocksensebackend.entity.ExcelImportStatus;
 import com.smartflow.smestocksensebackend.entity.Product;
 import com.smartflow.smestocksensebackend.exception.BadRequestException;
+import com.smartflow.smestocksensebackend.exception.NotFoundException;
 import com.smartflow.smestocksensebackend.repository.CategoryRepository;
+import com.smartflow.smestocksensebackend.repository.ExcelImportErrorRepository;
+import com.smartflow.smestocksensebackend.repository.ExcelImportRepository;
 import com.smartflow.smestocksensebackend.repository.ProductRepository;
 import com.smartflow.smestocksensebackend.repository.WarehouseRepository;
 import org.apache.poi.ss.usermodel.Row;
@@ -20,10 +26,12 @@ import org.springframework.mock.web.MockMultipartFile;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -41,6 +49,12 @@ class ExcelImportValidationServiceTest {
 
     @Mock
     private WarehouseRepository warehouseRepository;
+
+    @Mock
+    private ExcelImportRepository excelImportRepository;
+
+    @Mock
+    private ExcelImportErrorRepository excelImportErrorRepository;
 
     @InjectMocks
     private ExcelImportValidationService validationService;
@@ -339,6 +353,124 @@ class ExcelImportValidationServiceTest {
 
         assertThat(response.valid()).isFalse();
         assertThat(response.errors()).anyMatch(error -> "Kho hàng không tồn tại.".equals(error.message()));
+    }
+
+    @Test
+    void validateAndPersistErrors_invalidWorkbookSavesCountersAndErrors() throws Exception {
+        ExcelImport excelImport = new ExcelImport();
+        excelImport.setId(99L);
+        when(excelImportRepository.findById(99L)).thenReturn(Optional.of(excelImport));
+
+        ExcelImportValidationResponse response = validationService.validateAndPersistErrors(
+                99L,
+                xlsxFile(workbook(
+                        ExcelImportTemplateConstants.PRODUCT_HEADERS,
+                        List.of(List.of("", "San pham loi", "", "", "Cai", "CAT99", "10", "1", "5", "HOAT_DONG")),
+                        null,
+                        null
+                )),
+                ExcelImportMode.PRODUCT_ONLY.name(),
+                null
+        );
+
+        assertThat(response.valid()).isFalse();
+        assertThat(excelImport.getStatus()).isEqualTo(ExcelImportStatus.CO_LOI);
+        assertThat(excelImport.getTotalRows()).isEqualTo(1);
+        assertThat(excelImport.getValidRows()).isZero();
+        assertThat(excelImport.getErrorRows()).isEqualTo(1);
+
+        verify(excelImportErrorRepository).deleteByExcelImportId(99L);
+        verify(excelImportRepository).save(excelImport);
+        verify(excelImportErrorRepository).saveAll(any());
+        verify(productRepository, never()).save(any(Product.class));
+        verify(productRepository, never()).saveAndFlush(any(Product.class));
+    }
+
+    @Test
+    void validateAndPersistErrors_validWorkbookClearsOldErrorsAndMarksReady() throws Exception {
+        ExcelImport excelImport = new ExcelImport();
+        excelImport.setId(100L);
+        when(excelImportRepository.findById(100L)).thenReturn(Optional.of(excelImport));
+        when(categoryRepository.existsByNormalizedCode("CAT01")).thenReturn(true);
+
+        validationService.validateAndPersistErrors(
+                100L,
+                xlsxFile(workbook(
+                        ExcelImportTemplateConstants.PRODUCT_HEADERS,
+                        List.of(List.of("P01", "San pham 1", "", "", "Cai", "CAT01", "10", "1", "5", "HOAT_DONG")),
+                        null,
+                        null
+                )),
+                ExcelImportMode.PRODUCT_ONLY.name(),
+                null
+        );
+
+        assertThat(excelImport.getStatus()).isEqualTo(ExcelImportStatus.SAN_SANG_IMPORT);
+        assertThat(excelImport.getTotalRows()).isEqualTo(1);
+        assertThat(excelImport.getValidRows()).isEqualTo(1);
+        assertThat(excelImport.getErrorRows()).isZero();
+        verify(excelImportErrorRepository).deleteByExcelImportId(100L);
+        verify(excelImportErrorRepository, never()).saveAll(any());
+        verify(productRepository, never()).save(any(Product.class));
+        verify(productRepository, never()).saveAndFlush(any(Product.class));
+    }
+
+    @Test
+    void validateAndPersistErrors_revalidationReplacesOldErrorsAndPersistsFields() throws Exception {
+        ExcelImport excelImport = new ExcelImport();
+        excelImport.setId(101L);
+        when(excelImportRepository.findById(101L)).thenReturn(Optional.of(excelImport));
+
+        validationService.validateAndPersistErrors(
+                101L,
+                xlsxFile(workbook(
+                        ExcelImportTemplateConstants.PRODUCT_HEADERS,
+                        List.of(List.of("", "San pham loi", "", "", "Cai", "CAT99", "10", "1", "5", "HOAT_DONG")),
+                        null,
+                        null
+                )),
+                ExcelImportMode.PRODUCT_ONLY.name(),
+                null
+        );
+
+        org.mockito.ArgumentCaptor<Iterable<ExcelImportError>> errorsCaptor =
+                org.mockito.ArgumentCaptor.forClass(Iterable.class);
+        verify(excelImportErrorRepository).deleteByExcelImportId(101L);
+        verify(excelImportErrorRepository).saveAll(errorsCaptor.capture());
+
+        List<ExcelImportError> savedErrors = ((List<ExcelImportError>) errorsCaptor.getValue());
+        assertThat(savedErrors).hasSize(2);
+        assertThat(savedErrors).extracting(ExcelImportError::getExcelImport)
+                .allSatisfy(savedImport -> assertThat(savedImport).isSameAs(excelImport));
+        assertThat(savedErrors).extracting(ExcelImportError::getRowNumber)
+                .containsExactly(2, 2);
+        assertThat(savedErrors).extracting(ExcelImportError::getColumnName)
+                .containsExactly("ma_san_pham", "ma_danh_muc");
+        assertThat(savedErrors).extracting(ExcelImportError::getOriginalValue)
+                .containsExactly("", "CAT99");
+        assertThat(savedErrors).extracting(ExcelImportError::getMessage)
+                .allSatisfy(message -> assertThat(message).isNotNull().isNotBlank());
+        assertThat(excelImport.getTotalRows()).isEqualTo(1);
+        assertThat(excelImport.getValidRows()).isZero();
+        assertThat(excelImport.getErrorRows()).isEqualTo(1);
+    }
+
+    @Test
+    void validateAndPersistErrors_missingImportShouldReturnNotFound() {
+        when(excelImportRepository.findById(404L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> validationService.validateAndPersistErrors(
+                404L,
+                new MockMultipartFile("file", "sample.xlsx", XLSX, new byte[]{1}),
+                ExcelImportMode.PRODUCT_ONLY.name(),
+                null
+        ))
+                .isInstanceOf(NotFoundException.class)
+                .hasMessage("Lan import khong ton tai.");
+
+        verify(excelImportErrorRepository, never()).deleteByExcelImportId(anyLong());
+        verify(excelImportRepository, never()).save(any(ExcelImport.class));
+        verify(excelImportErrorRepository, never()).saveAll(any());
     }
 
     private MockMultipartFile xlsxFile(XSSFWorkbook workbook) throws IOException {

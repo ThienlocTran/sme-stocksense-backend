@@ -26,7 +26,8 @@ import java.util.Optional;
 
 /**
  * Lớp triển khai các phương thức nghiệp vụ của InventoryService.
- * Note: Core service thao tác DB tăng tồn kho. Bắt buộc dùng kèm @Transactional ở lớp gọi ngoài cùng.
+ * Note: Core service thao tác DB tăng tồn kho. Bắt buộc dùng kèm @Transactional
+ * ở lớp gọi ngoài cùng.
  */
 @Service
 @RequiredArgsConstructor
@@ -38,7 +39,8 @@ public class InventoryServiceImpl implements InventoryService {
     private final InventoryTransactionService inventoryTransactionService;
 
     /**
-     * Tăng số lượng tồn kho cho một sản phẩm tại một kho hàng cụ thể (Không log transaction).
+     * Tăng số lượng tồn kho cho một sản phẩm tại một kho hàng cụ thể (Không log
+     * transaction).
      */
     @Override
     @Transactional
@@ -47,14 +49,17 @@ public class InventoryServiceImpl implements InventoryService {
     }
 
     /**
-     * Tăng số lượng tồn kho cho một sản phẩm tại một kho hàng cụ thể và ghi nhận lịch sử giao dịch (T103).
+     * Tăng số lượng tồn kho cho một sản phẩm tại một kho hàng cụ thể và ghi nhận
+     * lịch sử giao dịch (T103).
      * Logic nghiệp vụ:
      * 0. Validate đầu vào: productId, warehouseId, quantity phải > 0.
      * 1. Xác thực xem sản phẩm và kho hàng có tồn tại trong hệ thống hay không.
-     * 2. Nếu không tìm thấy -> Ném NotFoundException để kích hoạt rollback transaction.
+     * 2. Nếu không tìm thấy -> Ném NotFoundException để kích hoạt rollback
+     * transaction.
      * 3. Tìm kiếm bản ghi tồn kho hiện tại (InventoryLevel) với Pessimistic Lock.
      * 4. Nếu chưa tồn tại -> Tạo mới bản ghi với số lượng = quantity (Insert).
-     *    - Bắt DataIntegrityViolationException phòng race condition: query lại rồi cộng dồn.
+     * - Bắt DataIntegrityViolationException phòng race condition: query lại rồi
+     * cộng dồn.
      * 5. Nếu đã tồn tại -> Cộng dồn quantity vào số lượng hiện tại (Update).
      * 6. Ghi log giao dịch kho loại NHAP_KHO liên kết phiếu nhập nếu có.
      */
@@ -62,11 +67,13 @@ public class InventoryServiceImpl implements InventoryService {
     @Transactional
     public void increaseInventory(Long productId, Long warehouseId, Integer quantity, ImportReceipt importReceipt) {
         // 0. Validate đầu vào
-        if (productId == null || productId <= 0 || warehouseId == null || warehouseId <= 0 || quantity == null || quantity <= 0) {
+        if (productId == null || productId <= 0 || warehouseId == null || warehouseId <= 0 || quantity == null
+                || quantity <= 0) {
             throw new IllegalArgumentException("productId, warehouseId, quantity phải > 0");
         }
 
-        // 0.1 Kiểm tra trạng thái phiếu nhập: chỉ cho phép cập nhật tồn kho khi phiếu đã HOAN_THANH
+        // 0.1 Kiểm tra trạng thái phiếu nhập: chỉ cho phép cập nhật tồn kho khi phiếu
+        // đã HOAN_THANH
         if (importReceipt != null && !ImportReceiptStatus.HOAN_THANH.equals(importReceipt.getStatus())) {
             throw new IllegalStateException("Chỉ cập nhật tồn kho khi phiếu nhập đã COMPLETED.");
         }
@@ -80,7 +87,8 @@ public class InventoryServiceImpl implements InventoryService {
                 .orElseThrow(() -> new NotFoundException("Kho hàng không tồn tại."));
 
         // 3. Tìm bản ghi tồn kho hiện tại với Pessimistic Write Lock
-        Optional<InventoryLevel> inventoryLevelOpt = inventoryLevelRepository.findByProductIdAndWarehouseIdForUpdate(productId, warehouseId);
+        Optional<InventoryLevel> inventoryLevelOpt = inventoryLevelRepository
+                .findByProductIdAndWarehouseIdForUpdate(productId, warehouseId);
 
         int quantityBefore = 0;
         int quantityAfter = 0;
@@ -96,8 +104,10 @@ public class InventoryServiceImpl implements InventoryService {
             try {
                 inventoryLevelRepository.saveAndFlush(newInventory);
             } catch (DataIntegrityViolationException e) {
-                // Race condition: bản ghi đã được tạo bởi transaction khác -> query lại và cộng dồn
-                InventoryLevel locked = inventoryLevelRepository.findByProductIdAndWarehouseIdForUpdate(productId, warehouseId)
+                // Race condition: bản ghi đã được tạo bởi transaction khác -> query lại và cộng
+                // dồn
+                InventoryLevel locked = inventoryLevelRepository
+                        .findByProductIdAndWarehouseIdForUpdate(productId, warehouseId)
                         .orElseThrow(() -> e);
                 quantityBefore = locked.getQuantity();
                 quantityAfter = safeAddQuantity(quantityBefore, quantity);
@@ -124,8 +134,7 @@ public class InventoryServiceImpl implements InventoryService {
                     quantityBefore,
                     quantityAfter,
                     importReceipt,
-                    "Kế thừa T73, track biến động kho phục vụ đối soát"
-            );
+                    "Kế thừa T73, track biến động kho phục vụ đối soát");
         }
     }
 
@@ -156,16 +165,20 @@ public class InventoryServiceImpl implements InventoryService {
      * - Trạng thái kho (warehouseStatus)
      * - Trạng thái sản phẩm (productStatus)
      * 
-     * @param warehouseId ID kho (null để không lọc)
-     * @param productId ID sản phẩm (null để không lọc)
-     * @param keyword từ khóa tìm kiếm (null để không lọc)
-     * @param stockStatus trạng thái tồn: LOW_STOCK, OUT_OF_STOCK, NORMAL, OVER_STOCK (null để không lọc)
-     * @param warehouseStatus trạng thái kho: HOAT_DONG, NGUNG_HOAT_DONG (null để không lọc)
-     * @param productStatus trạng thái sản phẩm: HOAT_DONG, NGUNG_HOAT_DONG (null để không lọc)
-     * @param pageable thông tin phân trang và sắp xếp
+     * @param warehouseId     ID kho (null để không lọc)
+     * @param productId       ID sản phẩm (null để không lọc)
+     * @param keyword         từ khóa tìm kiếm (null để không lọc)
+     * @param stockStatus     trạng thái tồn: LOW_STOCK, OUT_OF_STOCK, NORMAL,
+     *                        OVER_STOCK (null để không lọc)
+     * @param warehouseStatus trạng thái kho: HOAT_DONG, NGUNG_HOAT_DONG (null để
+     *                        không lọc)
+     * @param productStatus   trạng thái sản phẩm: HOAT_DONG, NGUNG_HOAT_DONG (null
+     *                        để không lọc)
+     * @param pageable        thông tin phân trang và sắp xếp
      * @return danh sách tồn kho phân trang
-     * @throws NotFoundException nếu warehouseId hoặc productId không tồn tại
-     * @throws BadRequestException nếu stockStatus, warehouseStatus hoặc productStatus không hợp lệ
+     * @throws NotFoundException   nếu warehouseId hoặc productId không tồn tại
+     * @throws BadRequestException nếu stockStatus, warehouseStatus hoặc
+     *                             productStatus không hợp lệ
      */
     @Override
     @Transactional(readOnly = true)
@@ -191,6 +204,7 @@ public class InventoryServiceImpl implements InventoryService {
         }
 
         String keywordParam = (keyword == null || keyword.isBlank()) ? null : "%" + keyword.trim() + "%";
+
         Page<InventoryLevelProjection> result = inventoryLevelRepository.findInventory(warehouseId, productId,
                 keywordParam, normalizedStockStatus, normalizedWarehouseStatus, normalizedProductStatus, pageable);
 
@@ -206,7 +220,8 @@ public class InventoryServiceImpl implements InventoryService {
      * - HIGH, OVER_STOCK, OVERSTOCK → OVER_STOCK
      * - NORMAL → NORMAL
      * 
-     * @param stockStatus giá trị input (không phân biệt chữ hoa/thường, hỗ trợ '-' và '_')
+     * @param stockStatus giá trị input (không phân biệt chữ hoa/thường, hỗ trợ '-'
+     *                    và '_')
      * @return giá trị chuẩn hóa hoặc null nếu input null/blank
      * @throws IllegalArgumentException nếu giá trị không hợp lệ
      */
@@ -249,7 +264,8 @@ public class InventoryServiceImpl implements InventoryService {
     }
 
     /**
-     * Ánh xạ từ InventoryLevelProjection (native query result) sang InventoryLevelResponse DTO.
+     * Ánh xạ từ InventoryLevelProjection (native query result) sang
+     * InventoryLevelResponse DTO.
      * 
      * @param projection kết quả từ native query
      * @return DTO response để trả về client

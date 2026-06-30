@@ -86,7 +86,8 @@ class ImportReceiptCompleteServiceTest {
                 amountCalculator,
                 discrepancyReportRepository,
                 discrepancyReportDetailRepository,
-                inventoryService
+                inventoryService,
+                null
         );
 
         employee = employee(5L, RoleCode.EMPLOYEE);

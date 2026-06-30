@@ -158,7 +158,7 @@ public class SecurityConfig {
                                                 .hasAnyRole("ADMIN", "EMPLOYEE")
                                                 .requestMatchers(HttpMethod.POST, "/api/import-receipts")
                                                 .hasAnyRole("ADMIN", "EMPLOYEE")
-                                                .anyRequest().permitAll())
+                                                .anyRequest().authenticated())
                                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                                 .build();
         }

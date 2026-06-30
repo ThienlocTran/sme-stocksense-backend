@@ -10,6 +10,7 @@ import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptDraftResponse
 import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptItemResponse;
 import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptPageResponse;
 import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptResponse;
+import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptHistoryResponse;
 import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptSummaryResponse;
 import com.smartflow.smestocksensebackend.dto.inbound.SaveImportReceiptDraftItemRequest;
 import com.smartflow.smestocksensebackend.dto.inbound.SaveImportReceiptDraftRequest;
@@ -22,7 +23,9 @@ import com.smartflow.smestocksensebackend.dto.inbound.RejectImportReceiptRequest
 import com.smartflow.smestocksensebackend.entity.Employee;
 import com.smartflow.smestocksensebackend.entity.EmployeeStatus;
 import com.smartflow.smestocksensebackend.entity.ImportReceipt;
+import com.smartflow.smestocksensebackend.entity.ImportReceiptAction;
 import com.smartflow.smestocksensebackend.entity.ImportReceiptDetail;
+import com.smartflow.smestocksensebackend.entity.ImportReceiptHistory;
 import com.smartflow.smestocksensebackend.entity.ImportReceiptStatus;
 import com.smartflow.smestocksensebackend.entity.Partner;
 import com.smartflow.smestocksensebackend.entity.PartnerStatus;
@@ -37,6 +40,7 @@ import com.smartflow.smestocksensebackend.exception.ConflictException;
 import com.smartflow.smestocksensebackend.exception.MissingRoleException;
 import com.smartflow.smestocksensebackend.exception.NotFoundException;
 import com.smartflow.smestocksensebackend.repository.ImportReceiptDetailRepository;
+import com.smartflow.smestocksensebackend.repository.ImportReceiptHistoryRepository;
 import com.smartflow.smestocksensebackend.repository.ImportReceiptRepository;
 import com.smartflow.smestocksensebackend.repository.PartnerRepository;
 import com.smartflow.smestocksensebackend.repository.WarehouseRepository;
@@ -65,6 +69,7 @@ import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 import java.util.Set;
 
 /**
@@ -109,6 +114,7 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
     private final DiscrepancyReportRepository discrepancyReportRepository;
     private final DiscrepancyReportDetailRepository discrepancyReportDetailRepository;
     private final InventoryService inventoryService;
+    private final ImportReceiptHistoryRepository importReceiptHistoryRepository;
 
     @Override
     @Transactional
@@ -253,6 +259,7 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
             receipt.setCancelledBy(actor);
             receipt.setCancelledAt(LocalDateTime.now());
             ImportReceipt savedReceipt = importReceiptRepository.saveAndFlush(receipt);
+            saveHistory(savedReceipt, actor, ImportReceiptAction.HUY, null);
             List<ImportReceiptDetail> details = importReceiptDetailRepository.findByDocumentId(receiptId);
             return ImportReceiptDraftResponse.from(savedReceipt, details);
         } catch (OptimisticLockingFailureException exception) {
@@ -311,6 +318,7 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
             receipt.setSubmittedBy(actor);
             receipt.setSubmittedAt(LocalDateTime.now());
             ImportReceipt savedReceipt = importReceiptRepository.saveAndFlush(receipt);
+            saveHistory(savedReceipt, actor, ImportReceiptAction.GUI_DUYET, null);
             return ImportReceiptDraftResponse.from(savedReceipt, details);
         } catch (OptimisticLockingFailureException exception) {
             throw new ConflictException("Phieu nhap da duoc cap nhat boi request khac.");
@@ -420,6 +428,11 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
 
         ImportReceipt receipt = importReceiptRepository.findById(receiptId)
                 .orElseThrow(() -> new NotFoundException("Phieu nhap khong ton tai."));
+
+        if (!PENDING_APPROVAL_STATUSES.contains(receipt.getStatus())) {
+            throw new ConflictException("Chi duoc xem chi tiet duyet voi phieu nhap o trang thai cho duyet.");
+        }
+
         List<ImportReceiptDetail> details = importReceiptDetailRepository.findByDocumentIdOrderByIdAsc(receiptId);
         return ImportReceiptDraftResponse.from(receipt, details);
     }
@@ -465,6 +478,10 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
         try {
             receipt.setStatus(nextStatus);
             ImportReceipt savedReceipt = importReceiptRepository.saveAndFlush(receipt);
+            ImportReceiptAction action = nextStatus == ImportReceiptStatus.CHO_DUYET_CAP_2 
+                    ? ImportReceiptAction.DUYET_CAP_1 
+                    : ImportReceiptAction.DUYET_CAP_2;
+            saveHistory(savedReceipt, actor, action, null);
             List<ImportReceiptDetail> details = importReceiptDetailRepository.findByDocumentIdOrderByIdAsc(receiptId);
             return ImportReceiptDraftResponse.from(savedReceipt, details);
         } catch (OptimisticLockingFailureException exception) {
@@ -501,11 +518,42 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
             receipt.setStatus(ImportReceiptStatus.TU_CHOI);
             receipt.setRejectionReason(request.reason().trim());
             ImportReceipt savedReceipt = importReceiptRepository.saveAndFlush(receipt);
+            saveHistory(savedReceipt, actor, ImportReceiptAction.TU_CHOI, request.reason().trim());
             List<ImportReceiptDetail> details = importReceiptDetailRepository.findByDocumentIdOrderByIdAsc(receiptId);
             return ImportReceiptDraftResponse.from(savedReceipt, details);
         } catch (OptimisticLockingFailureException exception) {
             throw new ConflictException("Phieu nhap da duoc cap nhat boi request khac.");
         }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ImportReceiptHistoryResponse> getHistory(Long receiptId) {
+        Employee actor = currentEmployee();
+        if (actor.getStatus() != EmployeeStatus.HOAT_DONG) {
+            throw new AccountInactiveException();
+        }
+
+        if (!importReceiptRepository.existsById(receiptId)) {
+            throw new NotFoundException("Phieu nhap khong ton tai.");
+        }
+
+        return importReceiptHistoryRepository.findByDocumentIdOrderByCreatedAtDesc(receiptId)
+                .stream()
+                .map(ImportReceiptHistoryResponse::from)
+                .collect(Collectors.toList());
+    }
+
+    private void saveHistory(ImportReceipt receipt, Employee actor, ImportReceiptAction action, String note) {
+        if (importReceiptHistoryRepository == null) {
+            return;
+        }
+        ImportReceiptHistory history = new ImportReceiptHistory();
+        history.setDocument(receipt);
+        history.setActor(actor);
+        history.setAction(action);
+        history.setNote(note);
+        importReceiptHistoryRepository.save(history);
     }
 
     // =========================================================================

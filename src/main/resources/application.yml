@@ -1,0 +1,6 @@
+spring:
+  application:
+    name: sme-stocksense-backend
+
+server:
+  port: 8080

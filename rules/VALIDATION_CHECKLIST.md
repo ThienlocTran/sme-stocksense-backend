@@ -13,6 +13,8 @@ For docs-only changes that touch `AGENTS.md` or `rules/`, include those paths in
 rg -n "Ãƒ|Ã„|Ã†|Ã¡Âº|Ã¡Â»|ï¿½" AGENTS.md rules docs README.md README_backend.md
 ```
 
+When scanning files that document this exact command, matches on the command example itself are expected. Any other matches must be treated as mojibake and fixed.
+
 ## Java Code Changed
 
 Run targeted tests:

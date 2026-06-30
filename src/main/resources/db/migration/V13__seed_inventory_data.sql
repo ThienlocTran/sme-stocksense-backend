@@ -207,261 +207,227 @@ SET "ten_san_pham" = EXCLUDED."ten_san_pham",
 -- ============================================================================
 -- PHASE 5: Insert Tồn Kho (ton_kho) - 36 rows (3 kho × 12 sản phẩm)
 -- ============================================================================
+-- Inventory seed must never overwrite existing business stock.
+-- Insert missing demo rows only; stock mutations after this point must happen through business workflows.
 
 -- Kho 1 (Kho Chính) - 12 sản phẩm
 INSERT INTO "ton_kho" ("san_pham_id", "kho_id", "so_luong", "ngay_cap_nhat")
 SELECT sp.id, k.id, 7, now()
 FROM "san_pham" sp JOIN "kho" k ON TRUE
 WHERE sp."ma_san_pham" = 'SP001' AND k."ma_kho" = 'K001'
-ON CONFLICT ("san_pham_id", "kho_id") DO UPDATE
-SET "so_luong" = EXCLUDED."so_luong", "ngay_cap_nhat" = now();
+ON CONFLICT ("san_pham_id", "kho_id") DO NOTHING;
 
 INSERT INTO "ton_kho" ("san_pham_id", "kho_id", "so_luong", "ngay_cap_nhat")
 SELECT sp.id, k.id, 200, now()
 FROM "san_pham" sp JOIN "kho" k ON TRUE
 WHERE sp."ma_san_pham" = 'SP002' AND k."ma_kho" = 'K001'
-ON CONFLICT ("san_pham_id", "kho_id") DO UPDATE
-SET "so_luong" = EXCLUDED."so_luong", "ngay_cap_nhat" = now();
+ON CONFLICT ("san_pham_id", "kho_id") DO NOTHING;
 
 INSERT INTO "ton_kho" ("san_pham_id", "kho_id", "so_luong", "ngay_cap_nhat")
 SELECT sp.id, k.id, 3, now()
 FROM "san_pham" sp JOIN "kho" k ON TRUE
 WHERE sp."ma_san_pham" = 'SP003' AND k."ma_kho" = 'K001'
-ON CONFLICT ("san_pham_id", "kho_id") DO UPDATE
-SET "so_luong" = EXCLUDED."so_luong", "ngay_cap_nhat" = now();
+ON CONFLICT ("san_pham_id", "kho_id") DO NOTHING;
 
 INSERT INTO "ton_kho" ("san_pham_id", "kho_id", "so_luong", "ngay_cap_nhat")
 SELECT sp.id, k.id, 0, now()
 FROM "san_pham" sp JOIN "kho" k ON TRUE
 WHERE sp."ma_san_pham" = 'SP004' AND k."ma_kho" = 'K001'
-ON CONFLICT ("san_pham_id", "kho_id") DO UPDATE
-SET "so_luong" = EXCLUDED."so_luong", "ngay_cap_nhat" = now();
+ON CONFLICT ("san_pham_id", "kho_id") DO NOTHING;
 
 INSERT INTO "ton_kho" ("san_pham_id", "kho_id", "so_luong", "ngay_cap_nhat")
 SELECT sp.id, k.id, 8, now()
 FROM "san_pham" sp JOIN "kho" k ON TRUE
 WHERE sp."ma_san_pham" = 'SP005' AND k."ma_kho" = 'K001'
-ON CONFLICT ("san_pham_id", "kho_id") DO UPDATE
-SET "so_luong" = EXCLUDED."so_luong", "ngay_cap_nhat" = now();
+ON CONFLICT ("san_pham_id", "kho_id") DO NOTHING;
 
 INSERT INTO "ton_kho" ("san_pham_id", "kho_id", "so_luong", "ngay_cap_nhat")
 SELECT sp.id, k.id, 8, now()
 FROM "san_pham" sp JOIN "kho" k ON TRUE
 WHERE sp."ma_san_pham" = 'SP006' AND k."ma_kho" = 'K001'
-ON CONFLICT ("san_pham_id", "kho_id") DO UPDATE
-SET "so_luong" = EXCLUDED."so_luong", "ngay_cap_nhat" = now();
+ON CONFLICT ("san_pham_id", "kho_id") DO NOTHING;
 
 INSERT INTO "ton_kho" ("san_pham_id", "kho_id", "so_luong", "ngay_cap_nhat")
 SELECT sp.id, k.id, 250, now()
 FROM "san_pham" sp JOIN "kho" k ON TRUE
 WHERE sp."ma_san_pham" = 'SP007' AND k."ma_kho" = 'K001'
-ON CONFLICT ("san_pham_id", "kho_id") DO UPDATE
-SET "so_luong" = EXCLUDED."so_luong", "ngay_cap_nhat" = now();
+ON CONFLICT ("san_pham_id", "kho_id") DO NOTHING;
 
 INSERT INTO "ton_kho" ("san_pham_id", "kho_id", "so_luong", "ngay_cap_nhat")
 SELECT sp.id, k.id, 1, now()
 FROM "san_pham" sp JOIN "kho" k ON TRUE
 WHERE sp."ma_san_pham" = 'SP008' AND k."ma_kho" = 'K001'
-ON CONFLICT ("san_pham_id", "kho_id") DO UPDATE
-SET "so_luong" = EXCLUDED."so_luong", "ngay_cap_nhat" = now();
+ON CONFLICT ("san_pham_id", "kho_id") DO NOTHING;
 
 INSERT INTO "ton_kho" ("san_pham_id", "kho_id", "so_luong", "ngay_cap_nhat")
 SELECT sp.id, k.id, 45, now()
 FROM "san_pham" sp JOIN "kho" k ON TRUE
 WHERE sp."ma_san_pham" = 'SP009' AND k."ma_kho" = 'K001'
-ON CONFLICT ("san_pham_id", "kho_id") DO UPDATE
-SET "so_luong" = EXCLUDED."so_luong", "ngay_cap_nhat" = now();
+ON CONFLICT ("san_pham_id", "kho_id") DO NOTHING;
 
 INSERT INTO "ton_kho" ("san_pham_id", "kho_id", "so_luong", "ngay_cap_nhat")
 SELECT sp.id, k.id, 140, now()
 FROM "san_pham" sp JOIN "kho" k ON TRUE
 WHERE sp."ma_san_pham" = 'SP010' AND k."ma_kho" = 'K001'
-ON CONFLICT ("san_pham_id", "kho_id") DO UPDATE
-SET "so_luong" = EXCLUDED."so_luong", "ngay_cap_nhat" = now();
+ON CONFLICT ("san_pham_id", "kho_id") DO NOTHING;
 
 INSERT INTO "ton_kho" ("san_pham_id", "kho_id", "so_luong", "ngay_cap_nhat")
 SELECT sp.id, k.id, 1, now()
 FROM "san_pham" sp JOIN "kho" k ON TRUE
 WHERE sp."ma_san_pham" = 'SP011' AND k."ma_kho" = 'K001'
-ON CONFLICT ("san_pham_id", "kho_id") DO UPDATE
-SET "so_luong" = EXCLUDED."so_luong", "ngay_cap_nhat" = now();
+ON CONFLICT ("san_pham_id", "kho_id") DO NOTHING;
 
 INSERT INTO "ton_kho" ("san_pham_id", "kho_id", "so_luong", "ngay_cap_nhat")
 SELECT sp.id, k.id, 0, now()
 FROM "san_pham" sp JOIN "kho" k ON TRUE
 WHERE sp."ma_san_pham" = 'SP012' AND k."ma_kho" = 'K001'
-ON CONFLICT ("san_pham_id", "kho_id") DO UPDATE
-SET "so_luong" = EXCLUDED."so_luong", "ngay_cap_nhat" = now();
+ON CONFLICT ("san_pham_id", "kho_id") DO NOTHING;
 
 -- Kho 2 (Kho Chi Nhánh) - 12 sản phẩm
 INSERT INTO "ton_kho" ("san_pham_id", "kho_id", "so_luong", "ngay_cap_nhat")
 SELECT sp.id, k.id, 4, now()
 FROM "san_pham" sp JOIN "kho" k ON TRUE
 WHERE sp."ma_san_pham" = 'SP001' AND k."ma_kho" = 'K002'
-ON CONFLICT ("san_pham_id", "kho_id") DO UPDATE
-SET "so_luong" = EXCLUDED."so_luong", "ngay_cap_nhat" = now();
+ON CONFLICT ("san_pham_id", "kho_id") DO NOTHING;
 
 INSERT INTO "ton_kho" ("san_pham_id", "kho_id", "so_luong", "ngay_cap_nhat")
 SELECT sp.id, k.id, 200, now()
 FROM "san_pham" sp JOIN "kho" k ON TRUE
 WHERE sp."ma_san_pham" = 'SP002' AND k."ma_kho" = 'K002'
-ON CONFLICT ("san_pham_id", "kho_id") DO UPDATE
-SET "so_luong" = EXCLUDED."so_luong", "ngay_cap_nhat" = now();
+ON CONFLICT ("san_pham_id", "kho_id") DO NOTHING;
 
 INSERT INTO "ton_kho" ("san_pham_id", "kho_id", "so_luong", "ngay_cap_nhat")
 SELECT sp.id, k.id, 2, now()
 FROM "san_pham" sp JOIN "kho" k ON TRUE
 WHERE sp."ma_san_pham" = 'SP003' AND k."ma_kho" = 'K002'
-ON CONFLICT ("san_pham_id", "kho_id") DO UPDATE
-SET "so_luong" = EXCLUDED."so_luong", "ngay_cap_nhat" = now();
+ON CONFLICT ("san_pham_id", "kho_id") DO NOTHING;
 
 INSERT INTO "ton_kho" ("san_pham_id", "kho_id", "so_luong", "ngay_cap_nhat")
 SELECT sp.id, k.id, 15, now()
 FROM "san_pham" sp JOIN "kho" k ON TRUE
 WHERE sp."ma_san_pham" = 'SP004' AND k."ma_kho" = 'K002'
-ON CONFLICT ("san_pham_id", "kho_id") DO UPDATE
-SET "so_luong" = EXCLUDED."so_luong", "ngay_cap_nhat" = now();
+ON CONFLICT ("san_pham_id", "kho_id") DO NOTHING;
 
 INSERT INTO "ton_kho" ("san_pham_id", "kho_id", "so_luong", "ngay_cap_nhat")
 SELECT sp.id, k.id, 5, now()
 FROM "san_pham" sp JOIN "kho" k ON TRUE
 WHERE sp."ma_san_pham" = 'SP005' AND k."ma_kho" = 'K002'
-ON CONFLICT ("san_pham_id", "kho_id") DO UPDATE
-SET "so_luong" = EXCLUDED."so_luong", "ngay_cap_nhat" = now();
+ON CONFLICT ("san_pham_id", "kho_id") DO NOTHING;
 
 INSERT INTO "ton_kho" ("san_pham_id", "kho_id", "so_luong", "ngay_cap_nhat")
 SELECT sp.id, k.id, 6, now()
 FROM "san_pham" sp JOIN "kho" k ON TRUE
 WHERE sp."ma_san_pham" = 'SP006' AND k."ma_kho" = 'K002'
-ON CONFLICT ("san_pham_id", "kho_id") DO UPDATE
-SET "so_luong" = EXCLUDED."so_luong", "ngay_cap_nhat" = now();
+ON CONFLICT ("san_pham_id", "kho_id") DO NOTHING;
 
 INSERT INTO "ton_kho" ("san_pham_id", "kho_id", "so_luong", "ngay_cap_nhat")
 SELECT sp.id, k.id, 200, now()
 FROM "san_pham" sp JOIN "kho" k ON TRUE
 WHERE sp."ma_san_pham" = 'SP007' AND k."ma_kho" = 'K002'
-ON CONFLICT ("san_pham_id", "kho_id") DO UPDATE
-SET "so_luong" = EXCLUDED."so_luong", "ngay_cap_nhat" = now();
+ON CONFLICT ("san_pham_id", "kho_id") DO NOTHING;
 
 INSERT INTO "ton_kho" ("san_pham_id", "kho_id", "so_luong", "ngay_cap_nhat")
 SELECT sp.id, k.id, 0, now()
 FROM "san_pham" sp JOIN "kho" k ON TRUE
 WHERE sp."ma_san_pham" = 'SP008' AND k."ma_kho" = 'K002'
-ON CONFLICT ("san_pham_id", "kho_id") DO UPDATE
-SET "so_luong" = EXCLUDED."so_luong", "ngay_cap_nhat" = now();
+ON CONFLICT ("san_pham_id", "kho_id") DO NOTHING;
 
 INSERT INTO "ton_kho" ("san_pham_id", "kho_id", "so_luong", "ngay_cap_nhat")
 SELECT sp.id, k.id, 25, now()
 FROM "san_pham" sp JOIN "kho" k ON TRUE
 WHERE sp."ma_san_pham" = 'SP009' AND k."ma_kho" = 'K002'
-ON CONFLICT ("san_pham_id", "kho_id") DO UPDATE
-SET "so_luong" = EXCLUDED."so_luong", "ngay_cap_nhat" = now();
+ON CONFLICT ("san_pham_id", "kho_id") DO NOTHING;
 
 INSERT INTO "ton_kho" ("san_pham_id", "kho_id", "so_luong", "ngay_cap_nhat")
 SELECT sp.id, k.id, 100, now()
 FROM "san_pham" sp JOIN "kho" k ON TRUE
 WHERE sp."ma_san_pham" = 'SP010' AND k."ma_kho" = 'K002'
-ON CONFLICT ("san_pham_id", "kho_id") DO UPDATE
-SET "so_luong" = EXCLUDED."so_luong", "ngay_cap_nhat" = now();
+ON CONFLICT ("san_pham_id", "kho_id") DO NOTHING;
 
 INSERT INTO "ton_kho" ("san_pham_id", "kho_id", "so_luong", "ngay_cap_nhat")
 SELECT sp.id, k.id, 0, now()
 FROM "san_pham" sp JOIN "kho" k ON TRUE
 WHERE sp."ma_san_pham" = 'SP011' AND k."ma_kho" = 'K002'
-ON CONFLICT ("san_pham_id", "kho_id") DO UPDATE
-SET "so_luong" = EXCLUDED."so_luong", "ngay_cap_nhat" = now();
+ON CONFLICT ("san_pham_id", "kho_id") DO NOTHING;
 
 INSERT INTO "ton_kho" ("san_pham_id", "kho_id", "so_luong", "ngay_cap_nhat")
 SELECT sp.id, k.id, 2, now()
 FROM "san_pham" sp JOIN "kho" k ON TRUE
 WHERE sp."ma_san_pham" = 'SP012' AND k."ma_kho" = 'K002'
-ON CONFLICT ("san_pham_id", "kho_id") DO UPDATE
-SET "so_luong" = EXCLUDED."so_luong", "ngay_cap_nhat" = now();
+ON CONFLICT ("san_pham_id", "kho_id") DO NOTHING;
 
 -- Kho 3 (Kho Tạm) - 12 sản phẩm
 INSERT INTO "ton_kho" ("san_pham_id", "kho_id", "so_luong", "ngay_cap_nhat")
 SELECT sp.id, k.id, 0, now()
 FROM "san_pham" sp JOIN "kho" k ON TRUE
 WHERE sp."ma_san_pham" = 'SP001' AND k."ma_kho" = 'K003'
-ON CONFLICT ("san_pham_id", "kho_id") DO UPDATE
-SET "so_luong" = EXCLUDED."so_luong", "ngay_cap_nhat" = now();
+ON CONFLICT ("san_pham_id", "kho_id") DO NOTHING;
 
 INSERT INTO "ton_kho" ("san_pham_id", "kho_id", "so_luong", "ngay_cap_nhat")
 SELECT sp.id, k.id, 200, now()
 FROM "san_pham" sp JOIN "kho" k ON TRUE
 WHERE sp."ma_san_pham" = 'SP002' AND k."ma_kho" = 'K003'
-ON CONFLICT ("san_pham_id", "kho_id") DO UPDATE
-SET "so_luong" = EXCLUDED."so_luong", "ngay_cap_nhat" = now();
+ON CONFLICT ("san_pham_id", "kho_id") DO NOTHING;
 
 INSERT INTO "ton_kho" ("san_pham_id", "kho_id", "so_luong", "ngay_cap_nhat")
 SELECT sp.id, k.id, 0, now()
 FROM "san_pham" sp JOIN "kho" k ON TRUE
 WHERE sp."ma_san_pham" = 'SP003' AND k."ma_kho" = 'K003'
-ON CONFLICT ("san_pham_id", "kho_id") DO UPDATE
-SET "so_luong" = EXCLUDED."so_luong", "ngay_cap_nhat" = now();
+ON CONFLICT ("san_pham_id", "kho_id") DO NOTHING;
 
 INSERT INTO "ton_kho" ("san_pham_id", "kho_id", "so_luong", "ngay_cap_nhat")
 SELECT sp.id, k.id, 35, now()
 FROM "san_pham" sp JOIN "kho" k ON TRUE
 WHERE sp."ma_san_pham" = 'SP004' AND k."ma_kho" = 'K003'
-ON CONFLICT ("san_pham_id", "kho_id") DO UPDATE
-SET "so_luong" = EXCLUDED."so_luong", "ngay_cap_nhat" = now();
+ON CONFLICT ("san_pham_id", "kho_id") DO NOTHING;
 
 INSERT INTO "ton_kho" ("san_pham_id", "kho_id", "so_luong", "ngay_cap_nhat")
 SELECT sp.id, k.id, 20, now()
 FROM "san_pham" sp JOIN "kho" k ON TRUE
 WHERE sp."ma_san_pham" = 'SP005' AND k."ma_kho" = 'K003'
-ON CONFLICT ("san_pham_id", "kho_id") DO UPDATE
-SET "so_luong" = EXCLUDED."so_luong", "ngay_cap_nhat" = now();
+ON CONFLICT ("san_pham_id", "kho_id") DO NOTHING;
 
 INSERT INTO "ton_kho" ("san_pham_id", "kho_id", "so_luong", "ngay_cap_nhat")
 SELECT sp.id, k.id, 0, now()
 FROM "san_pham" sp JOIN "kho" k ON TRUE
 WHERE sp."ma_san_pham" = 'SP006' AND k."ma_kho" = 'K003'
-ON CONFLICT ("san_pham_id", "kho_id") DO UPDATE
-SET "so_luong" = EXCLUDED."so_luong", "ngay_cap_nhat" = now();
+ON CONFLICT ("san_pham_id", "kho_id") DO NOTHING;
 
 INSERT INTO "ton_kho" ("san_pham_id", "kho_id", "so_luong", "ngay_cap_nhat")
 SELECT sp.id, k.id, 350, now()
 FROM "san_pham" sp JOIN "kho" k ON TRUE
 WHERE sp."ma_san_pham" = 'SP007' AND k."ma_kho" = 'K003'
-ON CONFLICT ("san_pham_id", "kho_id") DO UPDATE
-SET "so_luong" = EXCLUDED."so_luong", "ngay_cap_nhat" = now();
+ON CONFLICT ("san_pham_id", "kho_id") DO NOTHING;
 
 INSERT INTO "ton_kho" ("san_pham_id", "kho_id", "so_luong", "ngay_cap_nhat")
 SELECT sp.id, k.id, 10, now()
 FROM "san_pham" sp JOIN "kho" k ON TRUE
 WHERE sp."ma_san_pham" = 'SP008' AND k."ma_kho" = 'K003'
-ON CONFLICT ("san_pham_id", "kho_id") DO UPDATE
-SET "so_luong" = EXCLUDED."so_luong", "ngay_cap_nhat" = now();
+ON CONFLICT ("san_pham_id", "kho_id") DO NOTHING;
 
 INSERT INTO "ton_kho" ("san_pham_id", "kho_id", "so_luong", "ngay_cap_nhat")
 SELECT sp.id, k.id, 60, now()
 FROM "san_pham" sp JOIN "kho" k ON TRUE
 WHERE sp."ma_san_pham" = 'SP009' AND k."ma_kho" = 'K003'
-ON CONFLICT ("san_pham_id", "kho_id") DO UPDATE
-SET "so_luong" = EXCLUDED."so_luong", "ngay_cap_nhat" = now();
+ON CONFLICT ("san_pham_id", "kho_id") DO NOTHING;
 
 INSERT INTO "ton_kho" ("san_pham_id", "kho_id", "so_luong", "ngay_cap_nhat")
 SELECT sp.id, k.id, 120, now()
 FROM "san_pham" sp JOIN "kho" k ON TRUE
 WHERE sp."ma_san_pham" = 'SP010' AND k."ma_kho" = 'K003'
-ON CONFLICT ("san_pham_id", "kho_id") DO UPDATE
-SET "so_luong" = EXCLUDED."so_luong", "ngay_cap_nhat" = now();
+ON CONFLICT ("san_pham_id", "kho_id") DO NOTHING;
 
 INSERT INTO "ton_kho" ("san_pham_id", "kho_id", "so_luong", "ngay_cap_nhat")
 SELECT sp.id, k.id, 5, now()
 FROM "san_pham" sp JOIN "kho" k ON TRUE
 WHERE sp."ma_san_pham" = 'SP011' AND k."ma_kho" = 'K003'
-ON CONFLICT ("san_pham_id", "kho_id") DO UPDATE
-SET "so_luong" = EXCLUDED."so_luong", "ngay_cap_nhat" = now();
+ON CONFLICT ("san_pham_id", "kho_id") DO NOTHING;
 
 INSERT INTO "ton_kho" ("san_pham_id", "kho_id", "so_luong", "ngay_cap_nhat")
 SELECT sp.id, k.id, 0, now()
 FROM "san_pham" sp JOIN "kho" k ON TRUE
 WHERE sp."ma_san_pham" = 'SP012' AND k."ma_kho" = 'K003'
-ON CONFLICT ("san_pham_id", "kho_id") DO UPDATE
-SET "so_luong" = EXCLUDED."so_luong", "ngay_cap_nhat" = now();
+ON CONFLICT ("san_pham_id", "kho_id") DO NOTHING;
 
 -- ============================================================================
 -- PHASE 6: Verify Data (Kiểm tra dữ liệu đã insert)

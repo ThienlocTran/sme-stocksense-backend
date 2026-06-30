@@ -12,8 +12,9 @@ import com.smartflow.smestocksensebackend.dto.inbound.InspectImportReceiptReques
 import com.smartflow.smestocksensebackend.dto.inbound.CreateDiscrepancyReportRequest;
 import com.smartflow.smestocksensebackend.dto.inbound.DiscrepancyReportResponse;
 import com.smartflow.smestocksensebackend.dto.inbound.RejectImportReceiptRequest;
+import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptHistoryResponse;
 import org.springframework.data.domain.Pageable;
-
+import java.util.List;
 public interface ImportReceiptService {
 
     /**
@@ -161,4 +162,11 @@ public interface ImportReceiptService {
      * @return Phiếu nhập sau khi bị từ chối
      */
     ImportReceiptDraftResponse reject(Long receiptId, RejectImportReceiptRequest request);
+
+    /**
+     * Lấy danh sách lịch sử duyệt của phiếu nhập (T93).
+     * @param receiptId ID của phiếu nhập kho
+     * @return Danh sách các bản ghi lịch sử duyệt
+     */
+    List<ImportReceiptHistoryResponse> getHistory(Long receiptId);
 }

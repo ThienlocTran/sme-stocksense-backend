@@ -12,7 +12,9 @@ import com.smartflow.smestocksensebackend.dto.inbound.InspectImportReceiptReques
 import com.smartflow.smestocksensebackend.dto.inbound.CreateDiscrepancyReportRequest;
 import com.smartflow.smestocksensebackend.dto.inbound.DiscrepancyReportResponse;
 import com.smartflow.smestocksensebackend.dto.inbound.RejectImportReceiptRequest;
+import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptHistoryResponse;
 import com.smartflow.smestocksensebackend.service.ImportReceiptService;
+import java.util.List;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
@@ -225,5 +227,10 @@ public class ImportReceiptController {
             @Valid @RequestBody InspectImportReceiptRequest request
     ) {
         return importReceiptService.completeImport(id, request);
+    }
+
+    @GetMapping("/{receiptId}/history")
+    public List<ImportReceiptHistoryResponse> getHistory(@PathVariable Long receiptId) {
+        return importReceiptService.getHistory(receiptId);
     }
 }

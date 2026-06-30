@@ -19,7 +19,7 @@ Use this validation when preparing an integration branch or merge:
 .\mvnw.cmd test
 .\mvnw.cmd -DskipTests clean package
 git diff --check
-rg -n "\x{00C3}\x{0192}|\x{00C3}\x{201E}|\x{00C3}\x{2020}|\x{00C3}\x{00A1}\x{00C2}\x{00BA}|\x{00C3}\x{00A1}\x{00C2}\x{00BB}|\x{FFFD}" src docs
+rg -n "Ãƒ|Ã„|Ã†|Ã¡Âº|Ã¡Â»|ï¿½" src docs
 ```
 
 If the full test suite is too heavy, run targeted backend tests first:

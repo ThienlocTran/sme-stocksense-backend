@@ -14,9 +14,22 @@ logs/
 # Environment / secrets
 .env
 .env.*
-application-neon.yml
-application-prod.yml
-src/main/resources/application.yml
+!.env.example
+
+# Spring local/profile secret configs
+src/main/resources/application-neon.yml
+src/main/resources/application-prod.yml
+src/main/resources/application-production.yml
+src/main/resources/application-local.yml
+src/main/resources/application-*.local.yml
+
+# Keep examples committed
+!src/main/resources/application-neon.yml.example
+!src/main/resources/application-prod.yml.example
+!src/main/resources/application-production.yml.example
+!src/main/resources/application-local.yml.example
+
+# Local scripts / one-off repair tools
 repair-flyway.cmd
 
 # OS files

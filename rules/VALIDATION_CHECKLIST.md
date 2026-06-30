@@ -4,13 +4,13 @@
 
 ```powershell
 git diff --check
-rg -n "\x{00C3}\x{0192}|\x{00C3}\x{201E}|\x{00C3}\x{2020}|\x{00C3}\x{00A1}\x{00C2}\x{00BA}|\x{00C3}\x{00A1}\x{00C2}\x{00BB}|\x{FFFD}" src docs
+rg -n "Ãƒ|Ã„|Ã†|Ã¡Âº|Ã¡Â»|ï¿½" src docs
 ```
 
 For docs-only changes that touch `AGENTS.md` or `rules/`, include those paths in the mojibake scan:
 
 ```powershell
-rg -n "\x{00C3}\x{0192}|\x{00C3}\x{201E}|\x{00C3}\x{2020}|\x{00C3}\x{00A1}\x{00C2}\x{00BA}|\x{00C3}\x{00A1}\x{00C2}\x{00BB}|\x{FFFD}" AGENTS.md rules docs
+rg -n "Ãƒ|Ã„|Ã†|Ã¡Âº|Ã¡Â»|ï¿½" AGENTS.md rules docs README.md README_backend.md
 ```
 
 ## Java Code Changed

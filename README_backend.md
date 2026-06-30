@@ -1,5 +1,18 @@
 # SME StockSense Backend
 
+> Some older sections are historical. For current AI/project operating rules, follow `AGENTS.md` and `rules/`.
+
+## Safe Environment Setup
+
+Do not put real DB credentials in committed `application.yml`.
+
+For Neon/local development:
+1. Copy `.env.example` to `.env`.
+2. Copy `src/main/resources/application-neon.yml.example` to `src/main/resources/application-neon.yml`.
+3. Fill real credentials in ignored local files or IDE environment variables.
+4. Run with profile `neon`.
+5. Never commit `.env` or `application-neon.yml`.
+
 Backend Spring Boot cho hệ thống **SME StockSense** - hệ thống quản lý tồn kho tích hợp dự báo nhu cầu cho doanh nghiệp vừa và nhỏ.
 
 > Trạng thái hiện tại: repository này đang ở giai đoạn khởi tạo source base. Dự án đã có cấu trúc Spring Boot cơ bản, dependency chính và cấu hình server tối thiểu, nhưng chưa có API nghiệp vụ, schema database hay tích hợp AI service.

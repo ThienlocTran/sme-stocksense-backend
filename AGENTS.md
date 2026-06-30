@@ -9,7 +9,9 @@ Before any task:
 4. Read relevant module docs/source.
 5. Do not guess.
 
-For Git, Flyway, validation, and integration rules, follow the files in `rules/`.
+For Git, Flyway, validation, integration, and environment/config setup rules, follow the files in `rules/`.
+For environment/config setup, read `rules/ENV_CONFIG_RULES.md`.
+Do not commit secrets or local profile files.
 
 ## Global AI Rules
 
@@ -32,6 +34,7 @@ For Git, Flyway, validation, and integration rules, follow the files in `rules/`
 - `rules/README.md`
 - `rules/AI_PROJECT_RULES.md`
 - `rules/GIT_WORKFLOW_RULES.md`
+- `rules/ENV_CONFIG_RULES.md`
 - `rules/DB_MIGRATION_POLICY.md`
 - `rules/VALIDATION_CHECKLIST.md`
 - `rules/SPRINT_INTEGRATION_CHECKLIST.md` when preparing merges or integration branches

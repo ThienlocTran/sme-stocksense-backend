@@ -1,5 +1,18 @@
 # SME StockSense - Tổng Hợp Hệ Thống Backend
 
+> For current AI/project operating rules, follow `AGENTS.md` and `rules/`.
+
+## Safe Environment Setup
+
+Do not put real DB credentials in committed `application.yml`.
+
+For Neon/local development:
+1. Copy `.env.example` to `.env`.
+2. Copy `src/main/resources/application-neon.yml.example` to `src/main/resources/application-neon.yml`.
+3. Fill real credentials in ignored local files or IDE environment variables.
+4. Run with profile `neon`.
+5. Never commit `.env` or `application-neon.yml`.
+
 Chào mừng bạn đến với tài liệu tổng hợp hệ thống Backend của dự án **SME StockSense** – Hệ thống quản lý tồn kho thông minh và dự báo nhu cầu dành cho doanh nghiệp vừa và nhỏ (SME).
 
 Tài liệu này tổng hợp toàn bộ các module tính năng, kiến trúc mã nguồn, cơ sở dữ liệu và các liên kết hướng dẫn chi tiết của dự án bằng tiếng Việt.

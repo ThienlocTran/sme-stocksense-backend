@@ -1,5 +1,26 @@
 # SME StockSense - Tổng Hợp Hệ Thống Backend
 
+> For current AI/project operating rules, follow `AGENTS.md` and `rules/`.
+
+## Safe Environment Setup
+
+Do not put real DB credentials in committed `application.yml`.
+
+Spring Boot does not automatically load `.env` by itself unless the IDE/plugin/run configuration exports those values as environment variables.
+
+Preferred safe options:
+
+Option A - Local ignored `application-neon.yml`:
+1. Copy `src/main/resources/application-neon.yml.example` to `src/main/resources/application-neon.yml`.
+2. Replace placeholders with real local credentials in `application-neon.yml`.
+3. Never commit `application-neon.yml`.
+
+Option B - Environment variables:
+1. Copy `.env.example` to `.env` for reference.
+2. Configure IntelliJ Run Configuration, EnvFile plugin, terminal environment, or OS environment variables to export `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `JWT_SECRET`, `JWT_EXPIRATION_SECONDS`, and `FLYWAY_ENABLED`.
+3. Keep `application-neon.yml` using placeholders.
+4. Never commit `.env`.
+
 Chào mừng bạn đến với tài liệu tổng hợp hệ thống Backend của dự án **SME StockSense** – Hệ thống quản lý tồn kho thông minh và dự báo nhu cầu dành cho doanh nghiệp vừa và nhỏ (SME).
 
 Tài liệu này tổng hợp toàn bộ các module tính năng, kiến trúc mã nguồn, cơ sở dữ liệu và các liên kết hướng dẫn chi tiết của dự án bằng tiếng Việt.
@@ -89,7 +110,7 @@ sme-stocksense-backend/
 
 ### 1. Chuẩn bị môi trường
 * Đảm bảo đã cài đặt **Java 21** và **Maven**.
-* Tạo database PostgreSQL và cấu hình chuỗi kết nối trong file `.env` hoặc `src/main/resources/application.yml` (hoặc thông qua profile `application-neon.yml`).
+* Tạo database PostgreSQL và cấu hình chuỗi kết nối bằng file local ignored `src/main/resources/application-neon.yml` hoặc environment variables. Không đặt credential thật trong `src/main/resources/application.yml`.
 
 ### 2. Chạy ứng dụng Spring Boot
 Chạy lệnh sau tại thư mục gốc của dự án:

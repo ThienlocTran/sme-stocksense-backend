@@ -217,7 +217,7 @@ ON CONFLICT ("san_pham_id", "kho_id") DO UPDATE
 SET "so_luong" = EXCLUDED."so_luong", "ngay_cap_nhat" = now();
 
 INSERT INTO "ton_kho" ("san_pham_id", "kho_id", "so_luong", "ngay_cap_nhat")
-SELECT sp.id, k.id, 200, now()
+SELECT sp.id, k.id, 180, now()
 FROM "san_pham" sp JOIN "kho" k ON TRUE
 WHERE sp."ma_san_pham" = 'SP002' AND k."ma_kho" = 'K001'
 ON CONFLICT ("san_pham_id", "kho_id") DO UPDATE
@@ -302,7 +302,7 @@ ON CONFLICT ("san_pham_id", "kho_id") DO UPDATE
 SET "so_luong" = EXCLUDED."so_luong", "ngay_cap_nhat" = now();
 
 INSERT INTO "ton_kho" ("san_pham_id", "kho_id", "so_luong", "ngay_cap_nhat")
-SELECT sp.id, k.id, 200, now()
+SELECT sp.id, k.id, 60, now()
 FROM "san_pham" sp JOIN "kho" k ON TRUE
 WHERE sp."ma_san_pham" = 'SP002' AND k."ma_kho" = 'K002'
 ON CONFLICT ("san_pham_id", "kho_id") DO UPDATE
@@ -387,7 +387,7 @@ ON CONFLICT ("san_pham_id", "kho_id") DO UPDATE
 SET "so_luong" = EXCLUDED."so_luong", "ngay_cap_nhat" = now();
 
 INSERT INTO "ton_kho" ("san_pham_id", "kho_id", "so_luong", "ngay_cap_nhat")
-SELECT sp.id, k.id, 200, now()
+SELECT sp.id, k.id, 150, now()
 FROM "san_pham" sp JOIN "kho" k ON TRUE
 WHERE sp."ma_san_pham" = 'SP002' AND k."ma_kho" = 'K003'
 ON CONFLICT ("san_pham_id", "kho_id") DO UPDATE
@@ -468,8 +468,6 @@ SET "so_luong" = EXCLUDED."so_luong", "ngay_cap_nhat" = now();
 -- ============================================================================
 
 -- Verify categories
-/*
--- Verify categories
 SELECT '=== DANH MỤC ===' as info;
 SELECT "ma_danh_muc", "ten_danh_muc", "trang_thai" FROM "danh_muc" ORDER BY "ma_danh_muc";
 
@@ -514,4 +512,3 @@ JOIN "san_pham" sp ON tk."san_pham_id" = sp."id"
 JOIN "kho" k ON tk."kho_id" = k."id"
 GROUP BY k."ma_kho"
 ORDER BY k."ma_kho";
-*/

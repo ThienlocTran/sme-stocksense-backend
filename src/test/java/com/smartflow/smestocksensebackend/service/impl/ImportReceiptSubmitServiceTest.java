@@ -140,8 +140,16 @@ class ImportReceiptSubmitServiceTest {
     }
 
     @Test
-    void submitForApproval_rejectedReceiptShouldThrowConflictBecauseWorkflowRequiresEditBackToDraft() {
-        assertStatusConflict(ImportReceiptStatus.TU_CHOI);
+    void submitForApproval_rejectedReceiptShouldMoveToWaitingLevel1AndClearRejectionReason() {
+        receipt.setStatus(ImportReceiptStatus.TU_CHOI);
+        receipt.setRejectionReason("Sai don gia nhap.");
+        stubSuccessfulSubmit(owner);
+
+        ImportReceiptDraftResponse response = importReceiptService.submitForApproval(123L);
+
+        assertEquals("CHO_DUYET_CAP_1", response.status());
+        assertEquals(ImportReceiptStatus.CHO_DUYET_CAP_1, receipt.getStatus());
+        assertNull(receipt.getRejectionReason());
     }
 
     @Test

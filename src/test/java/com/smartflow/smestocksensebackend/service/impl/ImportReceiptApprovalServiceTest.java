@@ -124,7 +124,7 @@ class ImportReceiptApprovalServiceTest {
     // ---------------------------------------------------------------------
 
     @Test
-    void approve_level1ShouldMoveToLevel2AndRecordApprover() {
+    void approve_level1ShouldMoveToWaitingGoodsAndRecordManagerApprover() {
         ImportReceipt receipt = receiptWithStatus(ImportReceiptStatus.CHO_DUYET_CAP_1);
         when(importReceiptRepository.findById(100L)).thenReturn(Optional.of(receipt));
         when(importReceiptRepository.saveAndFlush(any(ImportReceipt.class)))
@@ -133,17 +133,18 @@ class ImportReceiptApprovalServiceTest {
 
         ImportReceiptDraftResponse response = importReceiptService.approve(100L);
 
-        assertEquals(ImportReceiptStatus.CHO_DUYET_CAP_2.name(), response.status());
-        assertEquals(ImportReceiptStatus.CHO_DUYET_CAP_2, receipt.getStatus());
-        assertEquals(manager, receipt.getLevel1ApprovedBy());
-        assertNotNull(receipt.getLevel1ApprovedAt());
-        assertNull(receipt.getLevel2ApprovedBy());
+        assertEquals(ImportReceiptStatus.CHO_HANG_VE.name(), response.status());
+        assertEquals(ImportReceiptStatus.CHO_HANG_VE, receipt.getStatus());
+        assertNull(receipt.getLevel1ApprovedBy());
+        assertNull(receipt.getLevel1ApprovedAt());
+        assertEquals(manager, receipt.getLevel2ApprovedBy());
+        assertNotNull(receipt.getLevel2ApprovedAt());
         // Bước duyệt KHÔNG được cộng tồn kho.
         verify(inventoryService, never()).increaseInventory(anyLong(), anyLong(), anyInt(), any());
     }
 
     @Test
-    void approve_level2ShouldMoveToWaitingGoodsAndRecordApprover() {
+    void approve_oldLevel2ShouldMoveToWaitingGoodsAndRecordManagerApprover() {
         ImportReceipt receipt = receiptWithStatus(ImportReceiptStatus.CHO_DUYET_CAP_2);
         when(importReceiptRepository.findById(100L)).thenReturn(Optional.of(receipt));
         when(importReceiptRepository.saveAndFlush(any(ImportReceipt.class)))
@@ -170,7 +171,7 @@ class ImportReceiptApprovalServiceTest {
 
         ImportReceiptDraftResponse response = importReceiptService.approve(100L);
 
-        assertEquals(ImportReceiptStatus.CHO_DUYET_CAP_2.name(), response.status());
+        assertEquals(ImportReceiptStatus.CHO_HANG_VE.name(), response.status());
     }
 
     @Test

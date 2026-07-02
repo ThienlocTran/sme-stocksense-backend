@@ -77,8 +77,8 @@ import java.util.Set;
  *
  * <p>Luồng trạng thái chuẩn của một phiếu nhập:</p>
  * <pre>
- *  NHAP → CHO_DUYET_CAP_1 → CHO_DUYET_CAP_2 → CHO_HANG_VE → CHO_KIEM_HANG → [HOAN_THANH]
- *       ↘ TU_CHOI (quay lại NHAP để sửa)
+ *  NHAP/TU_CHOI → CHO_DUYET_CAP_1 → CHO_HANG_VE → CHO_KIEM_HANG → [HOAN_THANH]
+ *                         ↘ TU_CHOI
  *       ↘ HUY
  * </pre>
  *
@@ -292,7 +292,7 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
                 .orElseThrow(() -> new NotFoundException("Phieu nhap khong ton tai."));
         ensureCanSubmitForApproval(actor, receipt);
         if (!ImportReceiptStatePolicy.canTransition(receipt.getStatus(), ImportReceiptStatus.CHO_DUYET_CAP_1)) {
-            throw new ConflictException("Chi duoc gui duyet phieu nhap o trang thai NHAP.");
+            throw new ConflictException("Chi duoc gui duyet phieu nhap o trang thai NHAP hoac TU_CHOI.");
         }
 
         Warehouse receiptWarehouse = receipt.getWarehouse();
@@ -315,6 +315,7 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
         try {
             receipt.setTotalAmount(totalAmount);
             receipt.setStatus(ImportReceiptStatus.CHO_DUYET_CAP_1);
+            receipt.setRejectionReason(null);
             receipt.setSubmittedBy(actor);
             receipt.setSubmittedAt(LocalDateTime.now());
             ImportReceipt savedReceipt = importReceiptRepository.saveAndFlush(receipt);
@@ -382,13 +383,13 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
     }
 
     // =========================================================================
-    // NHÓM 3B: LUỒNG DUYỆT PHIẾU NHẬP THEO CẤP (Approval Flow - T91..T94)
+    // NHÓM 3B: LUỒNG DUYỆT PHIẾU NHẬP (Approval Flow - T91..T94)
     // =========================================================================
 
     /**
      * Lấy danh sách phiếu nhập đang chờ duyệt cho quản lý (T91).
-     * Chỉ MANAGER/ADMIN được xem. Khi không truyền status thì trả về cả hai cấp chờ duyệt
-     * (CHO_DUYET_CAP_1 và CHO_DUYET_CAP_2); khi truyền status thì chỉ chấp nhận đúng hai cấp này.
+     * Chỉ MANAGER/ADMIN được xem. Khi không truyền status thì trả về các phiếu chờ quản lý duyệt
+     * (CHO_DUYET_CAP_1 và CHO_DUYET_CAP_2 cũ); khi truyền status thì chỉ chấp nhận các trạng thái này.
      */
     @Override
     @Transactional(readOnly = true)
@@ -438,8 +439,8 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
     }
 
     /**
-     * Duyệt phiếu nhập theo cấp (T93).
-     * Cấp 1: CHO_DUYET_CAP_1 → CHO_DUYET_CAP_2. Cấp 2: CHO_DUYET_CAP_2 → CHO_HANG_VE.
+     * Quản lý duyệt phiếu nhập (T93).
+     * CHO_DUYET_CAP_1 → CHO_HANG_VE. CHO_DUYET_CAP_2 cũ → CHO_HANG_VE để tương thích dữ liệu.
      * Tuyệt đối không cộng tồn kho ở bước này (chỉ tăng tồn khi hoàn tất - T104).
      */
     @Override
@@ -458,11 +459,7 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
         LocalDateTime now = LocalDateTime.now();
 
         ImportReceiptStatus nextStatus;
-        if (current == ImportReceiptStatus.CHO_DUYET_CAP_1) {
-            nextStatus = ImportReceiptStatus.CHO_DUYET_CAP_2;
-            receipt.setLevel1ApprovedBy(actor);
-            receipt.setLevel1ApprovedAt(now);
-        } else if (current == ImportReceiptStatus.CHO_DUYET_CAP_2) {
+        if (current == ImportReceiptStatus.CHO_DUYET_CAP_1 || current == ImportReceiptStatus.CHO_DUYET_CAP_2) {
             nextStatus = ImportReceiptStatus.CHO_HANG_VE;
             receipt.setLevel2ApprovedBy(actor);
             receipt.setLevel2ApprovedAt(now);
@@ -478,10 +475,7 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
         try {
             receipt.setStatus(nextStatus);
             ImportReceipt savedReceipt = importReceiptRepository.saveAndFlush(receipt);
-            ImportReceiptAction action = nextStatus == ImportReceiptStatus.CHO_DUYET_CAP_2 
-                    ? ImportReceiptAction.DUYET_CAP_1 
-                    : ImportReceiptAction.DUYET_CAP_2;
-            saveHistory(savedReceipt, actor, action, null);
+            saveHistory(savedReceipt, actor, ImportReceiptAction.DUYET_CAP_2, null);
             List<ImportReceiptDetail> details = importReceiptDetailRepository.findByDocumentIdOrderByIdAsc(receiptId);
             return ImportReceiptDraftResponse.from(savedReceipt, details);
         } catch (OptimisticLockingFailureException exception) {

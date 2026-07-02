@@ -25,11 +25,12 @@ public final class ImportReceiptStatePolicy {
                 ImportReceiptStatus.HUY
         ));
         TRANSITIONS.put(ImportReceiptStatus.TU_CHOI, EnumSet.of(
+                ImportReceiptStatus.CHO_DUYET_CAP_1,
                 ImportReceiptStatus.NHAP,
                 ImportReceiptStatus.HUY
         ));
         TRANSITIONS.put(ImportReceiptStatus.CHO_DUYET_CAP_1, EnumSet.of(
-                ImportReceiptStatus.CHO_DUYET_CAP_2,
+                ImportReceiptStatus.CHO_HANG_VE,
                 ImportReceiptStatus.TU_CHOI
         ));
         TRANSITIONS.put(ImportReceiptStatus.CHO_DUYET_CAP_2, EnumSet.of(

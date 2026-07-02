@@ -153,12 +153,12 @@ class ImportReceiptApprovalControllerTest {
 
     @Test
     void approve_managerShouldReturn200() throws Exception {
-        when(importReceiptService.approve(eq(100L))).thenReturn(draftResponse("CHO_DUYET_CAP_2"));
+        when(importReceiptService.approve(eq(100L))).thenReturn(draftResponse("CHO_HANG_VE"));
 
         mockMvc.perform(put("/api/import-receipts/100/approve")
                         .with(user("manager@example.com").roles("MANAGER")))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("CHO_DUYET_CAP_2"));
+                .andExpect(jsonPath("$.status").value("CHO_HANG_VE"));
     }
 
     @Test

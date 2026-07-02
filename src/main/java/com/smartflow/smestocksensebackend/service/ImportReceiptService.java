@@ -77,6 +77,8 @@ public interface ImportReceiptService {
      */
     ImportReceiptPageResponse listMyReceipts(String status, Pageable pageable);
 
+    ImportReceiptPageResponse listReceipts(String status, Pageable pageable);
+
     /**
      * Lấy chi tiết thông tin phiếu nhập kho (T78).
      *

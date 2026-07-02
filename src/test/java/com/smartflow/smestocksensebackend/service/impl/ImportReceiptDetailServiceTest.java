@@ -6,7 +6,9 @@ import com.smartflow.smestocksensebackend.dto.inbound.InspectImportReceiptItemRe
 import com.smartflow.smestocksensebackend.entity.Employee;
 import com.smartflow.smestocksensebackend.entity.EmployeeStatus;
 import com.smartflow.smestocksensebackend.entity.ImportReceipt;
+import com.smartflow.smestocksensebackend.entity.ImportReceiptAction;
 import com.smartflow.smestocksensebackend.entity.ImportReceiptDetail;
+import com.smartflow.smestocksensebackend.entity.ImportReceiptHistory;
 import com.smartflow.smestocksensebackend.entity.ImportReceiptStatus;
 import com.smartflow.smestocksensebackend.entity.Partner;
 import com.smartflow.smestocksensebackend.entity.PartnerStatus;
@@ -20,6 +22,7 @@ import com.smartflow.smestocksensebackend.exception.ConflictException;
 import com.smartflow.smestocksensebackend.exception.MissingRoleException;
 import com.smartflow.smestocksensebackend.exception.NotFoundException;
 import com.smartflow.smestocksensebackend.repository.ImportReceiptDetailRepository;
+import com.smartflow.smestocksensebackend.repository.ImportReceiptHistoryRepository;
 import com.smartflow.smestocksensebackend.repository.ImportReceiptRepository;
 import com.smartflow.smestocksensebackend.repository.DiscrepancyReportRepository;
 import com.smartflow.smestocksensebackend.repository.DiscrepancyReportDetailRepository;
@@ -54,6 +57,9 @@ class ImportReceiptDetailServiceTest {
 
     @Mock
     private ImportReceiptDetailRepository importReceiptDetailRepository;
+
+    @Mock
+    private ImportReceiptHistoryRepository importReceiptHistoryRepository;
 
     @Mock
     private DiscrepancyReportRepository discrepancyReportRepository;
@@ -156,13 +162,18 @@ class ImportReceiptDetailServiceTest {
     }
 
     @Test
-    void getDetail_managerShouldThrowMissingRoleException() {
+    void getDetail_managerShouldReadAnyReceipt() {
         Employee manager = createEmployee(1L, RoleCode.MANAGER, EmployeeStatus.HOAT_DONG);
         authenticateAs(manager);
+        Employee owner = createEmployee(2L, RoleCode.EMPLOYEE, EmployeeStatus.HOAT_DONG);
+        ImportReceipt receipt = createReceipt(100L, ImportReceiptStatus.HOAN_THANH, owner);
+        when(importReceiptRepository.findById(100L)).thenReturn(Optional.of(receipt));
+        when(importReceiptDetailRepository.findByDocumentIdOrderByIdAsc(100L)).thenReturn(List.of());
 
-        assertThatThrownBy(() -> importReceiptService.getDetail(100L))
-                .isInstanceOf(MissingRoleException.class)
-                .hasMessageContaining("Khong co quyen xem danh sach phieu nhap ca nhan.");
+        ImportReceiptDraftResponse response = importReceiptService.getDetail(100L);
+
+        assertThat(response.id()).isEqualTo(100L);
+        assertThat(response.status()).isEqualTo("HOAN_THANH");
     }
 
     @Test
@@ -180,6 +191,37 @@ class ImportReceiptDetailServiceTest {
 
         assertThat(receipt.getStatus()).isEqualTo(ImportReceiptStatus.NHAP);
         assertThat(receipt.getTotalAmount()).isEqualTo(BigDecimal.valueOf(1000));
+    }
+
+    @Test
+    void getHistory_managerShouldReadAnyReceipt() {
+        Employee manager = createEmployee(1L, RoleCode.MANAGER, EmployeeStatus.HOAT_DONG);
+        authenticateAs(manager);
+        Employee owner = createEmployee(2L, RoleCode.EMPLOYEE, EmployeeStatus.HOAT_DONG);
+        ImportReceipt receipt = createReceipt(100L, ImportReceiptStatus.HOAN_THANH, owner);
+        ImportReceiptHistory history = createHistory(1L, receipt, manager);
+        when(importReceiptRepository.findById(100L)).thenReturn(Optional.of(receipt));
+        when(importReceiptHistoryRepository.findByDocumentIdOrderByCreatedAtDesc(100L))
+                .thenReturn(List.of(history));
+
+        var response = importReceiptService.getHistory(100L);
+
+        assertThat(response).hasSize(1);
+        assertThat(response.getFirst().receiptId()).isEqualTo(100L);
+        assertThat(response.getFirst().action()).isEqualTo("DUYET_CAP_2");
+    }
+
+    @Test
+    void getHistory_employeeNonOwnerShouldThrowMissingRoleException() {
+        Employee employee = createEmployee(1L, RoleCode.EMPLOYEE, EmployeeStatus.HOAT_DONG);
+        authenticateAs(employee);
+        Employee owner = createEmployee(2L, RoleCode.EMPLOYEE, EmployeeStatus.HOAT_DONG);
+        ImportReceipt receipt = createReceipt(100L, ImportReceiptStatus.HOAN_THANH, owner);
+        when(importReceiptRepository.findById(100L)).thenReturn(Optional.of(receipt));
+
+        assertThatThrownBy(() -> importReceiptService.getHistory(100L))
+                .isInstanceOf(MissingRoleException.class)
+                .hasMessageContaining("Khong co quyen xem phieu nhap cua nguoi khac.");
     }
 
     @Test
@@ -544,6 +586,16 @@ class ImportReceiptDetailServiceTest {
         detail.setExpectedUnitPrice(BigDecimal.valueOf(100));
         detail.setExpectedLineTotal(BigDecimal.valueOf(1000));
         return detail;
+    }
+
+    private ImportReceiptHistory createHistory(Long id, ImportReceipt receipt, Employee actor) {
+        ImportReceiptHistory history = new ImportReceiptHistory();
+        history.setId(id);
+        history.setDocument(receipt);
+        history.setActor(actor);
+        history.setAction(ImportReceiptAction.DUYET_CAP_2);
+        history.setCreatedAt(LocalDateTime.of(2026, 6, 18, 10, 0));
+        return history;
     }
 
     private void authenticateAs(Employee employee) {

@@ -356,6 +356,27 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
                 .map(ImportReceiptSummaryResponse::from));
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public ImportReceiptPageResponse listReceipts(String status, Pageable pageable) {
+        Employee actor = currentEmployee();
+        if (actor.getStatus() != EmployeeStatus.HOAT_DONG) {
+            throw new AccountInactiveException();
+        }
+        ensureCanListAllReceipts(actor);
+
+        ImportReceiptStatus parsedStatus = parseStatus(status);
+        if (parsedStatus == null) {
+            return ImportReceiptPageResponse.from(importReceiptRepository
+                    .findAll(pageable)
+                    .map(ImportReceiptSummaryResponse::from));
+        }
+
+        return ImportReceiptPageResponse.from(importReceiptRepository
+                .findByStatus(parsedStatus, pageable)
+                .map(ImportReceiptSummaryResponse::from));
+    }
+
     /**
      * Lấy chi tiết đầy đủ của một phiếu nhập, bao gồm danh sách sản phẩm sắp xếp theo ID tăng dần.
      * ADMIN có thể xem mọi phiếu; EMPLOYEE chỉ xem được phiếu do mình tạo.
@@ -367,16 +388,10 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
         if (actor.getStatus() != EmployeeStatus.HOAT_DONG) {
             throw new AccountInactiveException();
         }
-        ensureCanListOwnReceipts(actor);
 
         ImportReceipt receipt = importReceiptRepository.findById(receiptId)
                 .orElseThrow(() -> new NotFoundException("Phieu nhap khong ton tai."));
-
-        RoleCode roleCode = actor.getRole() != null ? actor.getRole().getCode() : null;
-        boolean isOwner = receipt.getCreatedBy() != null && receipt.getCreatedBy().getId().equals(actor.getId());
-        if (roleCode != RoleCode.ADMIN && !isOwner) {
-            throw new MissingRoleException("Khong co quyen xem phieu nhap cua nguoi khac.");
-        }
+        ensureCanReadReceipt(actor, receipt);
 
         List<ImportReceiptDetail> details = importReceiptDetailRepository.findByDocumentIdOrderByIdAsc(receiptId);
         return ImportReceiptDraftResponse.from(receipt, details);
@@ -528,9 +543,9 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
             throw new AccountInactiveException();
         }
 
-        if (!importReceiptRepository.existsById(receiptId)) {
-            throw new NotFoundException("Phieu nhap khong ton tai.");
-        }
+        ImportReceipt receipt = importReceiptRepository.findById(receiptId)
+                .orElseThrow(() -> new NotFoundException("Phieu nhap khong ton tai."));
+        ensureCanReadReceipt(actor, receipt);
 
         return importReceiptHistoryRepository.findByDocumentIdOrderByCreatedAtDesc(receiptId)
                 .stream()
@@ -744,6 +759,28 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
         RoleCode roleCode = actor.getRole() != null ? actor.getRole().getCode() : null;
         if (roleCode != RoleCode.ADMIN && roleCode != RoleCode.EMPLOYEE) {
             throw new MissingRoleException("Khong co quyen xem danh sach phieu nhap ca nhan.");
+        }
+    }
+
+    private void ensureCanListAllReceipts(Employee actor) {
+        RoleCode roleCode = actor.getRole() != null ? actor.getRole().getCode() : null;
+        if (roleCode != RoleCode.ADMIN && roleCode != RoleCode.MANAGER) {
+            throw new MissingRoleException("Khong co quyen xem danh sach phieu nhap.");
+        }
+    }
+
+    private void ensureCanReadReceipt(Employee actor, ImportReceipt receipt) {
+        RoleCode roleCode = actor.getRole() != null ? actor.getRole().getCode() : null;
+        if (roleCode == RoleCode.ADMIN || roleCode == RoleCode.MANAGER) {
+            return;
+        }
+        if (roleCode != RoleCode.EMPLOYEE) {
+            throw new MissingRoleException("Khong co quyen xem phieu nhap.");
+        }
+
+        Employee creator = receipt.getCreatedBy();
+        if (creator == null || !actor.getId().equals(creator.getId())) {
+            throw new MissingRoleException("Khong co quyen xem phieu nhap cua nguoi khac.");
         }
     }
 

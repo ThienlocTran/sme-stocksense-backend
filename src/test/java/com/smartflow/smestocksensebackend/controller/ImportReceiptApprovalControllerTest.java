@@ -143,6 +143,16 @@ class ImportReceiptApprovalControllerTest {
                 .andExpect(jsonPath("$.message").value("Phieu nhap khong ton tai."));
     }
 
+    @Test
+    void approvalDetail_nonPendingShouldReturn409() throws Exception {
+        when(importReceiptService.getApprovalDetail(eq(100L)))
+                .thenThrow(new ConflictException("Chi duoc xem chi tiet duyet voi phieu nhap o trang thai cho duyet."));
+
+        mockMvc.perform(get("/api/import-receipts/100/approval-detail")
+                        .with(user("manager@example.com").roles("MANAGER")))
+                .andExpect(status().isConflict());
+    }
+
     // ===================== T93 - approve =====================
 
     @Test

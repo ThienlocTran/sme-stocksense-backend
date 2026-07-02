@@ -161,6 +161,41 @@ class ImportReceiptListServiceTest {
     }
 
     @Test
+    void listReceipts_managerShouldQueryAllReceipts() {
+        Employee manager = employee(7L, RoleCode.MANAGER);
+        authenticate(manager);
+        when(importReceiptRepository.findAll(pageable))
+                .thenReturn(new PageImpl<>(List.of(receipt(300L, owner, ImportReceiptStatus.HOAN_THANH, "PNK-ALL")), pageable, 1));
+
+        ImportReceiptPageResponse response = importReceiptService.listReceipts(null, pageable);
+
+        assertEquals(1, response.totalElements());
+        assertEquals("PNK-ALL", response.content().getFirst().code());
+        verify(importReceiptRepository).findAll(pageable);
+    }
+
+    @Test
+    void listReceipts_adminShouldFilterByStatus() {
+        Employee admin = employee(1L, RoleCode.ADMIN);
+        authenticate(admin);
+        when(importReceiptRepository.findByStatus(ImportReceiptStatus.NHAP, pageable))
+                .thenReturn(new PageImpl<>(List.of(receipt(301L, owner, ImportReceiptStatus.NHAP, "PNK-NHAP")), pageable, 1));
+
+        ImportReceiptPageResponse response = importReceiptService.listReceipts("NHAP", pageable);
+
+        assertEquals(1, response.totalElements());
+        assertEquals("NHAP", response.content().getFirst().status());
+        verify(importReceiptRepository).findByStatus(ImportReceiptStatus.NHAP, pageable);
+    }
+
+    @Test
+    void listReceipts_employeeShouldThrowForbidden() {
+        assertThrows(MissingRoleException.class, () -> importReceiptService.listReceipts(null, pageable));
+
+        verify(importReceiptRepository, never()).findAll(pageable);
+    }
+
+    @Test
     void listMyReceipts_shouldReturnMultipleStatuses() {
         when(importReceiptRepository.findByCreatedById(5L, pageable)).thenReturn(new PageImpl<>(List.of(
                 receipt(1L, owner, ImportReceiptStatus.NHAP, "PNK-001"),

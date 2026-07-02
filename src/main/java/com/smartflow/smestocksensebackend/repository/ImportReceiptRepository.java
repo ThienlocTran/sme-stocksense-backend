@@ -20,6 +20,9 @@ public interface ImportReceiptRepository extends JpaRepository<ImportReceipt, Lo
     long countByStatus(ImportReceiptStatus status);
 
     @EntityGraph(attributePaths = {"warehouse", "supplier", "createdBy"})
+    Page<ImportReceipt> findAll(Pageable pageable);
+
+    @EntityGraph(attributePaths = {"warehouse", "supplier", "createdBy"})
     Page<ImportReceipt> findByCreatedById(Long createdById, Pageable pageable);
 
     @EntityGraph(attributePaths = {"warehouse", "supplier", "createdBy"})

@@ -3,6 +3,7 @@ package com.smartflow.smestocksensebackend.controller;
 import com.smartflow.smestocksensebackend.config.JwtAuthenticationFilter;
 import com.smartflow.smestocksensebackend.config.SecurityConfig;
 import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptDraftResponse;
+import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptHistoryResponse;
 import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptItemResponse;
 import com.smartflow.smestocksensebackend.exception.ApiExceptionHandler;
 import com.smartflow.smestocksensebackend.exception.MissingRoleException;
@@ -92,12 +93,42 @@ class ImportReceiptDetailControllerTest {
     }
 
     @Test
-    void getDetail_managerShouldReturn403() throws Exception {
-        when(importReceiptService.getDetail(eq(123L)))
-                .thenThrow(new MissingRoleException("Khong co quyen xem danh sach phieu nhap ca nhan."));
+    void getDetail_managerShouldReturn200() throws Exception {
+        when(importReceiptService.getDetail(eq(123L))).thenReturn(response("HOAN_THANH"));
 
         mockMvc.perform(get("/api/import-receipts/123")
                         .with(user("manager@example.com").roles("MANAGER")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(123))
+                .andExpect(jsonPath("$.status").value("HOAN_THANH"));
+    }
+
+    @Test
+    void getHistory_managerShouldReturn200() throws Exception {
+        when(importReceiptService.getHistory(eq(123L)))
+                .thenReturn(List.of(new ImportReceiptHistoryResponse(
+                        1L,
+                        123L,
+                        "Tran Thi Quan Ly",
+                        "DUYET_CAP_2",
+                        null,
+                        LocalDateTime.of(2026, 6, 18, 10, 0)
+                )));
+
+        mockMvc.perform(get("/api/import-receipts/123/history")
+                        .with(user("manager@example.com").roles("MANAGER")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].receiptId").value(123))
+                .andExpect(jsonPath("$[0].action").value("DUYET_CAP_2"));
+    }
+
+    @Test
+    void getHistory_employeeForbiddenWhenNotOwner() throws Exception {
+        when(importReceiptService.getHistory(eq(123L)))
+                .thenThrow(new MissingRoleException("Khong co quyen xem phieu nhap cua nguoi khac."));
+
+        mockMvc.perform(get("/api/import-receipts/123/history")
+                        .with(user("employee@example.com").roles("EMPLOYEE")))
                 .andExpect(status().isForbidden());
     }
 

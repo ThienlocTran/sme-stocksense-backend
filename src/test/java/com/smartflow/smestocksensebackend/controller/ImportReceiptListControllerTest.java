@@ -55,6 +55,43 @@ class ImportReceiptListControllerTest {
     }
 
     @Test
+    void listReceipts_managerShouldReturnAllReceipts() throws Exception {
+        when(importReceiptService.listReceipts(eq(null), org.mockito.ArgumentMatchers.any(Pageable.class)))
+                .thenReturn(response("HOAN_THANH"));
+
+        mockMvc.perform(get("/api/import-receipts")
+                        .with(user("manager@example.com").roles("MANAGER")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content").exists())
+                .andExpect(jsonPath("$.content[0].status").value("HOAN_THANH"))
+                .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.size").value(10))
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.totalPages").value(1));
+    }
+
+    @Test
+    void listReceipts_adminShouldReturnAllReceipts() throws Exception {
+        when(importReceiptService.listReceipts(eq("NHAP"), org.mockito.ArgumentMatchers.any(Pageable.class)))
+                .thenReturn(response("NHAP"));
+
+        mockMvc.perform(get("/api/import-receipts")
+                        .param("status", "NHAP")
+                        .with(user("admin@example.com").roles("ADMIN")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].status").value("NHAP"));
+
+        verify(importReceiptService).listReceipts(eq("NHAP"), org.mockito.ArgumentMatchers.any(Pageable.class));
+    }
+
+    @Test
+    void listReceipts_employeeShouldReturn403() throws Exception {
+        mockMvc.perform(get("/api/import-receipts")
+                        .with(user("employee@example.com").roles("EMPLOYEE")))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void listMyReceipts_employeeShouldReturnOwnReceipts() throws Exception {
         when(importReceiptService.listMyReceipts(eq(null), org.mockito.ArgumentMatchers.any(Pageable.class)))
                 .thenReturn(response("NHAP"));

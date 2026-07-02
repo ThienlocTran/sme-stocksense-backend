@@ -106,6 +106,7 @@ public class InventoryTransactionServiceImpl implements InventoryTransactionServ
     }
 
     @Override
+    @Transactional(readOnly = true)
     public Page<InventoryTransactionResponse> searchTransactions(
             String keyword,
             Long productId,
@@ -115,26 +116,61 @@ public class InventoryTransactionServiceImpl implements InventoryTransactionServ
             LocalDateTime from,
             LocalDateTime to,
             Pageable pageable) {
-        log.info("===== SEARCH INVENTORY TRANSACTIONS (DEBUG NO SPEC) =====");
-        log.info("keyword={}", keyword);
-        log.info("productId={}", productId);
-        log.info("warehouseId={}", warehouseId);
-        log.info("transactionType={}", transactionType);
-        log.info("createdById={}", createdById);
-        log.info("from={}", from);
-        log.info("to={}", to);
-        log.info("pageable={}", pageable);
+        Specification<InventoryTransaction> spec = buildSpecification(keyword, productId, warehouseId, transactionType,
+                createdById, from, to);
 
-        Page<InventoryTransaction> page = inventoryTransactionRepository.findAll(PageRequest.of(0, 20));
-        log.info("total={}", page.getTotalElements());
-        log.info("size={}", page.getContent().size());
-        page.getContent().stream().limit(5).forEach(t -> log.info(
-                "id={} type={} createdAt={}",
-                t.getId(),
-                t.getTransactionType(),
-                t.getCreatedAt()));
-
+        Page<InventoryTransaction> page = inventoryTransactionRepository.findAll(spec, pageable);
         return page.map(this::toResponse);
+    }
+
+    private Specification<InventoryTransaction> buildSpecification(
+            String keyword,
+            Long productId,
+            Long warehouseId,
+            InventoryTransactionType transactionType,
+            Long createdById,
+            LocalDateTime from,
+            LocalDateTime to) {
+        return (root, query, criteriaBuilder) -> {
+            List<Predicate> predicates = new ArrayList<>();
+
+            if (keyword != null && !keyword.isBlank()) {
+                String likeKeyword = "%" + keyword.trim().toLowerCase() + "%";
+                Join<Object, Object> productJoin = root.join("product", JoinType.LEFT);
+                Join<Object, Object> createdByJoin = root.join("createdBy", JoinType.LEFT);
+
+                predicates.add(criteriaBuilder.or(
+                        criteriaBuilder.like(criteriaBuilder.lower(productJoin.get("code")), likeKeyword),
+                        criteriaBuilder.like(criteriaBuilder.lower(productJoin.get("name")), likeKeyword),
+                        criteriaBuilder.like(criteriaBuilder.lower(createdByJoin.get("fullName")), likeKeyword)));
+            }
+
+            if (productId != null) {
+                predicates.add(criteriaBuilder.equal(root.get("product").get("id"), productId));
+            }
+
+            if (warehouseId != null) {
+                predicates.add(criteriaBuilder.equal(root.get("warehouse").get("id"), warehouseId));
+            }
+
+            if (transactionType != null) {
+                predicates.add(criteriaBuilder.equal(root.get("transactionType"), transactionType));
+            }
+
+            if (createdById != null) {
+                predicates.add(criteriaBuilder.equal(root.get("createdBy").get("id"), createdById));
+            }
+
+            if (from != null && to != null) {
+                predicates.add(criteriaBuilder.between(root.get("createdAt"), from, to));
+            } else if (from != null) {
+                predicates.add(criteriaBuilder.greaterThanOrEqualTo(root.get("createdAt"), from));
+            } else if (to != null) {
+                predicates.add(criteriaBuilder.lessThanOrEqualTo(root.get("createdAt"), to));
+            }
+
+            return criteriaBuilder.and(predicates.toArray(new Predicate[0]));
+        };
     }
 
     private InventoryTransactionResponse toResponse(InventoryTransaction t) {

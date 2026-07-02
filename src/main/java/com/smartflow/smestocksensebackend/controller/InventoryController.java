@@ -1,5 +1,6 @@
 package com.smartflow.smestocksensebackend.controller;
 
+import com.smartflow.smestocksensebackend.dto.common.PageResponse;
 import com.smartflow.smestocksensebackend.dto.inventory.InventoryLevelResponse;
 import com.smartflow.smestocksensebackend.service.InventoryService;
 import lombok.RequiredArgsConstructor;
@@ -8,7 +9,6 @@ import org.springframework.validation.annotation.Validated;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Positive;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -49,7 +49,7 @@ public class InventoryController {
      */
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN','MANAGER','EMPLOYEE')")
-    public Page<InventoryLevelResponse> listInventory(
+    public PageResponse<InventoryLevelResponse> listInventory(
             @RequestParam(required = false) @Positive Long warehouseId,
             @RequestParam(required = false) @Positive Long productId,
             @RequestParam(required = false) String keyword,
@@ -59,8 +59,8 @@ public class InventoryController {
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.unsorted());
-        return inventoryService.listInventory(warehouseId, productId, keyword, stockStatus,
-                warehouseStatus, productStatus, pageable);
+        return PageResponse.from(inventoryService.listInventory(warehouseId, productId, keyword, stockStatus,
+                warehouseStatus, productStatus, pageable));
     }
 
     /**
@@ -81,7 +81,7 @@ public class InventoryController {
      */
     @GetMapping("/low-stock")
     @PreAuthorize("hasAnyRole('ADMIN','MANAGER','EMPLOYEE')")
-    public Page<InventoryLevelResponse> listLowStockInventory(
+    public PageResponse<InventoryLevelResponse> listLowStockInventory(
             @RequestParam(required = false) @Positive Long warehouseId,
             @RequestParam(required = false) @Positive Long productId,
             @RequestParam(required = false) String keyword,
@@ -90,7 +90,7 @@ public class InventoryController {
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.unsorted());
-        return inventoryService.listInventory(warehouseId, productId, keyword, "LOW_STOCK",
-                warehouseStatus, productStatus, pageable);
+        return PageResponse.from(inventoryService.listInventory(warehouseId, productId, keyword, "LOW_STOCK",
+                warehouseStatus, productStatus, pageable));
     }
 }

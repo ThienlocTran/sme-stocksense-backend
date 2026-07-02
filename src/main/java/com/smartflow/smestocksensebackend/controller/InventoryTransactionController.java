@@ -1,5 +1,6 @@
 package com.smartflow.smestocksensebackend.controller;
 
+import com.smartflow.smestocksensebackend.dto.common.PageResponse;
 import com.smartflow.smestocksensebackend.dto.inventory.InventoryTransactionResponse;
 import com.smartflow.smestocksensebackend.entity.InventoryTransactionType;
 import com.smartflow.smestocksensebackend.service.InventoryTransactionService;
@@ -9,7 +10,6 @@ import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -35,7 +35,7 @@ public class InventoryTransactionController {
 
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN','MANAGER','EMPLOYEE')")
-    public Page<InventoryTransactionResponse> searchTransactions(
+    public PageResponse<InventoryTransactionResponse> searchTransactions(
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) @Positive Long productId,
             @RequestParam(required = false) @Positive Long warehouseId,
@@ -70,8 +70,8 @@ public class InventoryTransactionController {
             }
         }
 
-        return inventoryTransactionService.searchTransactions(keyword, productId, warehouseId, type, createdById, from,
+        return PageResponse.from(inventoryTransactionService.searchTransactions(keyword, productId, warehouseId, type, createdById, from,
                 to,
-                pageable);
+                pageable));
     }
 }

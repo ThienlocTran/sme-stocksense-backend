@@ -4,6 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -25,7 +26,14 @@ public class ApiExceptionHandler {
         return new ApiErrorResponse(exception.getMessage());
     }
 
-    @ExceptionHandler({AccountInactiveException.class, MissingRoleException.class})
+    @ExceptionHandler(AuthenticationCredentialsNotFoundException.class)
+    @ResponseStatus(HttpStatus.UNAUTHORIZED)
+    public ApiErrorResponse handleAuthenticationCredentialsNotFound(
+            AuthenticationCredentialsNotFoundException exception) {
+        return new ApiErrorResponse(exception.getMessage());
+    }
+
+    @ExceptionHandler({ AccountInactiveException.class, MissingRoleException.class })
     @ResponseStatus(HttpStatus.FORBIDDEN)
     public ApiErrorResponse handleForbidden(RuntimeException exception) {
         return new ApiErrorResponse(exception.getMessage());
@@ -46,6 +54,12 @@ public class ApiExceptionHandler {
     @ExceptionHandler(NotFoundException.class)
     @ResponseStatus(HttpStatus.NOT_FOUND)
     public ApiErrorResponse handleNotFound(NotFoundException exception) {
+        return new ApiErrorResponse(exception.getMessage());
+    }
+
+    @ExceptionHandler(ConflictException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public ApiErrorResponse handleConflict(ConflictException exception) {
         return new ApiErrorResponse(exception.getMessage());
     }
 
@@ -71,14 +85,14 @@ public class ApiExceptionHandler {
     public ApiErrorResponse handleMalformedJson() {
         return new ApiErrorResponse(
                 "Dữ liệu không hợp lệ.",
-                Map.of("body", "JSON không hợp lệ hoặc request body bị thiếu.")
-        );
+                Map.of("body", "JSON không hợp lệ hoặc request body bị thiếu."));
     }
 
     @ExceptionHandler(Exception.class)
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     public ApiErrorResponse handleUnexpected(Exception exception) {
-        log.error("Unexpected API error", exception);
+        log.error("Unexpected API error class={} message={}", exception.getClass().getName(), exception.getMessage(),
+                exception);
         return new ApiErrorResponse("Lỗi hệ thống. Vui lòng thử lại sau.");
     }
 }

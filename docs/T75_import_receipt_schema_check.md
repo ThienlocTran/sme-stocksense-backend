@@ -1,5 +1,7 @@
 # T75 - Import Receipt Schema Check
 
+> Historical pre-implementation check. Current T75 design and implementation decisions are documented in `docs/inbound-workflow.md`.
+
 ## Scope
 
 Branch checked: `feature/T75-import-receipt-schema-check`.
@@ -114,7 +116,7 @@ Required T75 values:
 - `NHAP`
 - `CHO_DUYET_CAP_1`
 - `CHO_DUYET_CAP_2`
-- `DA_DUYET_CHO_HANG_VE`
+- `CHO_HANG_VE`
 - `CHO_KIEM_HANG`
 - `HOAN_THANH`
 - `TU_CHOI`
@@ -122,7 +124,7 @@ Required T75 values:
 
 Gap:
 
-- Existing DB enum is missing `CHO_DUYET_CAP_1`, `CHO_DUYET_CAP_2`, `DA_DUYET_CHO_HANG_VE`, `CHO_KIEM_HANG`.
+- Existing DB enum is missing `CHO_DUYET_CAP_1`, `CHO_DUYET_CAP_2`, `CHO_HANG_VE`, `CHO_KIEM_HANG`.
 - Existing DB enum contains generic `CHO_DUYET` and `DA_DUYET`, which do not match T75-required flow names.
 - A later migration must align the PostgreSQL enum with `ImportReceiptStatus` before mapped JPA enum persistence can be safe.
 
@@ -216,7 +218,7 @@ Reason:
 ## Exact Blockers For T76-T84
 
 1. Add or align PostgreSQL enum for receipt statuses with:
-   `NHAP`, `CHO_DUYET_CAP_1`, `CHO_DUYET_CAP_2`, `DA_DUYET_CHO_HANG_VE`, `CHO_KIEM_HANG`, `HOAN_THANH`, `TU_CHOI`, `HUY`.
+   `NHAP`, `CHO_DUYET_CAP_1`, `CHO_DUYET_CAP_2`, `CHO_HANG_VE`, `CHO_KIEM_HANG`, `HOAN_THANH`, `TU_CHOI`, `HUY`.
 2. Decide purchase concept:
    use `phieu_nhap_kho` only, or add separate `phieu_mua_hang` and define relationship to import receipt.
 3. Add Java entities for `san_pham`, `phieu_nhap_kho`, `chi_tiet_phieu_nhap` only after schema is confirmed.

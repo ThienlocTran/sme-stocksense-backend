@@ -63,6 +63,30 @@ class InventoryTransactionControllerTest {
                 .andExpect(jsonPath("$.number").doesNotExist());
     }
 
+    @Test
+    void searchTransactions_invalidSortFieldShouldReturn400() throws Exception {
+        mockMvc.perform(get("/api/inventory/transactions")
+                        .param("sort", "product.name,asc")
+                        .with(user("admin@example.com").roles("ADMIN")))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void searchTransactions_invalidSortDirectionShouldReturn400() throws Exception {
+        mockMvc.perform(get("/api/inventory/transactions")
+                        .param("sort", "createdAt,sideways")
+                        .with(user("admin@example.com").roles("ADMIN")))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void searchTransactions_invalidTransactionTypeShouldReturn400() throws Exception {
+        mockMvc.perform(get("/api/inventory/transactions")
+                        .param("transactionType", "INVALID")
+                        .with(user("admin@example.com").roles("ADMIN")))
+                .andExpect(status().isBadRequest());
+    }
+
     private PageImpl<InventoryTransactionResponse> page() {
         InventoryTransactionResponse response = new InventoryTransactionResponse();
         response.setId(1L);

@@ -8,7 +8,7 @@ Chi tiết giải thích từng dòng logic nghiệp vụ đã được viết t
 
 ## 1. Các File Được Tạo / Sửa
 - **Database Migration**:
-  - `src/main/resources/db/migration/V12__add_actual_arrival_date.sql.sql`: Tạo cột `ngay_hang_ve` (timestamp) trong bảng `phieu_nhap_kho` để lưu ngày hàng về thực tế của phiếu nhập.
+  - `src/main/resources/db/migration/V14__add_actual_arrival_date.sql`: Tạo cột `ngay_hang_ve` (timestamp) trong bảng `phieu_nhap_kho` để lưu ngày hàng về thực tế của phiếu nhập.
 - **Thực thể (Entity)**:
   - `src/main/java/com/smartflow/smestocksensebackend/entity/ImportReceipt.java`: Thêm trường `actualArrivalDate` ánh xạ với cột `ngay_hang_ve` của cơ sở dữ liệu.
 - **DTOs**:

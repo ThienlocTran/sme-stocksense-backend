@@ -14,6 +14,7 @@ import com.smartflow.smestocksensebackend.entity.InventoryTransactionType;
 import com.smartflow.smestocksensebackend.dto.inventory.InventoryLevelProjection;
 import com.smartflow.smestocksensebackend.dto.inventory.InventoryLevelResponse;
 import com.smartflow.smestocksensebackend.exception.BadRequestException;
+import com.smartflow.smestocksensebackend.exception.ConflictException;
 import com.smartflow.smestocksensebackend.service.InventoryTransactionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -69,13 +70,13 @@ public class InventoryServiceImpl implements InventoryService {
         // 0. Validate đầu vào
         if (productId == null || productId <= 0 || warehouseId == null || warehouseId <= 0 || quantity == null
                 || quantity <= 0) {
-            throw new IllegalArgumentException("productId, warehouseId, quantity phải > 0");
+            throw new BadRequestException("productId, warehouseId, quantity phải > 0");
         }
 
         // 0.1 Kiểm tra trạng thái phiếu nhập: chỉ cho phép cập nhật tồn kho khi phiếu
         // đã HOAN_THANH
         if (importReceipt != null && !ImportReceiptStatus.HOAN_THANH.equals(importReceipt.getStatus())) {
-            throw new IllegalStateException("Chỉ cập nhật tồn kho khi phiếu nhập đã COMPLETED.");
+            throw new ConflictException("Chỉ cập nhật tồn kho khi phiếu nhập đã COMPLETED.");
         }
 
         // 1. Kiểm tra sự tồn tại của sản phẩm
@@ -150,7 +151,7 @@ public class InventoryServiceImpl implements InventoryService {
         try {
             return Math.addExact(current, delta);
         } catch (ArithmeticException ex) {
-            throw new IllegalArgumentException("Tong so luong ton kho vuot gioi han cho phep.", ex);
+            throw new BadRequestException("Tong so luong ton kho vuot gioi han cho phep.");
         }
     }
 

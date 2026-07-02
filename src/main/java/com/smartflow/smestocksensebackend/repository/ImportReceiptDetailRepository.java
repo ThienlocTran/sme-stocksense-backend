@@ -15,7 +15,7 @@ public interface ImportReceiptDetailRepository extends JpaRepository<ImportRecei
 
     List<ImportReceiptDetail> findByDocumentIdOrderByIdAsc(Long documentId);
 
-    @Modifying(flushAutomatically = true)
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("delete from ImportReceiptDetail detail where detail.document.id = :documentId")
     void deleteByDocumentId(@Param("documentId") Long documentId);
 

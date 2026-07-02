@@ -6,6 +6,7 @@ import com.smartflow.smestocksensebackend.entity.Warehouse;
 import com.smartflow.smestocksensebackend.dto.inventory.InventoryLevelProjection;
 import com.smartflow.smestocksensebackend.dto.inventory.InventoryLevelResponse;
 import com.smartflow.smestocksensebackend.exception.BadRequestException;
+import com.smartflow.smestocksensebackend.exception.ConflictException;
 import com.smartflow.smestocksensebackend.exception.NotFoundException;
 import com.smartflow.smestocksensebackend.repository.InventoryLevelRepository;
 import com.smartflow.smestocksensebackend.repository.ProductRepository;
@@ -157,11 +158,11 @@ class InventoryServiceImplTest {
 
         /**
          * Kiểm thử ngoại lệ: Tham số đầu vào không hợp lệ (quantity = 0).
-         * Kỳ vọng: Ném IllegalArgumentException với message đúng trước khi truy vấn DB.
+         * Kỳ vọng: Ném BadRequestException với message đúng trước khi truy vấn DB.
          */
         @Test
         void increaseInventory_error_whenInvalidInput() {
-                IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                BadRequestException exception = assertThrows(BadRequestException.class,
                                 () -> inventoryService.increaseInventory(1L, 1L, 0));
 
                 assertEquals("productId, warehouseId, quantity phải > 0", exception.getMessage());
@@ -170,11 +171,11 @@ class InventoryServiceImplTest {
 
         /**
          * Kiểm thử ngoại lệ: productId = 0 (không hợp lệ vì phải > 0).
-         * Kỳ vọng: Ném IllegalArgumentException ngay trước khi truy vấn DB.
+         * Kỳ vọng: Ném BadRequestException ngay trước khi truy vấn DB.
          */
         @Test
         void increaseInventory_error_whenProductIdInvalid() {
-                IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                BadRequestException exception = assertThrows(BadRequestException.class,
                                 () -> inventoryService.increaseInventory(0L, 1L, 50));
 
                 assertEquals("productId, warehouseId, quantity phải > 0", exception.getMessage());
@@ -183,11 +184,11 @@ class InventoryServiceImplTest {
 
         /**
          * Kiểm thử ngoại lệ: warehouseId = -1 (âm, không hợp lệ vì phải > 0).
-         * Kỳ vọng: Ném IllegalArgumentException ngay trước khi truy vấn DB.
+         * Kỳ vọng: Ném BadRequestException ngay trước khi truy vấn DB.
          */
         @Test
         void increaseInventory_error_whenWarehouseIdInvalid() {
-                IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                BadRequestException exception = assertThrows(BadRequestException.class,
                                 () -> inventoryService.increaseInventory(1L, -1L, 50));
 
                 assertEquals("productId, warehouseId, quantity phải > 0", exception.getMessage());
@@ -197,7 +198,7 @@ class InventoryServiceImplTest {
         /**
          * Kiểm thử ngoại lệ: Tổng số lượng tồn kho vượt Integer.MAX_VALUE (Integer
          * Overflow).
-         * Kỳ vọng: Ném IllegalArgumentException với message đúng, không gọi
+         * Kỳ vọng: Ném BadRequestException với message đúng, không gọi
          * saveAndFlush.
          */
         @Test
@@ -213,8 +214,8 @@ class InventoryServiceImplTest {
                 Mockito.when(inventoryLevelRepository.findByProductIdAndWarehouseIdForUpdate(1L, 1L))
                                 .thenReturn(Optional.of(existingInventory));
 
-                IllegalArgumentException ex = assertThrows(
-                                IllegalArgumentException.class,
+                BadRequestException ex = assertThrows(
+                                BadRequestException.class,
                                 () -> inventoryService.increaseInventory(1L, 1L, 1));
 
                 assertEquals("Tong so luong ton kho vuot gioi han cho phep.", ex.getMessage());
@@ -332,7 +333,7 @@ class InventoryServiceImplTest {
 
         /**
          * Kiểm thử guard clause: phiếu nhập không ở trạng thái HOAN_THANH.
-         * Kỳ vọng: Ném IllegalStateException với message đúng, không gọi saveAndFlush.
+         * Kỳ vọng: Ném ConflictException với message đúng, không gọi saveAndFlush.
          */
         @Test
         void increaseInventory_error_whenImportReceiptNotCompleted() {
@@ -340,8 +341,8 @@ class InventoryServiceImplTest {
                 receipt.setId(5L);
                 receipt.setStatus(ImportReceiptStatus.NHAP); // Không phải HOAN_THANH
 
-                IllegalStateException ex = assertThrows(
-                                IllegalStateException.class,
+                ConflictException ex = assertThrows(
+                                ConflictException.class,
                                 () -> inventoryService.increaseInventory(1L, 1L, 50, receipt));
 
                 assertEquals("Chỉ cập nhật tồn kho khi phiếu nhập đã COMPLETED.", ex.getMessage());

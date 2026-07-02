@@ -2,6 +2,7 @@ package com.smartflow.smestocksensebackend.controller;
 
 import com.smartflow.smestocksensebackend.dto.common.PageResponse;
 import com.smartflow.smestocksensebackend.dto.inventory.InventoryLevelResponse;
+import com.smartflow.smestocksensebackend.exception.BadRequestException;
 import com.smartflow.smestocksensebackend.service.InventoryService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -17,11 +18,17 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.Set;
+
 @RestController
 @Validated
 @RequestMapping("/api/inventory")
 @RequiredArgsConstructor
 public class InventoryController {
+
+    private static final Set<String> ALLOWED_STOCK_STATUSES = Set.of(
+            "OUT_OF_STOCK", "LOW_STOCK", "OVER_STOCK", "NORMAL");
+    private static final Set<String> ALLOWED_ACTIVE_STATUSES = Set.of("HOAT_DONG", "NGUNG_HOAT_DONG");
 
     private final InventoryService inventoryService;
 
@@ -58,6 +65,9 @@ public class InventoryController {
             @RequestParam(required = false) String productStatus,
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
+        validateOptionalValue(stockStatus, ALLOWED_STOCK_STATUSES, "Trạng thái tồn kho không hợp lệ");
+        validateOptionalValue(warehouseStatus, ALLOWED_ACTIVE_STATUSES, "Trạng thái kho không hợp lệ");
+        validateOptionalValue(productStatus, ALLOWED_ACTIVE_STATUSES, "Trạng thái sản phẩm không hợp lệ");
         Pageable pageable = PageRequest.of(page, size, Sort.unsorted());
         return PageResponse.from(inventoryService.listInventory(warehouseId, productId, keyword, stockStatus,
                 warehouseStatus, productStatus, pageable));
@@ -89,8 +99,20 @@ public class InventoryController {
             @RequestParam(required = false) String productStatus,
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
+        validateOptionalValue(warehouseStatus, ALLOWED_ACTIVE_STATUSES, "Trạng thái kho không hợp lệ");
+        validateOptionalValue(productStatus, ALLOWED_ACTIVE_STATUSES, "Trạng thái sản phẩm không hợp lệ");
         Pageable pageable = PageRequest.of(page, size, Sort.unsorted());
         return PageResponse.from(inventoryService.listInventory(warehouseId, productId, keyword, "LOW_STOCK",
                 warehouseStatus, productStatus, pageable));
+    }
+
+    private void validateOptionalValue(String value, Set<String> allowedValues, String messagePrefix) {
+        if (value == null || value.isBlank()) {
+            return;
+        }
+        String normalized = value.trim().toUpperCase();
+        if (!allowedValues.contains(normalized)) {
+            throw new BadRequestException(messagePrefix + ": " + value);
+        }
     }
 }

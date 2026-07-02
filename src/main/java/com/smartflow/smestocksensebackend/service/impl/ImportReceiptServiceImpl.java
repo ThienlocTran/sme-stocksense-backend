@@ -1091,9 +1091,12 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
             }
         }
 
-        ImportReceipt savedReceipt = importReceiptRepository.saveAndFlush(receipt);
-
-        return ImportReceiptDraftResponse.from(savedReceipt, details);
+        try {
+            ImportReceipt savedReceipt = importReceiptRepository.saveAndFlush(receipt);
+            return ImportReceiptDraftResponse.from(savedReceipt, details);
+        } catch (OptimisticLockingFailureException exception) {
+            throw new ConflictException("Phiếu nhập đã được cập nhật bởi một phiên làm việc khác.");
+        }
     }
 
     private boolean hasDiscrepancy(ImportReceiptDetail detail) {

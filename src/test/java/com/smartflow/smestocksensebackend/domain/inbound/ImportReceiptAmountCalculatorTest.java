@@ -9,6 +9,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.math.BigDecimal;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -34,6 +35,21 @@ class ImportReceiptAmountCalculatorTest {
         BigDecimal lineTotal = calculator.calculateLineTotal(10, BigDecimal.ZERO);
 
         assertEquals(BigDecimal.ZERO, lineTotal);
+    }
+
+    @Test
+    void calculateLineTotal_withNullQuantity_shouldThrowIllegalArgumentException() {
+        ImportReceiptAmountCalculator calculator = new ImportReceiptAmountCalculator(importReceiptDetailRepository);
+
+        assertThrows(IllegalArgumentException.class,
+                () -> calculator.calculateLineTotal(null, new BigDecimal("19.50")));
+    }
+
+    @Test
+    void calculateLineTotal_withNullUnitPrice_shouldThrowIllegalArgumentException() {
+        ImportReceiptAmountCalculator calculator = new ImportReceiptAmountCalculator(importReceiptDetailRepository);
+
+        assertThrows(IllegalArgumentException.class, () -> calculator.calculateLineTotal(3, null));
     }
 
     @Test

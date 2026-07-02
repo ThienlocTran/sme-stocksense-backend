@@ -13,6 +13,12 @@ public class ImportReceiptAmountCalculator {
     private final ImportReceiptDetailRepository importReceiptDetailRepository;
 
     public BigDecimal calculateLineTotal(Integer quantity, BigDecimal unitPrice) {
+        if (quantity == null) {
+            throw new IllegalArgumentException("So luong khong duoc de trong.");
+        }
+        if (unitPrice == null) {
+            throw new IllegalArgumentException("Don gia khong duoc de trong.");
+        }
         return unitPrice.multiply(BigDecimal.valueOf(quantity));
     }
 

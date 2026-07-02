@@ -13,6 +13,7 @@ import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -160,7 +161,7 @@ class InventoryTransactionServiceImplTest {
         @Test
         void searchTransactions_returnsEmptyPageWhenNoMatchingRecords() {
                 Mockito.when(inventoryTransactionRepository
-                                .findAll(any(org.springframework.data.domain.Pageable.class)))
+                                .findAll(any(Specification.class), any(org.springframework.data.domain.Pageable.class)))
                                 .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of()));
 
                 var result = inventoryTransactionService.searchTransactions(
@@ -191,7 +192,7 @@ class InventoryTransactionServiceImplTest {
                 transaction.setCreatedAt(LocalDateTime.of(2026, 6, 28, 8, 0));
 
                 Mockito.when(inventoryTransactionRepository
-                                .findAll(any(org.springframework.data.domain.Pageable.class)))
+                                .findAll(any(Specification.class), any(org.springframework.data.domain.Pageable.class)))
                                 .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(transaction)));
 
                 var result = inventoryTransactionService.searchTransactions(
@@ -208,6 +209,6 @@ class InventoryTransactionServiceImplTest {
                 assertEquals(77L, result.getContent().get(0).getId());
                 assertEquals("SP001", result.getContent().get(0).getProductCode());
                 Mockito.verify(inventoryTransactionRepository)
-                                .findAll(any(org.springframework.data.domain.Pageable.class));
+                                .findAll(any(Specification.class), any(org.springframework.data.domain.Pageable.class));
         }
 }

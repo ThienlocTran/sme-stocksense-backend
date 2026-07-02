@@ -25,7 +25,7 @@ import java.util.List;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private static final Logger log = LoggerFactory.getLogger(JwtAuthenticationFilter.class);
-    private static final String BEARER_PREFIX = "Bearer ";
+    private static final String BEARER_PREFIX = "Bearer";
 
     private final JwtService jwtService;
     private final EmployeeRepository employeeRepository;
@@ -35,16 +35,16 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             HttpServletRequest request,
             HttpServletResponse response,
             FilterChain filterChain) throws ServletException, IOException {
-        String authorizationHeader = request.getHeader("Authorization");
-        log.debug("JwtAuthenticationFilter request uri={} authorizationHeader={}", request.getRequestURI(),
-                authorizationHeader);
-        if (authorizationHeader == null || !authorizationHeader.startsWith(BEARER_PREFIX)) {
-            log.debug("JwtAuthenticationFilter skipped: no Bearer Authorization header");
+        String authHeader = request.getHeader("Authorization");
+        boolean hasBearerToken = authHeader != null && authHeader.startsWith(BEARER_PREFIX + " ");
+        log.debug("JwtAuthenticationFilter request uri={} hasBearerToken={}", request.getRequestURI(), hasBearerToken);
+        if (!hasBearerToken) {
+            log.debug("JwtAuthenticationFilter skipped: no bearer token");
             filterChain.doFilter(request, response);
             return;
         }
 
-        String token = authorizationHeader.substring(BEARER_PREFIX.length());
+        String token = authHeader.substring(BEARER_PREFIX.length() + 1);
         boolean tokenValid = jwtService.isTokenValid(token);
         log.debug("JwtAuthenticationFilter token valid={}", tokenValid);
 
@@ -52,17 +52,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             jwtService.extractSubject(token)
                     .flatMap(employeeRepository::findByEmailIgnoreCase)
                     .ifPresentOrElse(employee -> {
-                        log.debug("JwtAuthenticationFilter token subject={}", employee.getEmail());
                         authenticate(request, employee);
-                    }, () -> log.debug("JwtAuthenticationFilter token subject did not resolve to employee"));
+                    }, () -> log.debug("JwtAuthenticationFilter token subject resolved=false"));
         }
 
         var authentication = SecurityContextHolder.getContext().getAuthentication();
-        log.debug("JwtAuthenticationFilter after auth authentication={}", authentication);
-        if (authentication != null) {
-            log.debug("JwtAuthenticationFilter auth details: authenticated={}, principal={}, authorities={}",
-                    authentication.isAuthenticated(), authentication.getPrincipal(), authentication.getAuthorities());
-        }
+        log.debug("JwtAuthenticationFilter auth present={} authenticated={}",
+                authentication != null, authentication != null && authentication.isAuthenticated());
 
         filterChain.doFilter(request, response);
     }

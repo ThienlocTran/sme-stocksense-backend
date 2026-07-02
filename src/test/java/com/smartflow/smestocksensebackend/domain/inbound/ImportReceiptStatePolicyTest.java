@@ -14,7 +14,7 @@ class ImportReceiptStatePolicyTest {
         assertTrue(ImportReceiptStatePolicy.canTransition(ImportReceiptStatus.NHAP, ImportReceiptStatus.HUY));
         assertTrue(ImportReceiptStatePolicy.canTransition(ImportReceiptStatus.TU_CHOI, ImportReceiptStatus.NHAP));
         assertTrue(ImportReceiptStatePolicy.canTransition(ImportReceiptStatus.TU_CHOI, ImportReceiptStatus.HUY));
-        assertTrue(ImportReceiptStatePolicy.canTransition(ImportReceiptStatus.CHO_DUYET_CAP_1, ImportReceiptStatus.CHO_DUYET_CAP_2));
+        assertTrue(ImportReceiptStatePolicy.canTransition(ImportReceiptStatus.CHO_DUYET_CAP_1, ImportReceiptStatus.CHO_HANG_VE));
         assertTrue(ImportReceiptStatePolicy.canTransition(ImportReceiptStatus.CHO_DUYET_CAP_1, ImportReceiptStatus.TU_CHOI));
         assertTrue(ImportReceiptStatePolicy.canTransition(ImportReceiptStatus.CHO_DUYET_CAP_2, ImportReceiptStatus.CHO_HANG_VE));
         assertTrue(ImportReceiptStatePolicy.canTransition(ImportReceiptStatus.CHO_DUYET_CAP_2, ImportReceiptStatus.TU_CHOI));
@@ -25,7 +25,7 @@ class ImportReceiptStatePolicyTest {
     @Test
     void canTransition_shouldRejectSkippedOrTerminalTransitions() {
         assertFalse(ImportReceiptStatePolicy.canTransition(ImportReceiptStatus.NHAP, ImportReceiptStatus.HOAN_THANH));
-        assertFalse(ImportReceiptStatePolicy.canTransition(ImportReceiptStatus.CHO_DUYET_CAP_1, ImportReceiptStatus.CHO_HANG_VE));
+        assertFalse(ImportReceiptStatePolicy.canTransition(ImportReceiptStatus.CHO_DUYET_CAP_1, ImportReceiptStatus.CHO_DUYET_CAP_2));
         assertFalse(ImportReceiptStatePolicy.canTransition(ImportReceiptStatus.CHO_HANG_VE, ImportReceiptStatus.HOAN_THANH));
         assertFalse(ImportReceiptStatePolicy.canTransition(ImportReceiptStatus.HOAN_THANH, ImportReceiptStatus.NHAP));
         assertFalse(ImportReceiptStatePolicy.canTransition(ImportReceiptStatus.HUY, ImportReceiptStatus.NHAP));

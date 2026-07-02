@@ -80,6 +80,30 @@ class InventoryControllerTest {
                 .andExpect(jsonPath("$.number").doesNotExist());
     }
 
+    @Test
+    void listInventory_invalidStockStatusShouldReturn400() throws Exception {
+        mockMvc.perform(get("/api/inventory")
+                        .param("status", "LOW")
+                        .with(user("employee@example.com").roles("EMPLOYEE")))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void listInventory_invalidWarehouseStatusShouldReturn400() throws Exception {
+        mockMvc.perform(get("/api/inventory")
+                        .param("warehouseStatus", "ACTIVE")
+                        .with(user("employee@example.com").roles("EMPLOYEE")))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void listLowStockInventory_invalidProductStatusShouldReturn400() throws Exception {
+        mockMvc.perform(get("/api/inventory/low-stock")
+                        .param("productStatus", "INACTIVE")
+                        .with(user("manager@example.com").roles("MANAGER")))
+                .andExpect(status().isBadRequest());
+    }
+
     private PageImpl<InventoryLevelResponse> page() {
         return new PageImpl<>(
                 List.of(new InventoryLevelResponse(

@@ -1002,7 +1002,7 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
     /**
      * Hoàn tất phiếu nhập kho (T104).
      * Bọc toàn bộ các khâu vào 1 giao dịch an toàn (ACID):
-     * Lấy phiếu -> Update kiểm hàng (T100) -> Tăng tồn kho (T102) -> Ghi log (T103) -> Đổi status phiếu sang HOAN_THANH.
+     * Lấy phiếu -> Update kiểm hàng (T100) -> Đổi status phiếu sang HOAN_THANH -> Tăng tồn kho (T102) -> Ghi log (T103).
      * Bất kỳ lỗi nào xảy ra sẽ kích hoạt Rollback toàn bộ trạng thái của giao dịch này.
      */
     @Override
@@ -1026,7 +1026,13 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
         // Nạp lại chi tiết phiếu nhập sau khi đã được cập nhật kiểm hàng
         List<ImportReceiptDetail> details = importReceiptDetailRepository.findByDocumentId(receiptId);
 
-        // 3. Tăng tồn kho (T102) & Ghi log (T103) cho từng dòng sản phẩm
+        // 3. Đổi status phiếu sang HOAN_THANH trước khi tăng tồn kho để thỏa guard nghiệp vụ
+        receipt.setStatus(ImportReceiptStatus.HOAN_THANH);
+        receipt.setCompletedBy(actor);
+        receipt.setCompletedAt(LocalDateTime.now());
+        receipt.setUpdatedAt(LocalDateTime.now());
+
+        // 4. Tăng tồn kho (T102) & Ghi log (T103) cho từng dòng sản phẩm
         for (ImportReceiptDetail detail : details) {
             if (detail.getActualReceivedQuantity() != null && detail.getActualReceivedQuantity() > 0) {
                 inventoryService.increaseInventory(
@@ -1037,12 +1043,6 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
                 );
             }
         }
-
-        // 4. Đổi status phiếu sang HOAN_THANH
-        receipt.setStatus(ImportReceiptStatus.HOAN_THANH);
-        receipt.setCompletedBy(actor);
-        receipt.setCompletedAt(LocalDateTime.now());
-        receipt.setUpdatedAt(LocalDateTime.now());
 
         ImportReceipt savedReceipt = importReceiptRepository.saveAndFlush(receipt);
 

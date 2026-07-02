@@ -17,6 +17,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -107,6 +108,7 @@ class ImportReceiptCompleteServiceTest {
 
     @Test
     void completeImport_success_whenInspectionMatches() {
+        detail.setExpectedQuantity(12);
         InspectImportReceiptRequest request = new InspectImportReceiptRequest(
                 List.of(new InspectImportReceiptItemRequest(25L, 10, "Binh thuong", null))
         );
@@ -124,8 +126,10 @@ class ImportReceiptCompleteServiceTest {
         assertEquals(employee, receipt.getCompletedBy());
         assertNotNull(receipt.getCompletedAt());
 
-        // Verify that inventory service is called with the actual received quantity
-        verify(inventoryService, times(1)).increaseInventory(25L, 1L, 10, receipt);
+        ArgumentCaptor<ImportReceipt> receiptCaptor = ArgumentCaptor.forClass(ImportReceipt.class);
+        verify(inventoryService, times(1)).increaseInventory(eq(25L), eq(1L), eq(10), receiptCaptor.capture());
+        assertSame(receipt, receiptCaptor.getValue());
+        assertEquals(ImportReceiptStatus.HOAN_THANH, receiptCaptor.getValue().getStatus());
     }
 
     @Test
@@ -150,6 +154,19 @@ class ImportReceiptCompleteServiceTest {
     @Test
     void completeImport_error_whenInvalidStatus_shouldThrowBadRequest() {
         receipt.setStatus(ImportReceiptStatus.NHAP);
+        when(importReceiptRepository.findById(123L)).thenReturn(Optional.of(receipt));
+
+        InspectImportReceiptRequest request = new InspectImportReceiptRequest(
+                List.of(new InspectImportReceiptItemRequest(25L, 10, "Binh thuong", null))
+        );
+
+        assertThrows(BadRequestException.class, () -> importReceiptService.completeImport(123L, request));
+        verify(inventoryService, never()).increaseInventory(anyLong(), anyLong(), anyInt(), any(ImportReceipt.class));
+    }
+
+    @Test
+    void completeImport_error_whenAlreadyCompleted_shouldThrowBadRequest() {
+        receipt.setStatus(ImportReceiptStatus.HOAN_THANH);
         when(importReceiptRepository.findById(123L)).thenReturn(Optional.of(receipt));
 
         InspectImportReceiptRequest request = new InspectImportReceiptRequest(
@@ -196,14 +213,15 @@ class ImportReceiptCompleteServiceTest {
         when(importReceiptDetailRepository.findByDocumentIdOrderByIdAsc(123L)).thenReturn(List.of(detail));
         when(importReceiptRepository.saveAndFlush(any(ImportReceipt.class))).thenAnswer(invocation -> invocation.getArgument(0));
         
-        // Mock inventoryService throwing an exception
-        doThrow(new NotFoundException("Sản phẩm không tồn tại."))
-                .when(inventoryService).increaseInventory(25L, 1L, 10, receipt);
+        doAnswer(invocation -> {
+            ImportReceipt receiptArg = invocation.getArgument(3);
+            assertEquals(ImportReceiptStatus.HOAN_THANH, receiptArg.getStatus());
+            throw new NotFoundException("Sản phẩm không tồn tại.");
+        }).when(inventoryService).increaseInventory(25L, 1L, 10, receipt);
 
         assertThrows(NotFoundException.class, () -> importReceiptService.completeImport(123L, request));
 
-        assertEquals(ImportReceiptStatus.CHO_KIEM_HANG, receipt.getStatus());
-        verify(importReceiptRepository, never()).saveAndFlush(argThat(saved -> saved.getStatus() == ImportReceiptStatus.HOAN_THANH));
+        verify(importReceiptRepository, times(1)).saveAndFlush(any(ImportReceipt.class));
     }
 
     private void authenticate(Employee emp) {

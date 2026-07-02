@@ -110,7 +110,7 @@ class ImportReceiptCompleteServiceTest {
     void completeImport_success_whenInspectionMatches() {
         detail.setExpectedQuantity(12);
         InspectImportReceiptRequest request = new InspectImportReceiptRequest(
-                List.of(new InspectImportReceiptItemRequest(25L, 10, "Binh thuong", null))
+                List.of(new InspectImportReceiptItemRequest(25L, 12, "Binh thuong", null))
         );
 
         when(importReceiptRepository.findById(123L)).thenReturn(Optional.of(receipt));
@@ -127,13 +127,14 @@ class ImportReceiptCompleteServiceTest {
         assertNotNull(receipt.getCompletedAt());
 
         ArgumentCaptor<ImportReceipt> receiptCaptor = ArgumentCaptor.forClass(ImportReceipt.class);
-        verify(inventoryService, times(1)).increaseInventory(eq(25L), eq(1L), eq(10), receiptCaptor.capture());
+        verify(inventoryService, times(1)).increaseInventory(eq(25L), eq(1L), eq(12), receiptCaptor.capture());
         assertSame(receipt, receiptCaptor.getValue());
         assertEquals(ImportReceiptStatus.HOAN_THANH, receiptCaptor.getValue().getStatus());
     }
 
     @Test
     void completeImport_success_whenActualReceivedQuantityIsZero_shouldNotIncreaseInventory() {
+        detail.setExpectedQuantity(0);
         InspectImportReceiptRequest request = new InspectImportReceiptRequest(
                 List.of(new InspectImportReceiptItemRequest(25L, 0, "Binh thuong", null))
         );
@@ -149,6 +150,51 @@ class ImportReceiptCompleteServiceTest {
         assertEquals("HOAN_THANH", response.status());
         // Verify inventory service is NEVER called for 0 quantity
         verify(inventoryService, never()).increaseInventory(anyLong(), anyLong(), anyInt(), any(ImportReceipt.class));
+    }
+
+    @Test
+    void completeImport_error_whenDiscrepancyWithoutReport_shouldThrowClearBadRequest() {
+        InspectImportReceiptRequest request = new InspectImportReceiptRequest(
+                List.of(new InspectImportReceiptItemRequest(25L, 8, "Binh thuong", null))
+        );
+
+        when(importReceiptRepository.findById(123L)).thenReturn(Optional.of(receipt));
+        when(importReceiptDetailRepository.findByDocumentId(123L)).thenReturn(List.of(detail));
+        when(importReceiptDetailRepository.findByDocumentIdOrderByIdAsc(123L)).thenReturn(List.of(detail));
+        when(discrepancyReportRepository.findByImportReceiptId(123L)).thenReturn(Optional.empty());
+        when(importReceiptRepository.saveAndFlush(any(ImportReceipt.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        BadRequestException exception = assertThrows(BadRequestException.class,
+                () -> importReceiptService.completeImport(123L, request));
+
+        assertEquals("Có chênh lệch số lượng/tình trạng hàng. Vui lòng lưu biên bản chênh lệch trước khi hoàn tất nhập kho.",
+                exception.getMessage());
+        assertEquals(ImportReceiptStatus.CHO_KIEM_HANG, receipt.getStatus());
+        verify(inventoryService, never()).increaseInventory(anyLong(), anyLong(), anyInt(), any(ImportReceipt.class));
+        verify(importReceiptRepository, times(1)).saveAndFlush(any(ImportReceipt.class));
+    }
+
+    @Test
+    void completeImport_success_whenDiscrepancyReportExists_shouldUseActualQuantity() {
+        InspectImportReceiptRequest request = new InspectImportReceiptRequest(
+                List.of(new InspectImportReceiptItemRequest(25L, 8, "Binh thuong", null))
+        );
+
+        DiscrepancyReport report = new DiscrepancyReport();
+        report.setId(99L);
+        report.setImportReceipt(receipt);
+
+        when(importReceiptRepository.findById(123L)).thenReturn(Optional.of(receipt));
+        when(importReceiptDetailRepository.findByDocumentId(123L)).thenReturn(List.of(detail));
+        when(importReceiptDetailRepository.findByDocumentIdOrderByIdAsc(123L)).thenReturn(List.of(detail));
+        when(discrepancyReportRepository.findByImportReceiptId(123L)).thenReturn(Optional.of(report));
+        when(importReceiptRepository.saveAndFlush(any(ImportReceipt.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ImportReceiptDraftResponse response = importReceiptService.completeImport(123L, request);
+
+        assertNotNull(response);
+        assertEquals("HOAN_THANH", response.status());
+        verify(inventoryService, times(1)).increaseInventory(eq(25L), eq(1L), eq(8), same(receipt));
     }
 
     @Test

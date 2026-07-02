@@ -327,7 +327,7 @@ class ImportReceiptDetailServiceTest {
         CreateDiscrepancyReportRequest request = new CreateDiscrepancyReportRequest("Ghi chu kiem hang", List.of(itemReq));
 
         when(importReceiptRepository.findById(100L)).thenReturn(Optional.of(receipt));
-        when(discrepancyReportRepository.existsByImportReceiptId(100L)).thenReturn(false);
+        when(discrepancyReportRepository.findByImportReceiptId(100L)).thenReturn(Optional.empty());
         when(importReceiptDetailRepository.findByDocumentId(100L)).thenReturn(details);
         when(discrepancyReportRepository.existsByCodeIgnoreCase("BBCL-PNK-100")).thenReturn(false);
         when(discrepancyReportRepository.saveAndFlush(org.mockito.ArgumentMatchers.any(DiscrepancyReport.class))).thenAnswer(invocation -> {
@@ -362,7 +362,7 @@ class ImportReceiptDetailServiceTest {
         CreateDiscrepancyReportRequest request = new CreateDiscrepancyReportRequest("Ghi chu", List.of());
 
         when(importReceiptRepository.findById(100L)).thenReturn(Optional.of(receipt));
-        when(discrepancyReportRepository.existsByImportReceiptId(100L)).thenReturn(false);
+        when(discrepancyReportRepository.findByImportReceiptId(100L)).thenReturn(Optional.empty());
         when(importReceiptDetailRepository.findByDocumentId(100L)).thenReturn(details);
 
         assertThatThrownBy(() -> importReceiptService.createDiscrepancyReport(100L, request))
@@ -386,19 +386,42 @@ class ImportReceiptDetailServiceTest {
     }
 
     @Test
-    void createDiscrepancyReport_error_whenAlreadyExists() {
+    void createDiscrepancyReport_success_whenAlreadyExists_shouldUpdateReport() {
         Employee owner = createEmployee(1L, RoleCode.EMPLOYEE, EmployeeStatus.HOAT_DONG);
         authenticateAs(owner);
 
         ImportReceipt receipt = createReceipt(100L, ImportReceiptStatus.CHO_KIEM_HANG, owner);
-        CreateDiscrepancyReportRequest request = new CreateDiscrepancyReportRequest("Ghi chu", List.of());
+        Product product = new Product();
+        product.setId(20L);
+        product.setCode("SP-20");
+        product.setName("Product 20");
+
+        ImportReceiptDetail detail = createDetail(1L, receipt);
+        detail.setProduct(product);
+        detail.setExpectedQuantity(10);
+        detail.setActualReceivedQuantity(8);
+        detail.setRowStatus("CHENH_LECH");
+
+        DiscrepancyReport existing = new DiscrepancyReport();
+        existing.setId(500L);
+        existing.setImportReceipt(receipt);
+        existing.setCode("BBCL-PNK-100");
+        existing.setCreatedBy(owner);
+
+        CreateDiscrepancyReportItemRequest itemReq = new CreateDiscrepancyReportItemRequest(20L, "Thieu hang", "Giao bu");
+        CreateDiscrepancyReportRequest request = new CreateDiscrepancyReportRequest("Ghi chu moi", List.of(itemReq));
 
         when(importReceiptRepository.findById(100L)).thenReturn(Optional.of(receipt));
-        when(discrepancyReportRepository.existsByImportReceiptId(100L)).thenReturn(true);
+        when(discrepancyReportRepository.findByImportReceiptId(100L)).thenReturn(Optional.of(existing));
+        when(importReceiptDetailRepository.findByDocumentId(100L)).thenReturn(List.of(detail));
+        when(discrepancyReportRepository.saveAndFlush(org.mockito.ArgumentMatchers.any(DiscrepancyReport.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        assertThatThrownBy(() -> importReceiptService.createDiscrepancyReport(100L, request))
-                .isInstanceOf(ConflictException.class)
-                .hasMessageContaining("Bien ban chenh lech cho phieu nhap nay da ton tai.");
+        DiscrepancyReportResponse response = importReceiptService.createDiscrepancyReport(100L, request);
+
+        assertThat(response.getId()).isEqualTo(500L);
+        assertThat(response.getNote()).isEqualTo("Ghi chu moi");
+        assertThat(response.getDetails()).hasSize(1);
+        assertThat(response.getDetails().get(0).getReason()).isEqualTo("Thieu hang");
     }
 
     // =========================================================================

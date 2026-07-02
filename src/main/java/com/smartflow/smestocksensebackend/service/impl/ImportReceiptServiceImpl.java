@@ -871,7 +871,8 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
             detail.setExpiryDate(item.expiryDate());
 
             // Logic đối chiếu khớp/lệch: So sánh số lượng thực nhận và số lượng dự kiến trên chứng từ gốc
-            if (detail.getExpectedQuantity().equals(item.actualReceivedQuantity())) {
+            if (detail.getExpectedQuantity().equals(item.actualReceivedQuantity())
+                    && !isDiscrepantPhysicalStatus(item.physicalStatus())) {
                 detail.setRowStatus("KHOP");
             } else {
                 detail.setRowStatus("CHENH_LECH");
@@ -932,9 +933,7 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
             throw new BadRequestException("Phieu nhap khong o trang thai CHO_KIEM_HANG.");
         }
 
-        if (discrepancyReportRepository.existsByImportReceiptId(receiptId)) {
-            throw new ConflictException("Bien ban chenh lech cho phieu nhap nay da ton tai.");
-        }
+        java.util.Optional<DiscrepancyReport> existingReport = discrepancyReportRepository.findByImportReceiptId(receiptId);
 
         List<ImportReceiptDetail> details = importReceiptDetailRepository.findByDocumentId(receiptId);
 
@@ -949,14 +948,16 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
         }
 
         // Biên bản tự động sinh ra dựa vào dữ liệu lệch đã được mark ở bước kiểm đếm
-        DiscrepancyReport report = new DiscrepancyReport();
-        report.setImportReceipt(receipt);
-        report.setCreatedBy(actor);
-        report.setReportDate(LocalDateTime.now());
+        DiscrepancyReport report = existingReport.orElseGet(DiscrepancyReport::new);
+        if (report.getId() == null) {
+            report.setImportReceipt(receipt);
+            report.setCreatedBy(actor);
+            report.setReportDate(LocalDateTime.now());
+        }
         report.setNote(normalizeOptional(request.getNote()));
 
         String code = "BBCL-" + receipt.getCode();
-        if (discrepancyReportRepository.existsByCodeIgnoreCase(code)) {
+        if (report.getId() == null && discrepancyReportRepository.existsByCodeIgnoreCase(code)) {
             throw new ConflictException("Ma bien ban chenh lech " + code + " da ton tai.");
         }
         report.setCode(code);
@@ -988,7 +989,12 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
             reportDetail.setAction(action != null ? action : "Chua xac dinh");
             reportDetails.add(reportDetail);
         }
-        report.setDetails(reportDetails);
+        if (report.getId() == null) {
+            report.setDetails(reportDetails);
+        } else {
+            report.getDetails().clear();
+            report.getDetails().addAll(reportDetails);
+        }
 
         DiscrepancyReport savedReport;
         try {
@@ -1025,6 +1031,10 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
 
         // Nạp lại chi tiết phiếu nhập sau khi đã được cập nhật kiểm hàng
         List<ImportReceiptDetail> details = importReceiptDetailRepository.findByDocumentId(receiptId);
+        boolean hasDiscrepancy = details.stream().anyMatch(this::hasDiscrepancy);
+        if (hasDiscrepancy && discrepancyReportRepository.findByImportReceiptId(receiptId).isEmpty()) {
+            throw new BadRequestException("Có chênh lệch số lượng/tình trạng hàng. Vui lòng lưu biên bản chênh lệch trước khi hoàn tất nhập kho.");
+        }
 
         // 3. Đổi status phiếu sang HOAN_THANH trước khi tăng tồn kho để thỏa guard nghiệp vụ
         receipt.setStatus(ImportReceiptStatus.HOAN_THANH);
@@ -1047,6 +1057,26 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
         ImportReceipt savedReceipt = importReceiptRepository.saveAndFlush(receipt);
 
         return ImportReceiptDraftResponse.from(savedReceipt, details);
+    }
+
+    private boolean hasDiscrepancy(ImportReceiptDetail detail) {
+        if ("CHENH_LECH".equals(detail.getRowStatus())) {
+            return true;
+        }
+        Integer expectedQuantity = detail.getExpectedQuantity();
+        Integer actualQuantity = detail.getActualReceivedQuantity();
+        return actualQuantity != null
+                && expectedQuantity != null
+                && !expectedQuantity.equals(actualQuantity);
+    }
+
+    private boolean isDiscrepantPhysicalStatus(String physicalStatus) {
+        String normalized = normalizeOptional(physicalStatus);
+        if (normalized == null) {
+            return false;
+        }
+        String value = normalized.toLowerCase(java.util.Locale.ROOT);
+        return !Set.of("tot", "tốt", "binh thuong", "bình thường", "nguyen ven", "nguyên vẹn").contains(value);
     }
 
     private boolean isDuplicateImportReceiptDetailException(DataIntegrityViolationException exception) {

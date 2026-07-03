@@ -9,6 +9,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -42,6 +43,18 @@ public class ExcelImportController {
             @RequestParam(required = false) Long khoId
     ) {
         ExcelImportValidationResponse response = excelImportValidationService.validate(file, loaiImport, khoId);
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping(value = "/{id}/validate-errors", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ExcelImportValidationResponse> validateErrors(
+            @PathVariable Long id,
+            @RequestParam(required = false) MultipartFile file,
+            @RequestParam(required = false) String loaiImport,
+            @RequestParam(required = false) Long khoId
+    ) {
+        ExcelImportValidationResponse response = excelImportValidationService.validateAndPersistErrors(id, file, loaiImport, khoId);
         return ResponseEntity.ok(response);
     }
 }

@@ -1,20 +1,25 @@
 package com.smartflow.smestocksensebackend.excelimport;
 
 import com.smartflow.smestocksensebackend.dto.excelimport.ExcelImportUploadResponse;
+import com.smartflow.smestocksensebackend.entity.Employee;
 import com.smartflow.smestocksensebackend.entity.ExcelImport;
 import com.smartflow.smestocksensebackend.entity.ExcelImportStatus;
 import com.smartflow.smestocksensebackend.entity.Warehouse;
 import com.smartflow.smestocksensebackend.exception.BadRequestException;
 import com.smartflow.smestocksensebackend.repository.ExcelImportRepository;
 import com.smartflow.smestocksensebackend.repository.WarehouseRepository;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.mock.web.MockMultipartFile;
 
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -36,8 +41,14 @@ class ExcelImportUploadServiceTest {
     @InjectMocks
     private ExcelImportUploadService excelImportUploadService;
 
+    @AfterEach
+    void tearDown() {
+        SecurityContextHolder.clearContext();
+    }
+
     @Test
     void upload_productOnlyWithoutWarehouseShouldCreatePendingMetadata() {
+        Employee uploader = authenticateUploader();
         when(excelImportRepository.save(any(ExcelImport.class))).thenAnswer(invocation -> {
             ExcelImport saved = invocation.getArgument(0);
             saved.setId(99L);
@@ -62,12 +73,14 @@ class ExcelImportUploadServiceTest {
         assertThat(saved.getTotalRows()).isZero();
         assertThat(saved.getValidRows()).isZero();
         assertThat(saved.getErrorRows()).isZero();
+        assertThat(saved.getCreatedBy()).isSameAs(uploader);
         assertThat(response.id()).isEqualTo(99L);
         assertThat(response.trangThai()).isEqualTo(ExcelImportStatus.CHO_XU_LY.name());
     }
 
     @Test
     void upload_openingStockWithoutWarehouseShouldCreatePendingMetadata() {
+        authenticateUploader();
         when(excelImportRepository.save(any(ExcelImport.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         excelImportUploadService.upload(
@@ -85,6 +98,7 @@ class ExcelImportUploadServiceTest {
 
     @Test
     void upload_withWarehouseShouldStoreWarehouseMetadata() {
+        authenticateUploader();
         Warehouse warehouse = new Warehouse();
         warehouse.setId(10L);
 
@@ -172,5 +186,15 @@ class ExcelImportUploadServiceTest {
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 content
         );
+    }
+
+    private Employee authenticateUploader() {
+        Employee employee = new Employee();
+        employee.setId(7L);
+        employee.setEmail("admin@example.com");
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(employee, null, List.of())
+        );
+        return employee;
     }
 }

@@ -57,7 +57,7 @@ class ExcelImportUploadControllerTest {
     }
 
     @Test
-    void upload_productOnlyWithoutWarehouseShouldReturnCreatedMetadata() throws Exception {
+    void upload_adminProductOnlyWithoutWarehouseShouldReturnCreatedMetadata() throws Exception {
         when(excelImportUploadService.upload(any(), eq(ExcelImportMode.PRODUCT_ONLY.name()), eq(null)))
                 .thenReturn(new ExcelImportUploadResponse(
                         99L,
@@ -73,7 +73,7 @@ class ExcelImportUploadControllerTest {
         mockMvc.perform(multipart("/api/excel-imports")
                         .file(xlsxFile())
                         .param("loaiImport", ExcelImportMode.PRODUCT_ONLY.name())
-                        .with(user("employee@example.com").roles("EMPLOYEE")))
+                        .with(user("admin@example.com").roles("ADMIN")))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").value(99))
                 .andExpect(jsonPath("$.tenFile").value("products.xlsx"))
@@ -101,7 +101,7 @@ class ExcelImportUploadControllerTest {
         mockMvc.perform(multipart("/api/excel-imports")
                         .file(xlsxFile())
                         .param("loaiImport", ExcelImportMode.PRODUCT_WITH_OPENING_STOCK.name())
-                        .with(user("employee@example.com").roles("EMPLOYEE")))
+                        .with(user("admin@example.com").roles("ADMIN")))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").value(100))
                 .andExpect(jsonPath("$.loaiImport").value(ExcelImportMode.PRODUCT_WITH_OPENING_STOCK.name()));
@@ -115,9 +115,27 @@ class ExcelImportUploadControllerTest {
         mockMvc.perform(multipart("/api/excel-imports")
                         .param("loaiImport", ExcelImportMode.PRODUCT_ONLY.name())
                         .param("khoId", "10")
-                        .with(user("employee@example.com").roles("EMPLOYEE")))
+                        .with(user("admin@example.com").roles("ADMIN")))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("file is required."));
+    }
+
+    @Test
+    void upload_managerShouldReturn403() throws Exception {
+        mockMvc.perform(multipart("/api/excel-imports")
+                        .file(xlsxFile())
+                        .param("loaiImport", ExcelImportMode.PRODUCT_ONLY.name())
+                        .with(user("manager@example.com").roles("MANAGER")))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void upload_employeeShouldReturn403() throws Exception {
+        mockMvc.perform(multipart("/api/excel-imports")
+                        .file(xlsxFile())
+                        .param("loaiImport", ExcelImportMode.PRODUCT_ONLY.name())
+                        .with(user("employee@example.com").roles("EMPLOYEE")))
+                .andExpect(status().isForbidden());
     }
 
     private MockMultipartFile xlsxFile() {

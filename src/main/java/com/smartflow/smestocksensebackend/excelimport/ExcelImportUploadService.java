@@ -1,6 +1,7 @@
 package com.smartflow.smestocksensebackend.excelimport;
 
 import com.smartflow.smestocksensebackend.dto.excelimport.ExcelImportUploadResponse;
+import com.smartflow.smestocksensebackend.entity.Employee;
 import com.smartflow.smestocksensebackend.entity.ExcelImport;
 import com.smartflow.smestocksensebackend.entity.ExcelImportStatus;
 import com.smartflow.smestocksensebackend.entity.Warehouse;
@@ -8,6 +9,9 @@ import com.smartflow.smestocksensebackend.exception.BadRequestException;
 import com.smartflow.smestocksensebackend.repository.ExcelImportRepository;
 import com.smartflow.smestocksensebackend.repository.WarehouseRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -42,8 +46,17 @@ public class ExcelImportUploadService {
         excelImport.setTotalRows(0);
         excelImport.setValidRows(0);
         excelImport.setErrorRows(0);
+        excelImport.setCreatedBy(currentEmployee());
 
         return ExcelImportUploadResponse.from(excelImportRepository.save(excelImport));
+    }
+
+    private Employee currentEmployee() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !(authentication.getPrincipal() instanceof Employee employee)) {
+            throw new AuthenticationCredentialsNotFoundException("Authentication required.");
+        }
+        return employee;
     }
 
     private void validateFile(MultipartFile file) {

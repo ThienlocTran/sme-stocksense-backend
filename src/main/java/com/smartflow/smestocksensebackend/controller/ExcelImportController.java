@@ -21,7 +21,7 @@ public class ExcelImportController {
     private final ExcelImportUploadService excelImportUploadService;
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @PreAuthorize("hasAnyRole('ADMIN','MANAGER','EMPLOYEE')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ExcelImportUploadResponse> upload(
             @RequestParam(required = false) MultipartFile file,
             @RequestParam(required = false) String loaiImport,

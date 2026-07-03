@@ -42,8 +42,8 @@ public class ExcelImport {
     @Column(name = "loai_import", nullable = false, length = 50)
     private String importType = OPENING_INVENTORY_TYPE;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "kho_id", nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "kho_id")
     private Warehouse warehouse;
 
     @Enumerated(EnumType.STRING)

@@ -4,6 +4,7 @@ import jakarta.persistence.Column;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
@@ -51,6 +52,19 @@ class ExcelImportMappingTest {
         assertNotNull(column);
         assertEquals("trang_thai", column.name());
         assertEquals("trang_thai_import", column.columnDefinition());
+    }
+
+    @Test
+    void importSessionWarehouse_shouldBeOptionalForProductOnlyImport() throws NoSuchFieldException {
+        Field warehouse = ExcelImport.class.getDeclaredField("warehouse");
+        ManyToOne manyToOne = warehouse.getAnnotation(ManyToOne.class);
+        JoinColumn joinColumn = warehouse.getAnnotation(JoinColumn.class);
+
+        assertNotNull(manyToOne);
+        assertEquals(true, manyToOne.optional());
+        assertNotNull(joinColumn);
+        assertEquals("kho_id", joinColumn.name());
+        assertEquals(true, joinColumn.nullable());
     }
 
     @Test

@@ -33,13 +33,14 @@ public class ExcelImportUploadService {
     private final WarehouseRepository warehouseRepository;
 
     public ExcelImportUploadResponse upload(MultipartFile file, String loaiImport, Long khoId) {
-        validateFile(file);
+        String fileName = file == null || file.isEmpty() ? null : safeOriginalFileName(file);
+        validateFile(file, fileName);
         ExcelImportMode importMode = parseImportMode(loaiImport);
         Warehouse warehouse = findWarehouseIfProvided(khoId);
 
         ExcelImport excelImport = new ExcelImport();
-        excelImport.setFileName(safeOriginalFileName(file));
-        excelImport.setFilePath(metadataOnlyPath(excelImport.getFileName()));
+        excelImport.setFileName(fileName);
+        excelImport.setFilePath(metadataOnlyPath(fileName));
         excelImport.setImportType(importMode.name());
         excelImport.setWarehouse(warehouse);
         excelImport.setStatus(ExcelImportStatus.CHO_XU_LY);
@@ -59,7 +60,7 @@ public class ExcelImportUploadService {
         return employee;
     }
 
-    private void validateFile(MultipartFile file) {
+    private void validateFile(MultipartFile file, String fileName) {
         if (file == null) {
             throw new BadRequestException("file is required.");
         }
@@ -67,7 +68,6 @@ public class ExcelImportUploadService {
             throw new BadRequestException("file must not be empty.");
         }
 
-        String fileName = safeOriginalFileName(file);
         if (!fileName.toLowerCase(Locale.ROOT).endsWith(".xlsx")) {
             throw new BadRequestException("file must be .xlsx.");
         }
@@ -86,7 +86,7 @@ public class ExcelImportUploadService {
         try {
             return ExcelImportMode.valueOf(loaiImport.trim());
         } catch (IllegalArgumentException exception) {
-            throw new BadRequestException("loaiImport is not supported.");
+            throw new BadRequestException("loaiImport is not supported.", exception);
         }
     }
 

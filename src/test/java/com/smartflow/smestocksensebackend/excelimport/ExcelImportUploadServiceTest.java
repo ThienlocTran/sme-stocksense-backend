@@ -165,6 +165,35 @@ class ExcelImportUploadServiceTest {
     }
 
     @Test
+    void upload_missingImportModeShouldReturnBadRequest() {
+        assertThatThrownBy(() -> excelImportUploadService.upload(xlsxFile("products.xlsx", new byte[]{1}), null, 10L))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessage("loaiImport is required.");
+
+        assertThatThrownBy(() -> excelImportUploadService.upload(xlsxFile("products.xlsx", new byte[]{1}), " ", 10L))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessage("loaiImport is required.");
+
+        verify(excelImportRepository, never()).save(any());
+    }
+
+    @Test
+    void upload_unsupportedContentTypeShouldReturnBadRequest() {
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "products.xlsx",
+                "text/csv",
+                new byte[]{1}
+        );
+
+        assertThatThrownBy(() -> excelImportUploadService.upload(file, ExcelImportMode.PRODUCT_ONLY.name(), 10L))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessage("file content type is not supported.");
+
+        verify(excelImportRepository, never()).save(any());
+    }
+
+    @Test
     void upload_invalidWarehouseShouldReturnBadRequestWhenProvided() {
         when(warehouseRepository.findById(404L)).thenReturn(Optional.empty());
 

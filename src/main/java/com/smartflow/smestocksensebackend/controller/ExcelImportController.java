@@ -35,7 +35,7 @@ public class ExcelImportController {
     }
 
     @PostMapping(value = "/validate", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @PreAuthorize("hasAnyRole('ADMIN','MANAGER','EMPLOYEE')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ExcelImportValidationResponse> validate(
             @RequestParam(required = false) MultipartFile file,
             @RequestParam(required = false) String loaiImport,

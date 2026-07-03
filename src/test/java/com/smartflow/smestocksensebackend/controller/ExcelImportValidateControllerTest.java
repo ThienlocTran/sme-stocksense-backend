@@ -58,7 +58,7 @@ class ExcelImportValidateControllerTest {
     }
 
     @Test
-    void validate_shouldReturnValidationResult() throws Exception {
+    void validate_adminShouldReturnValidationResult() throws Exception {
         when(excelImportValidationService.validate(any(), eq(ExcelImportMode.PRODUCT_ONLY.name()), eq(null)))
                 .thenReturn(new ExcelImportValidationResponse(
                         true,
@@ -72,13 +72,31 @@ class ExcelImportValidateControllerTest {
         mockMvc.perform(multipart("/api/excel-imports/validate")
                         .file(ExcelImportUploadControllerTestSupport.xlsxFile())
                         .param("loaiImport", ExcelImportMode.PRODUCT_ONLY.name())
-                        .with(user("employee@example.com").roles("EMPLOYEE")))
+                        .with(user("admin@example.com").roles("ADMIN")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.valid").value(true))
                 .andExpect(jsonPath("$.loaiImport").value(ExcelImportMode.PRODUCT_ONLY.name()))
                 .andExpect(jsonPath("$.tongSoDong").value(1))
                 .andExpect(jsonPath("$.soDongHopLe").value(1))
                 .andExpect(jsonPath("$.soDongLoi").value(0));
+    }
+
+    @Test
+    void validate_managerShouldReturn403() throws Exception {
+        mockMvc.perform(multipart("/api/excel-imports/validate")
+                        .file(ExcelImportUploadControllerTestSupport.xlsxFile())
+                        .param("loaiImport", ExcelImportMode.PRODUCT_ONLY.name())
+                        .with(user("manager@example.com").roles("MANAGER")))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void validate_employeeShouldReturn403() throws Exception {
+        mockMvc.perform(multipart("/api/excel-imports/validate")
+                        .file(ExcelImportUploadControllerTestSupport.xlsxFile())
+                        .param("loaiImport", ExcelImportMode.PRODUCT_ONLY.name())
+                        .with(user("employee@example.com").roles("EMPLOYEE")))
+                .andExpect(status().isForbidden());
     }
 
     static class ExcelImportUploadControllerTestSupport {

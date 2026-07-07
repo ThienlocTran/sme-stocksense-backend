@@ -71,6 +71,22 @@ class ExportReceiptPendingApprovalControllerTest {
         }
 
         @Test
+        void pendingApproval_negativePageShouldReturn400() throws Exception {
+                mockMvc.perform(get("/api/export-receipts/pending-approval")
+                                .param("page", "-1")
+                                .with(user("manager@example.com").roles("MANAGER")))
+                                .andExpect(status().isBadRequest());
+        }
+
+        @Test
+        void pendingApproval_sizeAbove100ShouldReturn400() throws Exception {
+                mockMvc.perform(get("/api/export-receipts/pending-approval")
+                                .param("size", "101")
+                                .with(user("manager@example.com").roles("MANAGER")))
+                                .andExpect(status().isBadRequest());
+        }
+
+        @Test
         void pendingApproval_invalidStatusShouldReturn400() throws Exception {
                 when(exportReceiptService.listPendingApproval(eq("NHAP"), any(Pageable.class)))
                                 .thenThrow(new BadRequestException(

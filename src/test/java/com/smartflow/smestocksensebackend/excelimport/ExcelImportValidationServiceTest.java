@@ -71,8 +71,8 @@ class ExcelImportValidationServiceTest {
     @Test
     void validate_validProductOnlyWorkbookReturnsValidTrue() throws Exception {
         when(categoryRepository.existsByNormalizedCode("CAT01")).thenReturn(true);
-        when(productRepository.existsBySkuIgnoreCase("SKU01")).thenReturn(false);
-        when(productRepository.existsByBarcodeIgnoreCase("BAR01")).thenReturn(false);
+        when(productRepository.existsBySku("SKU01")).thenReturn(false);
+        when(productRepository.existsByBarcode("BAR01")).thenReturn(false);
 
         ExcelImportValidationResponse response = validationService.validate(
                 xlsxFile(workbook(
@@ -91,6 +91,27 @@ class ExcelImportValidationServiceTest {
         assertThat(response.soDongLoi()).isZero();
         verify(productRepository, never()).save(any(Product.class));
         verify(productRepository, never()).saveAndFlush(any(Product.class));
+    }
+
+    @Test
+    void validate_commaDecimalReturnsValidationError() throws Exception {
+        when(categoryRepository.existsByNormalizedCode("CAT01")).thenReturn(true);
+        when(productRepository.existsBySku("SKU01")).thenReturn(false);
+        when(productRepository.existsByBarcode("BAR01")).thenReturn(false);
+
+        ExcelImportValidationResponse response = validationService.validate(
+                xlsxFile(workbook(
+                        ExcelImportTemplateConstants.PRODUCT_HEADERS,
+                        List.of(List.of("P01", "San pham 1", "SKU01", "BAR01", "Cai", "CAT01", "12,5", "1", "5", "HOAT_DONG")),
+                        null,
+                        null
+                )),
+                ExcelImportMode.PRODUCT_ONLY.name(),
+                null
+        );
+
+        assertThat(response.valid()).isFalse();
+        assertThat(response.errors()).anyMatch(error -> "gia_ban".equals(error.columnName()));
     }
 
     @Test
@@ -204,8 +225,8 @@ class ExcelImportValidationServiceTest {
     @Test
     void validate_validProductWithOpeningStockWorkbookReturnsValidTrue() throws Exception {
         when(categoryRepository.existsByNormalizedCode("CAT01")).thenReturn(true);
-        when(productRepository.existsBySkuIgnoreCase("SKU01")).thenReturn(false);
-        when(productRepository.existsByBarcodeIgnoreCase("BAR01")).thenReturn(false);
+        when(productRepository.existsBySku("SKU01")).thenReturn(false);
+        when(productRepository.existsByBarcode("BAR01")).thenReturn(false);
         when(warehouseRepository.existsByCodeIgnoreCase("WH01")).thenReturn(true);
 
         ExcelImportValidationResponse response = validationService.validate(

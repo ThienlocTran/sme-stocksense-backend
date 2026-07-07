@@ -22,7 +22,7 @@ public class ExcelImportChecksumService {
         } catch (NoSuchAlgorithmException exception) {
             throw new IllegalStateException("SHA-256 is not available.", exception);
         } catch (Exception exception) {
-            throw new BadRequestException("Cannot read uploaded file.");
+            throw new BadRequestException("Cannot read uploaded file.", exception);
         }
     }
 }

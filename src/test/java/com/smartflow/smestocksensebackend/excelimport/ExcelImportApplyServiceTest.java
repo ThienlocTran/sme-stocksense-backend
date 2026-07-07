@@ -157,7 +157,7 @@ class ExcelImportApplyServiceTest {
         when(excelImportValidationService.validate(file, ExcelImportMode.PRODUCT_ONLY.name(), null))
                 .thenReturn(new ExcelImportValidationResponse(true, ExcelImportMode.PRODUCT_ONLY.name(), 1, 1, 0, List.of()));
         when(categoryRepository.findByNormalizedCode("CAT01")).thenReturn(Optional.of(category));
-        when(productRepository.findByCodeIgnoreCase("P01")).thenReturn(Optional.of(product));
+        when(productRepository.findByCode("P01")).thenReturn(Optional.of(product));
         when(excelImportRepository.save(excelImport)).thenReturn(excelImport);
 
         ExcelImportApplyResponse response = applyService.apply(99L, file);
@@ -194,7 +194,7 @@ class ExcelImportApplyServiceTest {
         when(excelImportValidationService.validate(file, ExcelImportMode.PRODUCT_WITH_OPENING_STOCK.name(), null))
                 .thenReturn(new ExcelImportValidationResponse(true, ExcelImportMode.PRODUCT_WITH_OPENING_STOCK.name(), 2, 2, 0, List.of()));
         when(categoryRepository.findByNormalizedCode("CAT01")).thenReturn(Optional.of(category));
-        when(productRepository.findByCodeIgnoreCase("P01")).thenReturn(Optional.of(product));
+        when(productRepository.findByCode("P01")).thenReturn(Optional.of(product));
         when(warehouseRepository.findByCodeIgnoreCase("WH01")).thenReturn(Optional.of(warehouse));
         when(inventoryLevelRepository.findByProductIdAndWarehouseIdForUpdate(10L, 20L)).thenReturn(Optional.of(level));
         when(excelImportRepository.save(excelImport)).thenReturn(excelImport);

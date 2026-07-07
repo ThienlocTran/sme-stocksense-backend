@@ -37,6 +37,8 @@ import java.util.Locale;
 @RequiredArgsConstructor
 public class ExcelImportApplyService {
 
+    private static final String DECIMAL_PATTERN = "-?\\d+(\\.\\d+)?";
+
     private final ExcelImportRepository excelImportRepository;
     private final ExcelImportErrorRepository excelImportErrorRepository;
     private final ExcelImportValidationService excelImportValidationService;
@@ -68,7 +70,7 @@ public class ExcelImportApplyService {
         } catch (BadRequestException | NotFoundException exception) {
             throw exception;
         } catch (Exception exception) {
-            throw new BadRequestException("File Excel khong hop le.");
+            throw new BadRequestException("File Excel khong hop le.", exception);
         }
 
         excelImport.setStatus(ExcelImportStatus.DA_IMPORT);
@@ -101,7 +103,7 @@ public class ExcelImportApplyService {
         try {
             return ExcelImportMode.valueOf(importType);
         } catch (Exception exception) {
-            throw new BadRequestException("loaiImport is not supported.");
+            throw new BadRequestException("loaiImport is not supported.", exception);
         }
     }
 
@@ -132,7 +134,7 @@ public class ExcelImportApplyService {
         Category category = categoryRepository.findByNormalizedCode(categoryCode)
                 .orElseThrow(() -> new BadRequestException("Danh muc khong ton tai."));
 
-        Product product = productRepository.findByCodeIgnoreCase(code).orElseGet(Product::new);
+        Product product = productRepository.findByCode(code).orElseGet(Product::new);
         product.setCode(code);
         product.setName(requiredCell(row, 1, "ten_san_pham").trim());
         product.setSku(blankToNull(readCell(row, 2)));
@@ -166,7 +168,7 @@ public class ExcelImportApplyService {
     private void setOpeningStock(Row row) {
         Warehouse warehouse = warehouseRepository.findByCodeIgnoreCase(requiredCell(row, 0, "ma_kho"))
                 .orElseThrow(() -> new BadRequestException("Kho hang khong ton tai."));
-        Product product = productRepository.findByCodeIgnoreCase(requiredCell(row, 1, "ma_san_pham"))
+        Product product = productRepository.findByCode(requiredCell(row, 1, "ma_san_pham").trim().toUpperCase(Locale.ROOT))
                 .orElseThrow(() -> new BadRequestException("San pham khong ton tai."));
         Integer quantity = parseRequiredInteger(readCell(row, 2), "so_luong_ton");
 
@@ -189,7 +191,7 @@ public class ExcelImportApplyService {
         try {
             return ProductStatus.valueOf(value.trim());
         } catch (IllegalArgumentException exception) {
-            throw new BadRequestException("Trang thai san pham khong hop le.");
+            throw new BadRequestException("Trang thai san pham khong hop le.", exception);
         }
     }
 
@@ -197,10 +199,14 @@ public class ExcelImportApplyService {
         if (isBlank(value)) {
             return null;
         }
-        try {
-            return new BigDecimal(value.replace(",", "").trim());
-        } catch (Exception exception) {
+        String normalized = value.trim();
+        if (!normalized.matches(DECIMAL_PATTERN)) {
             throw new BadRequestException("Gia tri so khong hop le.");
+        }
+        try {
+            return new BigDecimal(normalized);
+        } catch (Exception exception) {
+            throw new BadRequestException("Gia tri so khong hop le.", exception);
         }
     }
 
@@ -219,7 +225,7 @@ public class ExcelImportApplyService {
         try {
             return decimal.intValueExact();
         } catch (ArithmeticException exception) {
-            throw new BadRequestException(columnName + " vuot gioi han cho phep.");
+            throw new BadRequestException(columnName + " vuot gioi han cho phep.", exception);
         }
     }
 

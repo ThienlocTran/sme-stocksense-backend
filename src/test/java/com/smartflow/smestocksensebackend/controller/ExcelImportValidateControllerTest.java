@@ -357,6 +357,30 @@ class ExcelImportValidateControllerTest {
     }
 
     @Test
+    void apply_missingSessionShouldReturn404() throws Exception {
+        when(excelImportApplyService.apply(eq(404L), any()))
+                .thenThrow(new NotFoundException("Lan import khong ton tai."));
+
+        mockMvc.perform(multipart("/api/excel-imports/404/apply")
+                        .file(ExcelImportUploadControllerTestSupport.xlsxFile())
+                        .with(user("admin@example.com").roles("ADMIN")))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("Lan import khong ton tai."));
+    }
+
+    @Test
+    void apply_invalidSessionShouldReturn400() throws Exception {
+        when(excelImportApplyService.apply(eq(99L), any()))
+                .thenThrow(new BadRequestException("File Excel khong khop voi file da validate."));
+
+        mockMvc.perform(multipart("/api/excel-imports/99/apply")
+                        .file(ExcelImportUploadControllerTestSupport.xlsxFile())
+                        .with(user("admin@example.com").roles("ADMIN")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("File Excel khong khop voi file da validate."));
+    }
+
+    @Test
     void apply_managerShouldReturn403() throws Exception {
         mockMvc.perform(multipart("/api/excel-imports/99/apply")
                         .file(ExcelImportUploadControllerTestSupport.xlsxFile())

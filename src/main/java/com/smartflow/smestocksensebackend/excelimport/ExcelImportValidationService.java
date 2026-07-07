@@ -40,6 +40,8 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class ExcelImportValidationService {
 
+    private static final String DECIMAL_PATTERN = "-?\\d+(\\.\\d+)?";
+
     private static final Set<String> ALLOWED_CONTENT_TYPES = Set.of(
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             "application/octet-stream"
@@ -347,7 +349,7 @@ public class ExcelImportValidationService {
 
             if (isBlank(productCode)) {
                 state.addRowError(sheetName, rowIndex + 1, "ma_san_pham", productCode, "Mã sản phẩm không được để trống.", "Nhập mã sản phẩm.");
-            } else if (!productRepository.existsByCodeIgnoreCase(productCode) && !productCodesInWorkbook.contains(normalize(productCode))) {
+            } else if (!productRepository.existsByCode(productCode.trim().toUpperCase(Locale.ROOT)) && !productCodesInWorkbook.contains(normalize(productCode))) {
                 state.addRowError(sheetName, rowIndex + 1, "ma_san_pham", productCode, "Sản phẩm không tồn tại.", "Thêm sản phẩm vào sheet 01_SanPham hoặc dùng mã đang có trong hệ thống.");
             }
 
@@ -409,9 +411,9 @@ public class ExcelImportValidationService {
 
     private boolean isSkuUsedByAnotherProduct(String sku, Product existingProduct) {
         if (existingProduct == null) {
-            return productRepository.existsBySkuIgnoreCase(sku);
+            return productRepository.existsBySku(sku);
         }
-        java.util.Optional<Product> found = productRepository.findBySkuIgnoreCase(sku);
+        java.util.Optional<Product> found = productRepository.findBySku(sku);
         if (found == null) {
             return false;
         }
@@ -422,9 +424,9 @@ public class ExcelImportValidationService {
 
     private boolean isBarcodeUsedByAnotherProduct(String barcode, Product existingProduct) {
         if (existingProduct == null) {
-            return productRepository.existsByBarcodeIgnoreCase(barcode);
+            return productRepository.existsByBarcode(barcode);
         }
-        java.util.Optional<Product> found = productRepository.findByBarcodeIgnoreCase(barcode);
+        java.util.Optional<Product> found = productRepository.findByBarcode(barcode);
         if (found == null) {
             return false;
         }
@@ -434,7 +436,7 @@ public class ExcelImportValidationService {
     }
 
     private Product findExistingProductByCode(String code) {
-        java.util.Optional<Product> product = productRepository.findByCodeIgnoreCase(code);
+        java.util.Optional<Product> product = productRepository.findByCode(code.trim().toUpperCase(Locale.ROOT));
         return product == null ? null : product.orElse(null);
     }
 
@@ -539,8 +541,12 @@ public class ExcelImportValidationService {
     }
 
     private BigDecimal parseDecimal(String rawValue) {
+        String normalized = rawValue.trim();
+        if (!normalized.matches(DECIMAL_PATTERN)) {
+            return null;
+        }
         try {
-            return new BigDecimal(rawValue.replace(",", "").trim());
+            return new BigDecimal(normalized);
         } catch (Exception exception) {
             return null;
         }

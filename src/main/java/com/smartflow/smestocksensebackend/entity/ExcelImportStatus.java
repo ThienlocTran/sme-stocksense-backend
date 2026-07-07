@@ -4,6 +4,7 @@ public enum ExcelImportStatus {
     CHO_XU_LY,
     CO_LOI,
     SAN_SANG_IMPORT,
+    DA_XAC_NHAN,
     DA_IMPORT,
     THAT_BAI
 }

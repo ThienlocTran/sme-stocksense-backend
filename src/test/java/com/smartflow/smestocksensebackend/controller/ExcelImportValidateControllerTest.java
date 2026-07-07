@@ -272,7 +272,7 @@ class ExcelImportValidateControllerTest {
         when(excelImportValidationService.confirm(99L))
                 .thenReturn(new ExcelImportConfirmResponse(
                         99L,
-                        ExcelImportStatus.SAN_SANG_IMPORT.name(),
+                        ExcelImportStatus.DA_XAC_NHAN.name(),
                         3,
                         3,
                         0,
@@ -283,7 +283,7 @@ class ExcelImportValidateControllerTest {
                         .with(user("admin@example.com").roles("ADMIN")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.importId").value(99))
-                .andExpect(jsonPath("$.status").value(ExcelImportStatus.SAN_SANG_IMPORT.name()))
+                .andExpect(jsonPath("$.status").value(ExcelImportStatus.DA_XAC_NHAN.name()))
                 .andExpect(jsonPath("$.totalRows").value(3))
                 .andExpect(jsonPath("$.validRows").value(3))
                 .andExpect(jsonPath("$.errorRows").value(0))

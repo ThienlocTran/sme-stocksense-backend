@@ -214,6 +214,42 @@ class ExcelImportValidateControllerTest {
     }
 
     @Test
+    void listErrors_negativePageShouldReturn400() throws Exception {
+        mockMvc.perform(get("/api/excel-imports/99/errors")
+                        .param("page", "-1")
+                        .param("size", "20")
+                        .with(user("admin@example.com").roles("ADMIN")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("page phai lon hon hoac bang 0."));
+
+        verify(excelImportValidationService, never()).listErrors(any(), any(Pageable.class));
+    }
+
+    @Test
+    void listErrors_nonPositiveSizeShouldReturn400() throws Exception {
+        mockMvc.perform(get("/api/excel-imports/99/errors")
+                        .param("page", "0")
+                        .param("size", "0")
+                        .with(user("admin@example.com").roles("ADMIN")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("size phai nam trong khoang 1 den 100."));
+
+        verify(excelImportValidationService, never()).listErrors(any(), any(Pageable.class));
+    }
+
+    @Test
+    void listErrors_oversizedPageShouldReturn400() throws Exception {
+        mockMvc.perform(get("/api/excel-imports/99/errors")
+                        .param("page", "0")
+                        .param("size", "101")
+                        .with(user("admin@example.com").roles("ADMIN")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("size phai nam trong khoang 1 den 100."));
+
+        verify(excelImportValidationService, never()).listErrors(any(), any(Pageable.class));
+    }
+
+    @Test
     void listErrors_managerShouldReturn403() throws Exception {
         mockMvc.perform(get("/api/excel-imports/99/errors")
                         .with(user("manager@example.com").roles("MANAGER")))

@@ -121,6 +121,8 @@ public class SecurityConfig {
                                                 .hasRole("ADMIN")
                                                 .requestMatchers(HttpMethod.GET, "/api/excel-imports/*/errors")
                                                 .hasRole("ADMIN")
+                                                .requestMatchers(HttpMethod.POST, "/api/excel-imports/*/confirm")
+                                                .hasRole("ADMIN")
                                                 .requestMatchers(HttpMethod.POST, "/api/excel-imports/*/validate-errors")
                                                 .hasRole("ADMIN")
                                                 .requestMatchers(HttpMethod.POST, "/api/excel-imports/validate")

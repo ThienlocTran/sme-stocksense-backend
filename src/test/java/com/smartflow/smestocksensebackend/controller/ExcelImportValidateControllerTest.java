@@ -3,9 +3,12 @@ package com.smartflow.smestocksensebackend.controller;
 import com.smartflow.smestocksensebackend.config.JwtAuthenticationFilter;
 import com.smartflow.smestocksensebackend.config.SecurityConfig;
 import com.smartflow.smestocksensebackend.dto.common.PageResponse;
+import com.smartflow.smestocksensebackend.dto.excelimport.ExcelImportConfirmResponse;
 import com.smartflow.smestocksensebackend.dto.excelimport.ExcelImportErrorResponse;
 import com.smartflow.smestocksensebackend.dto.excelimport.ExcelImportValidationResponse;
+import com.smartflow.smestocksensebackend.entity.ExcelImportStatus;
 import com.smartflow.smestocksensebackend.exception.ApiExceptionHandler;
+import com.smartflow.smestocksensebackend.exception.BadRequestException;
 import com.smartflow.smestocksensebackend.exception.NotFoundException;
 import com.smartflow.smestocksensebackend.excelimport.ExcelImportMode;
 import com.smartflow.smestocksensebackend.excelimport.ExcelImportTemplateService;
@@ -32,6 +35,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -259,6 +263,68 @@ class ExcelImportValidateControllerTest {
     @Test
     void listErrors_employeeShouldReturn403() throws Exception {
         mockMvc.perform(get("/api/excel-imports/99/errors")
+                        .with(user("employee@example.com").roles("EMPLOYEE")))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void confirm_adminShouldReturnConfirmedSummary() throws Exception {
+        when(excelImportValidationService.confirm(99L))
+                .thenReturn(new ExcelImportConfirmResponse(
+                        99L,
+                        ExcelImportStatus.SAN_SANG_IMPORT.name(),
+                        3,
+                        3,
+                        0,
+                        "Lan import da san sang de thuc hien buoc tiep theo."
+                ));
+
+        mockMvc.perform(post("/api/excel-imports/99/confirm")
+                        .with(user("admin@example.com").roles("ADMIN")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.importId").value(99))
+                .andExpect(jsonPath("$.status").value(ExcelImportStatus.SAN_SANG_IMPORT.name()))
+                .andExpect(jsonPath("$.totalRows").value(3))
+                .andExpect(jsonPath("$.validRows").value(3))
+                .andExpect(jsonPath("$.errorRows").value(0))
+                .andExpect(jsonPath("$.message").value("Lan import da san sang de thuc hien buoc tiep theo."));
+
+        verify(excelImportValidationService, never()).validate(any(), any(), any());
+        verify(excelImportValidationService, never()).validateAndPersistErrors(any(), any(), any(), any());
+    }
+
+    @Test
+    void confirm_missingSessionShouldReturn404() throws Exception {
+        when(excelImportValidationService.confirm(404L))
+                .thenThrow(new NotFoundException("Lan import khong ton tai."));
+
+        mockMvc.perform(post("/api/excel-imports/404/confirm")
+                        .with(user("admin@example.com").roles("ADMIN")))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("Lan import khong ton tai."));
+    }
+
+    @Test
+    void confirm_invalidSessionShouldReturn400() throws Exception {
+        when(excelImportValidationService.confirm(99L))
+                .thenThrow(new BadRequestException("Lan import chua san sang xac nhan."));
+
+        mockMvc.perform(post("/api/excel-imports/99/confirm")
+                        .with(user("admin@example.com").roles("ADMIN")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Lan import chua san sang xac nhan."));
+    }
+
+    @Test
+    void confirm_managerShouldReturn403() throws Exception {
+        mockMvc.perform(post("/api/excel-imports/99/confirm")
+                        .with(user("manager@example.com").roles("MANAGER")))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void confirm_employeeShouldReturn403() throws Exception {
+        mockMvc.perform(post("/api/excel-imports/99/confirm")
                         .with(user("employee@example.com").roles("EMPLOYEE")))
                 .andExpect(status().isForbidden());
     }

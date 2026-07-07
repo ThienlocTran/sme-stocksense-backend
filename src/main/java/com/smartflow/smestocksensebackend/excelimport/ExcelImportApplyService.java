@@ -54,7 +54,7 @@ public class ExcelImportApplyService {
 
     @Transactional
     public ExcelImportApplyResponse apply(Long importId, MultipartFile file) {
-        ExcelImport excelImport = excelImportRepository.findById(importId)
+        ExcelImport excelImport = excelImportRepository.findByIdForUpdate(importId)
                 .orElseThrow(() -> new NotFoundException("Lan import khong ton tai."));
 
         validateApplyPreconditions(excelImport, file);

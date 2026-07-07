@@ -84,7 +84,7 @@ class ExcelImportApplyServiceTest {
 
     @Test
     void apply_missingImportShouldThrowNotFound() {
-        when(excelImportRepository.findById(404L)).thenReturn(Optional.empty());
+        when(excelImportRepository.findByIdForUpdate(404L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> applyService.apply(404L, file(productWorkbook())))
                 .isInstanceOf(NotFoundException.class)
@@ -95,7 +95,7 @@ class ExcelImportApplyServiceTest {
     void apply_rejectsStatusNotConfirmed() {
         ExcelImport excelImport = readyImport(99L, ExcelImportMode.PRODUCT_ONLY);
         excelImport.setStatus(ExcelImportStatus.SAN_SANG_IMPORT);
-        when(excelImportRepository.findById(99L)).thenReturn(Optional.of(excelImport));
+        when(excelImportRepository.findByIdForUpdate(99L)).thenReturn(Optional.of(excelImport));
 
         assertThatThrownBy(() -> applyService.apply(99L, file(productWorkbook())))
                 .isInstanceOf(BadRequestException.class)
@@ -106,7 +106,7 @@ class ExcelImportApplyServiceTest {
     void apply_rejectsAlreadyImported() {
         ExcelImport excelImport = readyImport(99L, ExcelImportMode.PRODUCT_ONLY);
         excelImport.setStatus(ExcelImportStatus.DA_IMPORT);
-        when(excelImportRepository.findById(99L)).thenReturn(Optional.of(excelImport));
+        when(excelImportRepository.findByIdForUpdate(99L)).thenReturn(Optional.of(excelImport));
 
         assertThatThrownBy(() -> applyService.apply(99L, file(productWorkbook())))
                 .isInstanceOf(BadRequestException.class)
@@ -117,7 +117,7 @@ class ExcelImportApplyServiceTest {
     void apply_rejectsMissingChecksum() {
         ExcelImport excelImport = readyImport(99L, ExcelImportMode.PRODUCT_ONLY);
         excelImport.setChecksumFileSha256(null);
-        when(excelImportRepository.findById(99L)).thenReturn(Optional.of(excelImport));
+        when(excelImportRepository.findByIdForUpdate(99L)).thenReturn(Optional.of(excelImport));
 
         assertThatThrownBy(() -> applyService.apply(99L, file(productWorkbook())))
                 .isInstanceOf(BadRequestException.class)
@@ -127,7 +127,7 @@ class ExcelImportApplyServiceTest {
     @Test
     void apply_rejectsChecksumMismatch() {
         ExcelImport excelImport = readyImport(99L, ExcelImportMode.PRODUCT_ONLY);
-        when(excelImportRepository.findById(99L)).thenReturn(Optional.of(excelImport));
+        when(excelImportRepository.findByIdForUpdate(99L)).thenReturn(Optional.of(excelImport));
         when(excelImportChecksumService.sha256(any())).thenReturn("different");
 
         assertThatThrownBy(() -> applyService.apply(99L, file(productWorkbook())))
@@ -139,7 +139,7 @@ class ExcelImportApplyServiceTest {
     void apply_revalidatesBeforeOfficialWrites() {
         ExcelImport excelImport = readyImport(99L, ExcelImportMode.PRODUCT_ONLY);
         MockMultipartFile file = file(productWorkbook());
-        when(excelImportRepository.findById(99L)).thenReturn(Optional.of(excelImport));
+        when(excelImportRepository.findByIdForUpdate(99L)).thenReturn(Optional.of(excelImport));
         when(excelImportChecksumService.sha256(file)).thenReturn("checksum");
         when(excelImportErrorRepository.existsByExcelImportId(99L)).thenReturn(false);
         when(excelImportValidationService.validate(file, ExcelImportMode.PRODUCT_ONLY.name(), null))
@@ -160,7 +160,7 @@ class ExcelImportApplyServiceTest {
         MockMultipartFile file = file(productWorkbook());
         Category category = category();
         Product product = product(10L, "P01");
-        when(excelImportRepository.findById(99L)).thenReturn(Optional.of(excelImport));
+        when(excelImportRepository.findByIdForUpdate(99L)).thenReturn(Optional.of(excelImport));
         when(excelImportChecksumService.sha256(file)).thenReturn("checksum");
         when(excelImportErrorRepository.existsByExcelImportId(99L)).thenReturn(false);
         when(excelImportValidationService.validate(file, ExcelImportMode.PRODUCT_ONLY.name(), null))
@@ -182,6 +182,8 @@ class ExcelImportApplyServiceTest {
         assertThat(product.getStatus()).isEqualTo(ProductStatus.HOAT_DONG);
         assertThat(response.status()).isEqualTo(ExcelImportStatus.DA_IMPORT.name());
         assertThat(excelImport.getCompletedAt()).isNotNull();
+        verify(excelImportRepository).findByIdForUpdate(99L);
+        verify(excelImportRepository, never()).findById(99L);
         verify(productRepository).saveAndFlush(product);
         verify(inventoryLevelRepository, never()).saveAndFlush(any(InventoryLevel.class));
         verify(inventoryTransactionRepository, never()).saveAndFlush(any(InventoryTransaction.class));
@@ -198,7 +200,7 @@ class ExcelImportApplyServiceTest {
         level.setProduct(product);
         level.setWarehouse(warehouse);
         level.setQuantity(5);
-        when(excelImportRepository.findById(99L)).thenReturn(Optional.of(excelImport));
+        when(excelImportRepository.findByIdForUpdate(99L)).thenReturn(Optional.of(excelImport));
         when(excelImportChecksumService.sha256(file)).thenReturn("checksum");
         when(excelImportErrorRepository.existsByExcelImportId(99L)).thenReturn(false);
         when(excelImportValidationService.validate(file, ExcelImportMode.PRODUCT_WITH_OPENING_STOCK.name(), null))
@@ -275,7 +277,7 @@ class ExcelImportApplyServiceTest {
         Category category = category();
         Product product = product(10L, "P01");
         Warehouse warehouse = warehouse();
-        when(excelImportRepository.findById(99L)).thenReturn(Optional.of(excelImport));
+        when(excelImportRepository.findByIdForUpdate(99L)).thenReturn(Optional.of(excelImport));
         when(excelImportChecksumService.sha256(file)).thenReturn("checksum");
         when(excelImportErrorRepository.existsByExcelImportId(99L)).thenReturn(false);
         when(excelImportValidationService.validate(file, ExcelImportMode.PRODUCT_WITH_OPENING_STOCK.name(), null))
@@ -303,7 +305,7 @@ class ExcelImportApplyServiceTest {
         ExcelImport excelImport = readyImport(99L, ExcelImportMode.PRODUCT_WITH_OPENING_STOCK);
         excelImport.setCreatedBy(null);
         MockMultipartFile file = file(openingWorkbook());
-        when(excelImportRepository.findById(99L)).thenReturn(Optional.of(excelImport));
+        when(excelImportRepository.findByIdForUpdate(99L)).thenReturn(Optional.of(excelImport));
         when(excelImportChecksumService.sha256(file)).thenReturn("checksum");
         when(excelImportErrorRepository.existsByExcelImportId(99L)).thenReturn(false);
 
@@ -342,7 +344,7 @@ class ExcelImportApplyServiceTest {
     void apply_alreadyImportedDoesNotCreateDuplicateTransaction() {
         ExcelImport excelImport = readyImport(99L, ExcelImportMode.PRODUCT_WITH_OPENING_STOCK);
         excelImport.setStatus(ExcelImportStatus.DA_IMPORT);
-        when(excelImportRepository.findById(99L)).thenReturn(Optional.of(excelImport));
+        when(excelImportRepository.findByIdForUpdate(99L)).thenReturn(Optional.of(excelImport));
 
         assertThatThrownBy(() -> applyService.apply(99L, file(openingWorkbook())))
                 .isInstanceOf(BadRequestException.class)
@@ -405,7 +407,7 @@ class ExcelImportApplyServiceTest {
 
     private void stubSuccessfulOpeningApply(ExcelImport excelImport, MockMultipartFile file, Category category,
             Product product, Warehouse warehouse, InventoryLevel level) {
-        when(excelImportRepository.findById(99L)).thenReturn(Optional.of(excelImport));
+        when(excelImportRepository.findByIdForUpdate(99L)).thenReturn(Optional.of(excelImport));
         when(excelImportChecksumService.sha256(file)).thenReturn("checksum");
         when(excelImportErrorRepository.existsByExcelImportId(99L)).thenReturn(false);
         when(excelImportValidationService.validate(file, ExcelImportMode.PRODUCT_WITH_OPENING_STOCK.name(), null))

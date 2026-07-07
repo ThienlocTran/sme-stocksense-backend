@@ -1,5 +1,7 @@
 package com.smartflow.smestocksensebackend.excelimport;
 
+import com.smartflow.smestocksensebackend.dto.common.PageResponse;
+import com.smartflow.smestocksensebackend.dto.excelimport.ExcelImportErrorResponse;
 import com.smartflow.smestocksensebackend.dto.excelimport.ExcelImportValidationErrorResponse;
 import com.smartflow.smestocksensebackend.dto.excelimport.ExcelImportValidationResponse;
 import com.smartflow.smestocksensebackend.entity.ExcelImport;
@@ -21,6 +23,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.mock.web.MockMultipartFile;
 
 import java.io.ByteArrayOutputStream;
@@ -34,6 +38,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -473,6 +478,83 @@ class ExcelImportValidationServiceTest {
         verify(excelImportErrorRepository, never()).saveAll(any());
     }
 
+    @Test
+    void listErrors_existingImportReturnsPersistedErrorsOnly() {
+        ExcelImport excelImport = new ExcelImport();
+        excelImport.setId(99L);
+        excelImport.setStatus(ExcelImportStatus.CO_LOI);
+        excelImport.setTotalRows(3);
+        excelImport.setValidRows(1);
+        excelImport.setErrorRows(2);
+
+        ExcelImportError first = error(7L, excelImport, 2, "ma_san_pham");
+        ExcelImportError second = error(8L, excelImport, 2, "ten_san_pham");
+        PageRequest pageable = PageRequest.of(0, 20);
+
+        when(excelImportRepository.findById(99L)).thenReturn(Optional.of(excelImport));
+        when(excelImportErrorRepository.findByExcelImportId(99L, pageable))
+                .thenReturn(new PageImpl<>(List.of(first, second), pageable, 2));
+
+        PageResponse<ExcelImportErrorResponse> response = validationService.listErrors(99L, pageable);
+
+        assertThat(response.content()).hasSize(2);
+        assertThat(response.content()).extracting(ExcelImportErrorResponse::id).containsExactly(7L, 8L);
+        assertThat(response.content()).extracting(ExcelImportErrorResponse::importId).containsExactly(99L, 99L);
+        assertThat(response.content()).extracting(ExcelImportErrorResponse::rowNumber).containsExactly(2, 2);
+        assertThat(response.content()).extracting(ExcelImportErrorResponse::columnName)
+                .containsExactly("ma_san_pham", "ten_san_pham");
+        assertThat(response.content()).extracting(ExcelImportErrorResponse::originalValue)
+                .containsExactly("raw-ma_san_pham", "raw-ten_san_pham");
+        assertThat(response.content()).extracting(ExcelImportErrorResponse::message)
+                .containsExactly("message-ma_san_pham", "message-ten_san_pham");
+        assertThat(response.content()).extracting(ExcelImportErrorResponse::suggestion)
+                .containsExactly("suggestion-ma_san_pham", "suggestion-ten_san_pham");
+        assertThat(response.totalElements()).isEqualTo(2);
+        assertThat(excelImport.getStatus()).isEqualTo(ExcelImportStatus.CO_LOI);
+        assertThat(excelImport.getTotalRows()).isEqualTo(3);
+        assertThat(excelImport.getValidRows()).isEqualTo(1);
+        assertThat(excelImport.getErrorRows()).isEqualTo(2);
+
+        verify(excelImportRepository, never()).save(any(ExcelImport.class));
+        verify(excelImportErrorRepository, never()).deleteByExcelImportId(anyLong());
+        verify(excelImportErrorRepository, never()).saveAll(any());
+        verifyNoInteractions(categoryRepository, productRepository, warehouseRepository);
+    }
+
+    @Test
+    void listErrors_existingImportWithoutErrorsReturnsEmptyPage() {
+        ExcelImport excelImport = new ExcelImport();
+        excelImport.setId(100L);
+        PageRequest pageable = PageRequest.of(0, 20);
+
+        when(excelImportRepository.findById(100L)).thenReturn(Optional.of(excelImport));
+        when(excelImportErrorRepository.findByExcelImportId(100L, pageable))
+                .thenReturn(new PageImpl<>(List.of(), pageable, 0));
+
+        PageResponse<ExcelImportErrorResponse> response = validationService.listErrors(100L, pageable);
+
+        assertThat(response.content()).isEmpty();
+        assertThat(response.totalElements()).isZero();
+        verify(excelImportRepository, never()).save(any(ExcelImport.class));
+        verify(excelImportErrorRepository, never()).deleteByExcelImportId(anyLong());
+        verify(excelImportErrorRepository, never()).saveAll(any());
+    }
+
+    @Test
+    void listErrors_missingImportShouldReturnNotFound() {
+        PageRequest pageable = PageRequest.of(0, 20);
+        when(excelImportRepository.findById(404L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> validationService.listErrors(404L, pageable))
+                .isInstanceOf(NotFoundException.class)
+                .hasMessage("Lan import khong ton tai.");
+
+        verify(excelImportErrorRepository, never()).findByExcelImportId(anyLong(), any());
+        verify(excelImportRepository, never()).save(any(ExcelImport.class));
+        verify(excelImportErrorRepository, never()).deleteByExcelImportId(anyLong());
+        verify(excelImportErrorRepository, never()).saveAll(any());
+    }
+
     private MockMultipartFile xlsxFile(XSSFWorkbook workbook) throws IOException {
         try (workbook; ByteArrayOutputStream out = new ByteArrayOutputStream()) {
             workbook.write(out);
@@ -513,5 +595,17 @@ class ExcelImportValidationServiceTest {
                 }
             }
         }
+    }
+
+    private ExcelImportError error(Long id, ExcelImport excelImport, Integer rowNumber, String columnName) {
+        ExcelImportError error = new ExcelImportError();
+        error.setId(id);
+        error.setExcelImport(excelImport);
+        error.setRowNumber(rowNumber);
+        error.setColumnName(columnName);
+        error.setOriginalValue("raw-" + columnName);
+        error.setMessage("message-" + columnName);
+        error.setSuggestion("suggestion-" + columnName);
+        return error;
     }
 }

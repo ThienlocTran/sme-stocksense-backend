@@ -8,6 +8,7 @@ import com.smartflow.smestocksensebackend.dto.excelimport.ExcelImportValidationR
 import com.smartflow.smestocksensebackend.entity.ExcelImport;
 import com.smartflow.smestocksensebackend.entity.ExcelImportError;
 import com.smartflow.smestocksensebackend.entity.ExcelImportStatus;
+import com.smartflow.smestocksensebackend.entity.Product;
 import com.smartflow.smestocksensebackend.exception.BadRequestException;
 import com.smartflow.smestocksensebackend.exception.NotFoundException;
 import com.smartflow.smestocksensebackend.repository.CategoryRepository;
@@ -49,6 +50,7 @@ public class ExcelImportValidationService {
     private final WarehouseRepository warehouseRepository;
     private final ExcelImportRepository excelImportRepository;
     private final ExcelImportErrorRepository excelImportErrorRepository;
+    private final ExcelImportChecksumService excelImportChecksumService;
 
     public ExcelImportValidationResponse validate(MultipartFile file, String loaiImport, Long khoId) {
         validateRequest(file, loaiImport);
@@ -90,12 +92,14 @@ public class ExcelImportValidationService {
     public ExcelImportValidationResponse validateAndPersistErrors(Long importId, MultipartFile file, String loaiImport, Long khoId) {
         ExcelImport excelImport = excelImportRepository.findById(importId)
                 .orElseThrow(() -> new NotFoundException("Lan import khong ton tai."));
+        String checksum = excelImportChecksumService.sha256(file);
         ExcelImportValidationResponse response = validate(file, loaiImport, khoId);
 
         excelImportErrorRepository.deleteByExcelImportId(importId);
         excelImport.setTotalRows(response.tongSoDong());
         excelImport.setValidRows(response.soDongHopLe());
         excelImport.setErrorRows(response.soDongLoi());
+        excelImport.setChecksumFileSha256(checksum);
         excelImport.setStatus(response.valid() ? ExcelImportStatus.SAN_SANG_IMPORT : ExcelImportStatus.CO_LOI);
         excelImportRepository.save(excelImport);
         persistValidationErrors(excelImport, response.errors());
@@ -117,6 +121,9 @@ public class ExcelImportValidationService {
         }
         if (excelImportErrorRepository.existsByExcelImportId(excelImport.getId())) {
             throw new BadRequestException("Lan import con loi da luu, khong the xac nhan.");
+        }
+        if (isBlank(excelImport.getChecksumFileSha256())) {
+            throw new BadRequestException("Lan import chua co checksum file da validate.");
         }
     }
 
@@ -265,6 +272,7 @@ public class ExcelImportValidationService {
             String minStockRaw = readCell(row, 7);
             String maxStockRaw = readCell(row, 8);
             String statusRaw = readCell(row, 9);
+            Product existingProduct = isBlank(code) ? null : findExistingProductByCode(code);
 
             if (isBlank(code)) {
                 state.addRowError(sheetName, rowIndex + 1, "ma_san_pham", code, "Mã sản phẩm không được để trống.", "Nhập mã sản phẩm.");
@@ -297,7 +305,7 @@ public class ExcelImportValidationService {
             if (!isBlank(sku)) {
                 if (!seenSkus.add(normalize(sku))) {
                     state.addRowError(sheetName, rowIndex + 1, "sku", sku, "SKU bị trùng trong file.", "Dùng SKU khác cho từng sản phẩm.");
-                } else if (productRepository.existsBySkuIgnoreCase(sku)) {
+                } else if (isSkuUsedByAnotherProduct(sku, existingProduct)) {
                     state.addRowError(sheetName, rowIndex + 1, "sku", sku, "SKU đã tồn tại trong hệ thống.", "Đổi SKU trước khi import.");
                 }
             }
@@ -305,7 +313,7 @@ public class ExcelImportValidationService {
             if (!isBlank(barcode)) {
                 if (!seenBarcodes.add(normalize(barcode))) {
                     state.addRowError(sheetName, rowIndex + 1, "ma_vach", barcode, "Mã vạch bị trùng trong file.", "Dùng mã vạch khác cho từng sản phẩm.");
-                } else if (productRepository.existsByBarcodeIgnoreCase(barcode)) {
+                } else if (isBarcodeUsedByAnotherProduct(barcode, existingProduct)) {
                     state.addRowError(sheetName, rowIndex + 1, "ma_vach", barcode, "Mã vạch đã tồn tại trong hệ thống.", "Đổi mã vạch trước khi import.");
                 }
             }
@@ -346,7 +354,7 @@ public class ExcelImportValidationService {
             if (isBlank(quantityRaw)) {
                 state.addRowError(sheetName, rowIndex + 1, "so_luong_ton", quantityRaw, "Số lượng tồn không được để trống.", "Nhập số lượng tồn.");
             } else {
-                validateNonNegativeDecimal(sheetName, rowIndex + 1, "so_luong_ton", quantityRaw, state);
+                validateNonNegativeInteger(sheetName, rowIndex + 1, "so_luong_ton", quantityRaw, state);
             }
 
             if (!isBlank(warehouseCode) && !isBlank(productCode)) {
@@ -397,6 +405,37 @@ public class ExcelImportValidationService {
         } catch (IllegalArgumentException exception) {
             state.addRowError(sheetName, rowNumber, "trang_thai", value, "Trạng thái sản phẩm không hợp lệ.", "Chỉ dùng HOAT_DONG hoặc NGUNG_HOAT_DONG.");
         }
+    }
+
+    private boolean isSkuUsedByAnotherProduct(String sku, Product existingProduct) {
+        if (existingProduct == null) {
+            return productRepository.existsBySkuIgnoreCase(sku);
+        }
+        java.util.Optional<Product> found = productRepository.findBySkuIgnoreCase(sku);
+        if (found == null) {
+            return false;
+        }
+        return found
+                .map(product -> !product.getId().equals(existingProduct.getId()))
+                .orElse(false);
+    }
+
+    private boolean isBarcodeUsedByAnotherProduct(String barcode, Product existingProduct) {
+        if (existingProduct == null) {
+            return productRepository.existsByBarcodeIgnoreCase(barcode);
+        }
+        java.util.Optional<Product> found = productRepository.findByBarcodeIgnoreCase(barcode);
+        if (found == null) {
+            return false;
+        }
+        return found
+                .map(product -> !product.getId().equals(existingProduct.getId()))
+                .orElse(false);
+    }
+
+    private Product findExistingProductByCode(String code) {
+        java.util.Optional<Product> product = productRepository.findByCodeIgnoreCase(code);
+        return product == null ? null : product.orElse(null);
     }
 
     private void validateNonNegativeDecimal(String sheetName, int rowNumber, String columnName, String rawValue, ValidationState state) {

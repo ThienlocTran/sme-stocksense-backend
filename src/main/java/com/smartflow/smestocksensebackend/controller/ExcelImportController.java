@@ -1,10 +1,12 @@
 package com.smartflow.smestocksensebackend.controller;
 
 import com.smartflow.smestocksensebackend.dto.common.PageResponse;
+import com.smartflow.smestocksensebackend.dto.excelimport.ExcelImportApplyResponse;
 import com.smartflow.smestocksensebackend.dto.excelimport.ExcelImportConfirmResponse;
 import com.smartflow.smestocksensebackend.dto.excelimport.ExcelImportErrorResponse;
 import com.smartflow.smestocksensebackend.dto.excelimport.ExcelImportUploadResponse;
 import com.smartflow.smestocksensebackend.dto.excelimport.ExcelImportValidationResponse;
+import com.smartflow.smestocksensebackend.excelimport.ExcelImportApplyService;
 import com.smartflow.smestocksensebackend.excelimport.ExcelImportValidationService;
 import com.smartflow.smestocksensebackend.excelimport.ExcelImportUploadService;
 import com.smartflow.smestocksensebackend.exception.BadRequestException;
@@ -32,6 +34,7 @@ public class ExcelImportController {
 
     private final ExcelImportUploadService excelImportUploadService;
     private final ExcelImportValidationService excelImportValidationService;
+    private final ExcelImportApplyService excelImportApplyService;
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasRole('ADMIN')")
@@ -91,6 +94,15 @@ public class ExcelImportController {
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ExcelImportConfirmResponse> confirm(@PathVariable Long id) {
         return ResponseEntity.ok(excelImportValidationService.confirm(id));
+    }
+
+    @PostMapping(value = "/{id}/apply", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ExcelImportApplyResponse> apply(
+            @PathVariable Long id,
+            @RequestParam(required = false) MultipartFile file
+    ) {
+        return ResponseEntity.ok(excelImportApplyService.apply(id, file));
     }
 
     private void validatePageRequest(int page, int size) {

@@ -62,6 +62,9 @@ class ExcelImportValidationServiceTest {
     @Mock
     private ExcelImportErrorRepository excelImportErrorRepository;
 
+    @Mock
+    private ExcelImportChecksumService excelImportChecksumService;
+
     @InjectMocks
     private ExcelImportValidationService validationService;
 
@@ -366,6 +369,7 @@ class ExcelImportValidationServiceTest {
         ExcelImport excelImport = new ExcelImport();
         excelImport.setId(99L);
         when(excelImportRepository.findById(99L)).thenReturn(Optional.of(excelImport));
+        when(excelImportChecksumService.sha256(any())).thenReturn("abc123");
 
         ExcelImportValidationResponse response = validationService.validateAndPersistErrors(
                 99L,
@@ -384,6 +388,7 @@ class ExcelImportValidationServiceTest {
         assertThat(excelImport.getTotalRows()).isEqualTo(1);
         assertThat(excelImport.getValidRows()).isZero();
         assertThat(excelImport.getErrorRows()).isEqualTo(1);
+        assertThat(excelImport.getChecksumFileSha256()).isEqualTo("abc123");
 
         verify(excelImportErrorRepository).deleteByExcelImportId(99L);
         verify(excelImportRepository).save(excelImport);
@@ -398,6 +403,7 @@ class ExcelImportValidationServiceTest {
         excelImport.setId(100L);
         when(excelImportRepository.findById(100L)).thenReturn(Optional.of(excelImport));
         when(categoryRepository.existsByNormalizedCode("CAT01")).thenReturn(true);
+        when(excelImportChecksumService.sha256(any())).thenReturn("valid123");
 
         validationService.validateAndPersistErrors(
                 100L,
@@ -415,6 +421,7 @@ class ExcelImportValidationServiceTest {
         assertThat(excelImport.getTotalRows()).isEqualTo(1);
         assertThat(excelImport.getValidRows()).isEqualTo(1);
         assertThat(excelImport.getErrorRows()).isZero();
+        assertThat(excelImport.getChecksumFileSha256()).isEqualTo("valid123");
         verify(excelImportErrorRepository).deleteByExcelImportId(100L);
         verify(excelImportErrorRepository, never()).saveAll(any());
         verify(productRepository, never()).save(any(Product.class));
@@ -425,7 +432,9 @@ class ExcelImportValidationServiceTest {
     void validateAndPersistErrors_revalidationReplacesOldErrorsAndPersistsFields() throws Exception {
         ExcelImport excelImport = new ExcelImport();
         excelImport.setId(101L);
+        excelImport.setChecksumFileSha256("old");
         when(excelImportRepository.findById(101L)).thenReturn(Optional.of(excelImport));
+        when(excelImportChecksumService.sha256(any())).thenReturn("new");
 
         validationService.validateAndPersistErrors(
                 101L,
@@ -459,6 +468,7 @@ class ExcelImportValidationServiceTest {
         assertThat(excelImport.getTotalRows()).isEqualTo(1);
         assertThat(excelImport.getValidRows()).isZero();
         assertThat(excelImport.getErrorRows()).isEqualTo(1);
+        assertThat(excelImport.getChecksumFileSha256()).isEqualTo("new");
     }
 
     @Test
@@ -676,6 +686,20 @@ class ExcelImportValidationServiceTest {
         verify(excelImportErrorRepository, never()).saveAll(any());
     }
 
+    @Test
+    void confirm_rejectsMissingChecksum() {
+        ExcelImport excelImport = readyImport(105L);
+        excelImport.setChecksumFileSha256(null);
+        when(excelImportRepository.findById(105L)).thenReturn(Optional.of(excelImport));
+        when(excelImportErrorRepository.existsByExcelImportId(105L)).thenReturn(false);
+
+        assertThatThrownBy(() -> validationService.confirm(105L))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessage("Lan import chua co checksum file da validate.");
+
+        verify(excelImportRepository, never()).save(any(ExcelImport.class));
+    }
+
     private MockMultipartFile xlsxFile(XSSFWorkbook workbook) throws IOException {
         try (workbook; ByteArrayOutputStream out = new ByteArrayOutputStream()) {
             workbook.write(out);
@@ -737,6 +761,7 @@ class ExcelImportValidationServiceTest {
         excelImport.setTotalRows(3);
         excelImport.setValidRows(3);
         excelImport.setErrorRows(0);
+        excelImport.setChecksumFileSha256("checksum");
         return excelImport;
     }
 }

@@ -15,5 +15,7 @@ public interface ExcelImportErrorRepository extends JpaRepository<ExcelImportErr
 
     Page<ExcelImportError> findByExcelImportId(Long excelImportId, Pageable pageable);
 
+    boolean existsByExcelImportId(Long excelImportId);
+
     void deleteByExcelImportId(Long excelImportId);
 }

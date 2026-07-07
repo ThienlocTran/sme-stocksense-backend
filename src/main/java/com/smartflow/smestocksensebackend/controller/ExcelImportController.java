@@ -1,6 +1,7 @@
 package com.smartflow.smestocksensebackend.controller;
 
 import com.smartflow.smestocksensebackend.dto.common.PageResponse;
+import com.smartflow.smestocksensebackend.dto.excelimport.ExcelImportConfirmResponse;
 import com.smartflow.smestocksensebackend.dto.excelimport.ExcelImportErrorResponse;
 import com.smartflow.smestocksensebackend.dto.excelimport.ExcelImportUploadResponse;
 import com.smartflow.smestocksensebackend.dto.excelimport.ExcelImportValidationResponse;
@@ -84,6 +85,12 @@ public class ExcelImportController {
                 )
         );
         return ResponseEntity.ok(excelImportValidationService.listErrors(id, pageRequest));
+    }
+
+    @PostMapping("/{id}/confirm")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ExcelImportConfirmResponse> confirm(@PathVariable Long id) {
+        return ResponseEntity.ok(excelImportValidationService.confirm(id));
     }
 
     private void validatePageRequest(int page, int size) {

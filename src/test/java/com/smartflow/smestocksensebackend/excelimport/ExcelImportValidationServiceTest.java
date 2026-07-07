@@ -1,6 +1,7 @@
 package com.smartflow.smestocksensebackend.excelimport;
 
 import com.smartflow.smestocksensebackend.dto.common.PageResponse;
+import com.smartflow.smestocksensebackend.dto.excelimport.ExcelImportConfirmResponse;
 import com.smartflow.smestocksensebackend.dto.excelimport.ExcelImportErrorResponse;
 import com.smartflow.smestocksensebackend.dto.excelimport.ExcelImportValidationErrorResponse;
 import com.smartflow.smestocksensebackend.dto.excelimport.ExcelImportValidationResponse;
@@ -555,6 +556,110 @@ class ExcelImportValidationServiceTest {
         verify(excelImportErrorRepository, never()).saveAll(any());
     }
 
+    @Test
+    void confirm_validatedImportMarksSessionReadyOnly() {
+        ExcelImport excelImport = readyImport(99L);
+        when(excelImportRepository.findById(99L)).thenReturn(Optional.of(excelImport));
+        when(excelImportErrorRepository.existsByExcelImportId(99L)).thenReturn(false);
+        when(excelImportRepository.save(excelImport)).thenReturn(excelImport);
+
+        ExcelImportConfirmResponse response = validationService.confirm(99L);
+
+        assertThat(response.importId()).isEqualTo(99L);
+        assertThat(response.status()).isEqualTo(ExcelImportStatus.SAN_SANG_IMPORT.name());
+        assertThat(response.totalRows()).isEqualTo(3);
+        assertThat(response.validRows()).isEqualTo(3);
+        assertThat(response.errorRows()).isZero();
+        assertThat(response.message()).isNotBlank();
+        assertThat(excelImport.getStatus()).isEqualTo(ExcelImportStatus.SAN_SANG_IMPORT);
+
+        verify(excelImportRepository).save(excelImport);
+        verify(excelImportErrorRepository, never()).deleteByExcelImportId(anyLong());
+        verify(excelImportErrorRepository, never()).saveAll(any());
+        verify(productRepository, never()).save(any(Product.class));
+        verify(productRepository, never()).saveAndFlush(any(Product.class));
+        verifyNoInteractions(categoryRepository, warehouseRepository);
+    }
+
+    @Test
+    void confirm_missingImportShouldReturnNotFound() {
+        when(excelImportRepository.findById(404L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> validationService.confirm(404L))
+                .isInstanceOf(NotFoundException.class)
+                .hasMessage("Lan import khong ton tai.");
+
+        verify(excelImportErrorRepository, never()).existsByExcelImportId(anyLong());
+        verify(excelImportRepository, never()).save(any(ExcelImport.class));
+        verify(excelImportErrorRepository, never()).deleteByExcelImportId(anyLong());
+        verify(excelImportErrorRepository, never()).saveAll(any());
+    }
+
+    @Test
+    void confirm_rejectsErrorRows() {
+        ExcelImport excelImport = readyImport(100L);
+        excelImport.setValidRows(2);
+        excelImport.setErrorRows(1);
+        when(excelImportRepository.findById(100L)).thenReturn(Optional.of(excelImport));
+
+        assertThatThrownBy(() -> validationService.confirm(100L))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessage("Lan import con loi, khong the xac nhan.");
+
+        verify(excelImportErrorRepository, never()).existsByExcelImportId(anyLong());
+        verify(excelImportRepository, never()).save(any(ExcelImport.class));
+        verify(excelImportErrorRepository, never()).deleteByExcelImportId(anyLong());
+        verify(excelImportErrorRepository, never()).saveAll(any());
+    }
+
+    @Test
+    void confirm_rejectsPersistedErrorsEvenWhenCountersAreClean() {
+        ExcelImport excelImport = readyImport(101L);
+        when(excelImportRepository.findById(101L)).thenReturn(Optional.of(excelImport));
+        when(excelImportErrorRepository.existsByExcelImportId(101L)).thenReturn(true);
+
+        assertThatThrownBy(() -> validationService.confirm(101L))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessage("Lan import con loi da luu, khong the xac nhan.");
+
+        verify(excelImportRepository, never()).save(any(ExcelImport.class));
+        verify(excelImportErrorRepository, never()).deleteByExcelImportId(anyLong());
+        verify(excelImportErrorRepository, never()).saveAll(any());
+    }
+
+    @Test
+    void confirm_rejectsNotValidatedImport() {
+        ExcelImport excelImport = readyImport(102L);
+        excelImport.setTotalRows(0);
+        excelImport.setValidRows(0);
+        when(excelImportRepository.findById(102L)).thenReturn(Optional.of(excelImport));
+
+        assertThatThrownBy(() -> validationService.confirm(102L))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessage("Lan import chua co du lieu hop le da duoc validate.");
+
+        verify(excelImportErrorRepository, never()).existsByExcelImportId(anyLong());
+        verify(excelImportRepository, never()).save(any(ExcelImport.class));
+        verify(excelImportErrorRepository, never()).deleteByExcelImportId(anyLong());
+        verify(excelImportErrorRepository, never()).saveAll(any());
+    }
+
+    @Test
+    void confirm_rejectsInvalidStatusTransition() {
+        ExcelImport excelImport = readyImport(103L);
+        excelImport.setStatus(ExcelImportStatus.CHO_XU_LY);
+        when(excelImportRepository.findById(103L)).thenReturn(Optional.of(excelImport));
+
+        assertThatThrownBy(() -> validationService.confirm(103L))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessage("Lan import chua san sang xac nhan.");
+
+        verify(excelImportErrorRepository, never()).existsByExcelImportId(anyLong());
+        verify(excelImportRepository, never()).save(any(ExcelImport.class));
+        verify(excelImportErrorRepository, never()).deleteByExcelImportId(anyLong());
+        verify(excelImportErrorRepository, never()).saveAll(any());
+    }
+
     private MockMultipartFile xlsxFile(XSSFWorkbook workbook) throws IOException {
         try (workbook; ByteArrayOutputStream out = new ByteArrayOutputStream()) {
             workbook.write(out);
@@ -607,5 +712,15 @@ class ExcelImportValidationServiceTest {
         error.setMessage("message-" + columnName);
         error.setSuggestion("suggestion-" + columnName);
         return error;
+    }
+
+    private ExcelImport readyImport(Long id) {
+        ExcelImport excelImport = new ExcelImport();
+        excelImport.setId(id);
+        excelImport.setStatus(ExcelImportStatus.SAN_SANG_IMPORT);
+        excelImport.setTotalRows(3);
+        excelImport.setValidRows(3);
+        excelImport.setErrorRows(0);
+        return excelImport;
     }
 }

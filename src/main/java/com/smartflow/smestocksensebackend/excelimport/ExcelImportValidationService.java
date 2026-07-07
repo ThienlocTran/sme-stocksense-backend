@@ -1,6 +1,7 @@
 package com.smartflow.smestocksensebackend.excelimport;
 
 import com.smartflow.smestocksensebackend.dto.common.PageResponse;
+import com.smartflow.smestocksensebackend.dto.excelimport.ExcelImportConfirmResponse;
 import com.smartflow.smestocksensebackend.dto.excelimport.ExcelImportErrorResponse;
 import com.smartflow.smestocksensebackend.dto.excelimport.ExcelImportValidationErrorResponse;
 import com.smartflow.smestocksensebackend.dto.excelimport.ExcelImportValidationResponse;
@@ -76,6 +77,16 @@ public class ExcelImportValidationService {
     }
 
     @Transactional
+    public ExcelImportConfirmResponse confirm(Long importId) {
+        ExcelImport excelImport = excelImportRepository.findById(importId)
+                .orElseThrow(() -> new NotFoundException("Lan import khong ton tai."));
+
+        validateConfirmable(excelImport);
+        excelImport.setStatus(ExcelImportStatus.SAN_SANG_IMPORT);
+        return ExcelImportConfirmResponse.from(excelImportRepository.save(excelImport));
+    }
+
+    @Transactional
     public ExcelImportValidationResponse validateAndPersistErrors(Long importId, MultipartFile file, String loaiImport, Long khoId) {
         ExcelImport excelImport = excelImportRepository.findById(importId)
                 .orElseThrow(() -> new NotFoundException("Lan import khong ton tai."));
@@ -90,6 +101,23 @@ public class ExcelImportValidationService {
         persistValidationErrors(excelImport, response.errors());
 
         return response;
+    }
+
+    private void validateConfirmable(ExcelImport excelImport) {
+        if (excelImport.getStatus() != ExcelImportStatus.SAN_SANG_IMPORT) {
+            throw new BadRequestException("Lan import chua san sang xac nhan.");
+        }
+        if (excelImport.getTotalRows() == null || excelImport.getTotalRows() <= 0
+                || excelImport.getValidRows() == null || excelImport.getValidRows() <= 0
+                || excelImport.getErrorRows() == null) {
+            throw new BadRequestException("Lan import chua co du lieu hop le da duoc validate.");
+        }
+        if (excelImport.getErrorRows() > 0) {
+            throw new BadRequestException("Lan import con loi, khong the xac nhan.");
+        }
+        if (excelImportErrorRepository.existsByExcelImportId(excelImport.getId())) {
+            throw new BadRequestException("Lan import con loi da luu, khong the xac nhan.");
+        }
     }
 
     private void persistValidationErrors(ExcelImport excelImport, List<ExcelImportValidationErrorResponse> errors) {

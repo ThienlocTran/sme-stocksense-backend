@@ -3,6 +3,7 @@ package com.smartflow.smestocksensebackend.controller;
 import com.smartflow.smestocksensebackend.config.JwtAuthenticationFilter;
 import com.smartflow.smestocksensebackend.config.SecurityConfig;
 import com.smartflow.smestocksensebackend.dto.common.PageResponse;
+import com.smartflow.smestocksensebackend.dto.excelimport.ExcelImportApplyResponse;
 import com.smartflow.smestocksensebackend.dto.excelimport.ExcelImportConfirmResponse;
 import com.smartflow.smestocksensebackend.dto.excelimport.ExcelImportErrorResponse;
 import com.smartflow.smestocksensebackend.dto.excelimport.ExcelImportValidationResponse;
@@ -10,6 +11,7 @@ import com.smartflow.smestocksensebackend.entity.ExcelImportStatus;
 import com.smartflow.smestocksensebackend.exception.ApiExceptionHandler;
 import com.smartflow.smestocksensebackend.exception.BadRequestException;
 import com.smartflow.smestocksensebackend.exception.NotFoundException;
+import com.smartflow.smestocksensebackend.excelimport.ExcelImportApplyService;
 import com.smartflow.smestocksensebackend.excelimport.ExcelImportMode;
 import com.smartflow.smestocksensebackend.excelimport.ExcelImportTemplateService;
 import com.smartflow.smestocksensebackend.excelimport.ExcelImportUploadService;
@@ -54,6 +56,9 @@ class ExcelImportValidateControllerTest {
 
     @MockitoBean
     private ExcelImportValidationService excelImportValidationService;
+
+    @MockitoBean
+    private ExcelImportApplyService excelImportApplyService;
 
     @MockitoBean
     private JwtService jwtService;
@@ -325,6 +330,68 @@ class ExcelImportValidateControllerTest {
     @Test
     void confirm_employeeShouldReturn403() throws Exception {
         mockMvc.perform(post("/api/excel-imports/99/confirm")
+                        .with(user("employee@example.com").roles("EMPLOYEE")))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void apply_adminShouldReturnAppliedSummary() throws Exception {
+        when(excelImportApplyService.apply(eq(99L), any()))
+                .thenReturn(new ExcelImportApplyResponse(
+                        99L,
+                        ExcelImportStatus.DA_IMPORT.name(),
+                        3,
+                        3,
+                        0,
+                        java.time.LocalDateTime.of(2026, 7, 7, 10, 0),
+                        "Lan import da duoc ap dung thanh cong."
+                ));
+
+        mockMvc.perform(multipart("/api/excel-imports/99/apply")
+                        .file(ExcelImportUploadControllerTestSupport.xlsxFile())
+                        .with(user("admin@example.com").roles("ADMIN")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.importId").value(99))
+                .andExpect(jsonPath("$.status").value(ExcelImportStatus.DA_IMPORT.name()))
+                .andExpect(jsonPath("$.message").value("Lan import da duoc ap dung thanh cong."));
+    }
+
+    @Test
+    void apply_missingSessionShouldReturn404() throws Exception {
+        when(excelImportApplyService.apply(eq(404L), any()))
+                .thenThrow(new NotFoundException("Lan import khong ton tai."));
+
+        mockMvc.perform(multipart("/api/excel-imports/404/apply")
+                        .file(ExcelImportUploadControllerTestSupport.xlsxFile())
+                        .with(user("admin@example.com").roles("ADMIN")))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("Lan import khong ton tai."));
+    }
+
+    @Test
+    void apply_invalidSessionShouldReturn400() throws Exception {
+        when(excelImportApplyService.apply(eq(99L), any()))
+                .thenThrow(new BadRequestException("File Excel khong khop voi file da validate."));
+
+        mockMvc.perform(multipart("/api/excel-imports/99/apply")
+                        .file(ExcelImportUploadControllerTestSupport.xlsxFile())
+                        .with(user("admin@example.com").roles("ADMIN")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("File Excel khong khop voi file da validate."));
+    }
+
+    @Test
+    void apply_managerShouldReturn403() throws Exception {
+        mockMvc.perform(multipart("/api/excel-imports/99/apply")
+                        .file(ExcelImportUploadControllerTestSupport.xlsxFile())
+                        .with(user("manager@example.com").roles("MANAGER")))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void apply_employeeShouldReturn403() throws Exception {
+        mockMvc.perform(multipart("/api/excel-imports/99/apply")
+                        .file(ExcelImportUploadControllerTestSupport.xlsxFile())
                         .with(user("employee@example.com").roles("EMPLOYEE")))
                 .andExpect(status().isForbidden());
     }

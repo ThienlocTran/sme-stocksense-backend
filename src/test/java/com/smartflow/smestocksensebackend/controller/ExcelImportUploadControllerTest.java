@@ -6,6 +6,7 @@ import com.smartflow.smestocksensebackend.dto.excelimport.ExcelImportUploadRespo
 import com.smartflow.smestocksensebackend.entity.ExcelImportStatus;
 import com.smartflow.smestocksensebackend.exception.ApiExceptionHandler;
 import com.smartflow.smestocksensebackend.exception.BadRequestException;
+import com.smartflow.smestocksensebackend.excelimport.ExcelImportApplyService;
 import com.smartflow.smestocksensebackend.excelimport.ExcelImportMode;
 import com.smartflow.smestocksensebackend.excelimport.ExcelImportTemplateService;
 import com.smartflow.smestocksensebackend.excelimport.ExcelImportValidationService;
@@ -45,6 +46,9 @@ class ExcelImportUploadControllerTest {
 
     @MockitoBean
     private ExcelImportValidationService excelImportValidationService;
+
+    @MockitoBean
+    private ExcelImportApplyService excelImportApplyService;
 
     @MockitoBean
     private JwtService jwtService;

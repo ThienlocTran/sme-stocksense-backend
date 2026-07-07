@@ -69,6 +69,16 @@ class ExcelImportMappingTest {
     }
 
     @Test
+    void importSessionChecksum_shouldMapToNullableSha256Column() throws NoSuchFieldException {
+        Column column = ExcelImport.class.getDeclaredField("checksumFileSha256").getAnnotation(Column.class);
+
+        assertNotNull(column);
+        assertEquals("checksum_file_sha256", column.name());
+        assertEquals(64, column.length());
+        assertEquals(true, column.nullable());
+    }
+
+    @Test
     void importError_shouldMapToExistingTableAndImportSessionFk() throws NoSuchFieldException {
         Table table = ExcelImportError.class.getAnnotation(Table.class);
         JoinColumn importJoin = ExcelImportError.class.getDeclaredField("excelImport").getAnnotation(JoinColumn.class);

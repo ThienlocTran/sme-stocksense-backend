@@ -39,6 +39,9 @@ public class ExcelImport {
     @Column(name = "duong_dan_file", length = 255)
     private String filePath;
 
+    @Column(name = "checksum_file_sha256", length = 64)
+    private String checksumFileSha256;
+
     @Column(name = "loai_import", nullable = false, length = 50)
     private String importType = OPENING_INVENTORY_TYPE;
 

@@ -2,6 +2,8 @@ package com.smartflow.smestocksensebackend.controller;
 
 import com.smartflow.smestocksensebackend.config.JwtAuthenticationFilter;
 import com.smartflow.smestocksensebackend.config.SecurityConfig;
+import com.smartflow.smestocksensebackend.dto.common.PageResponse;
+import com.smartflow.smestocksensebackend.dto.excelimport.ExcelImportErrorResponse;
 import com.smartflow.smestocksensebackend.dto.excelimport.ExcelImportValidationResponse;
 import com.smartflow.smestocksensebackend.exception.ApiExceptionHandler;
 import com.smartflow.smestocksensebackend.exception.NotFoundException;
@@ -15,6 +17,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -22,8 +26,11 @@ import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -134,6 +141,126 @@ class ExcelImportValidateControllerTest {
                         .with(user("admin@example.com").roles("ADMIN")))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.message").value("Lan import khong ton tai."));
+    }
+
+    @Test
+    void listErrors_adminShouldReturnStablePageResponse() throws Exception {
+        when(excelImportValidationService.listErrors(eq(99L), any(Pageable.class)))
+                .thenReturn(new PageResponse<>(
+                        List.of(new ExcelImportErrorResponse(
+                                7L,
+                                99L,
+                                2,
+                                "ma_san_pham",
+                                "",
+                                "Ma san pham khong duoc de trong.",
+                                "Nhap ma san pham."
+                        )),
+                        0,
+                        20,
+                        1,
+                        1
+                ));
+
+        mockMvc.perform(get("/api/excel-imports/99/errors")
+                        .param("page", "0")
+                        .param("size", "20")
+                        .with(user("admin@example.com").roles("ADMIN")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].id").value(7))
+                .andExpect(jsonPath("$.content[0].importId").value(99))
+                .andExpect(jsonPath("$.content[0].rowNumber").value(2))
+                .andExpect(jsonPath("$.content[0].columnName").value("ma_san_pham"))
+                .andExpect(jsonPath("$.content[0].originalValue").value(""))
+                .andExpect(jsonPath("$.content[0].message").value("Ma san pham khong duoc de trong."))
+                .andExpect(jsonPath("$.content[0].suggestion").value("Nhap ma san pham."))
+                .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.size").value(20))
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.totalPages").value(1));
+
+        verify(excelImportValidationService).listErrors(eq(99L), org.mockito.ArgumentMatchers.argThat(pageable ->
+                pageable.getPageNumber() == 0
+                        && pageable.getPageSize() == 20
+                        && pageable.getSort().getOrderFor("rowNumber").getDirection() == Sort.Direction.ASC
+                        && pageable.getSort().getOrderFor("columnName").getDirection() == Sort.Direction.ASC
+                        && pageable.getSort().getOrderFor("id").getDirection() == Sort.Direction.ASC
+        ));
+        verify(excelImportValidationService, never()).validate(any(), any(), any());
+        verify(excelImportValidationService, never()).validateAndPersistErrors(any(), any(), any(), any());
+    }
+
+    @Test
+    void listErrors_emptySessionShouldReturnEmptyPage() throws Exception {
+        when(excelImportValidationService.listErrors(eq(100L), any(Pageable.class)))
+                .thenReturn(new PageResponse<>(List.of(), 0, 20, 0, 0));
+
+        mockMvc.perform(get("/api/excel-imports/100/errors")
+                        .with(user("admin@example.com").roles("ADMIN")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content").isEmpty())
+                .andExpect(jsonPath("$.totalElements").value(0));
+    }
+
+    @Test
+    void listErrors_missingSessionShouldReturn404() throws Exception {
+        when(excelImportValidationService.listErrors(eq(404L), any(Pageable.class)))
+                .thenThrow(new NotFoundException("Lan import khong ton tai."));
+
+        mockMvc.perform(get("/api/excel-imports/404/errors")
+                        .with(user("admin@example.com").roles("ADMIN")))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("Lan import khong ton tai."));
+    }
+
+    @Test
+    void listErrors_negativePageShouldReturn400() throws Exception {
+        mockMvc.perform(get("/api/excel-imports/99/errors")
+                        .param("page", "-1")
+                        .param("size", "20")
+                        .with(user("admin@example.com").roles("ADMIN")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("page phai lon hon hoac bang 0."));
+
+        verify(excelImportValidationService, never()).listErrors(any(), any(Pageable.class));
+    }
+
+    @Test
+    void listErrors_nonPositiveSizeShouldReturn400() throws Exception {
+        mockMvc.perform(get("/api/excel-imports/99/errors")
+                        .param("page", "0")
+                        .param("size", "0")
+                        .with(user("admin@example.com").roles("ADMIN")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("size phai nam trong khoang 1 den 100."));
+
+        verify(excelImportValidationService, never()).listErrors(any(), any(Pageable.class));
+    }
+
+    @Test
+    void listErrors_oversizedPageShouldReturn400() throws Exception {
+        mockMvc.perform(get("/api/excel-imports/99/errors")
+                        .param("page", "0")
+                        .param("size", "101")
+                        .with(user("admin@example.com").roles("ADMIN")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("size phai nam trong khoang 1 den 100."));
+
+        verify(excelImportValidationService, never()).listErrors(any(), any(Pageable.class));
+    }
+
+    @Test
+    void listErrors_managerShouldReturn403() throws Exception {
+        mockMvc.perform(get("/api/excel-imports/99/errors")
+                        .with(user("manager@example.com").roles("MANAGER")))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void listErrors_employeeShouldReturn403() throws Exception {
+        mockMvc.perform(get("/api/excel-imports/99/errors")
+                        .with(user("employee@example.com").roles("EMPLOYEE")))
+                .andExpect(status().isForbidden());
     }
 
     @Test

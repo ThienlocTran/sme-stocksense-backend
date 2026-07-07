@@ -1,5 +1,7 @@
 package com.smartflow.smestocksensebackend.excelimport;
 
+import com.smartflow.smestocksensebackend.dto.common.PageResponse;
+import com.smartflow.smestocksensebackend.dto.excelimport.ExcelImportErrorResponse;
 import com.smartflow.smestocksensebackend.dto.excelimport.ExcelImportValidationErrorResponse;
 import com.smartflow.smestocksensebackend.dto.excelimport.ExcelImportValidationResponse;
 import com.smartflow.smestocksensebackend.entity.ExcelImport;
@@ -19,6 +21,7 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -61,6 +64,15 @@ public class ExcelImportValidationService {
         } catch (Exception exception) {
             throw new BadRequestException("File Excel không hợp lệ.");
         }
+    }
+
+    @Transactional(readOnly = true)
+    public PageResponse<ExcelImportErrorResponse> listErrors(Long importId, Pageable pageable) {
+        excelImportRepository.findById(importId)
+                .orElseThrow(() -> new NotFoundException("Lan import khong ton tai."));
+
+        return PageResponse.from(excelImportErrorRepository.findByExcelImportId(importId, pageable)
+                .map(ExcelImportErrorResponse::from));
     }
 
     @Transactional

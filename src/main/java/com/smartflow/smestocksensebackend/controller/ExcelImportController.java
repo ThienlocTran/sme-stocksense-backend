@@ -1,14 +1,20 @@
 package com.smartflow.smestocksensebackend.controller;
 
+import com.smartflow.smestocksensebackend.dto.common.PageResponse;
+import com.smartflow.smestocksensebackend.dto.excelimport.ExcelImportErrorResponse;
 import com.smartflow.smestocksensebackend.dto.excelimport.ExcelImportUploadResponse;
 import com.smartflow.smestocksensebackend.dto.excelimport.ExcelImportValidationResponse;
 import com.smartflow.smestocksensebackend.excelimport.ExcelImportValidationService;
 import com.smartflow.smestocksensebackend.excelimport.ExcelImportUploadService;
+import com.smartflow.smestocksensebackend.exception.BadRequestException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -20,6 +26,8 @@ import org.springframework.web.multipart.MultipartFile;
 @RequestMapping("/api/excel-imports")
 @RequiredArgsConstructor
 public class ExcelImportController {
+
+    private static final int MAX_PAGE_SIZE = 100;
 
     private final ExcelImportUploadService excelImportUploadService;
     private final ExcelImportValidationService excelImportValidationService;
@@ -56,5 +64,34 @@ public class ExcelImportController {
     ) {
         ExcelImportValidationResponse response = excelImportValidationService.validateAndPersistErrors(id, file, loaiImport, khoId);
         return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/{id}/errors")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<PageResponse<ExcelImportErrorResponse>> listErrors(
+            @PathVariable Long id,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size
+    ) {
+        validatePageRequest(page, size);
+        PageRequest pageRequest = PageRequest.of(
+                page,
+                size,
+                Sort.by(
+                        Sort.Order.asc("rowNumber"),
+                        Sort.Order.asc("columnName"),
+                        Sort.Order.asc("id")
+                )
+        );
+        return ResponseEntity.ok(excelImportValidationService.listErrors(id, pageRequest));
+    }
+
+    private void validatePageRequest(int page, int size) {
+        if (page < 0) {
+            throw new BadRequestException("page phai lon hon hoac bang 0.");
+        }
+        if (size < 1 || size > MAX_PAGE_SIZE) {
+            throw new BadRequestException("size phai nam trong khoang 1 den 100.");
+        }
     }
 }

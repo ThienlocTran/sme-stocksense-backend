@@ -82,7 +82,7 @@ public class ExcelImportValidationService {
                 .orElseThrow(() -> new NotFoundException("Lan import khong ton tai."));
 
         validateConfirmable(excelImport);
-        excelImport.setStatus(ExcelImportStatus.SAN_SANG_IMPORT);
+        excelImport.setStatus(ExcelImportStatus.DA_XAC_NHAN);
         return ExcelImportConfirmResponse.from(excelImportRepository.save(excelImport));
     }
 

@@ -557,7 +557,7 @@ class ExcelImportValidationServiceTest {
     }
 
     @Test
-    void confirm_validatedImportMarksSessionReadyOnly() {
+    void confirm_validatedImportTransitionsToConfirmedStatusOnly() {
         ExcelImport excelImport = readyImport(99L);
         when(excelImportRepository.findById(99L)).thenReturn(Optional.of(excelImport));
         when(excelImportErrorRepository.existsByExcelImportId(99L)).thenReturn(false);
@@ -566,12 +566,12 @@ class ExcelImportValidationServiceTest {
         ExcelImportConfirmResponse response = validationService.confirm(99L);
 
         assertThat(response.importId()).isEqualTo(99L);
-        assertThat(response.status()).isEqualTo(ExcelImportStatus.SAN_SANG_IMPORT.name());
+        assertThat(response.status()).isEqualTo(ExcelImportStatus.DA_XAC_NHAN.name());
         assertThat(response.totalRows()).isEqualTo(3);
         assertThat(response.validRows()).isEqualTo(3);
         assertThat(response.errorRows()).isZero();
         assertThat(response.message()).isNotBlank();
-        assertThat(excelImport.getStatus()).isEqualTo(ExcelImportStatus.SAN_SANG_IMPORT);
+        assertThat(excelImport.getStatus()).isEqualTo(ExcelImportStatus.DA_XAC_NHAN);
 
         verify(excelImportRepository).save(excelImport);
         verify(excelImportErrorRepository, never()).deleteByExcelImportId(anyLong());
@@ -651,6 +651,22 @@ class ExcelImportValidationServiceTest {
         when(excelImportRepository.findById(103L)).thenReturn(Optional.of(excelImport));
 
         assertThatThrownBy(() -> validationService.confirm(103L))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessage("Lan import chua san sang xac nhan.");
+
+        verify(excelImportErrorRepository, never()).existsByExcelImportId(anyLong());
+        verify(excelImportRepository, never()).save(any(ExcelImport.class));
+        verify(excelImportErrorRepository, never()).deleteByExcelImportId(anyLong());
+        verify(excelImportErrorRepository, never()).saveAll(any());
+    }
+
+    @Test
+    void confirm_rejectsAlreadyConfirmedImport() {
+        ExcelImport excelImport = readyImport(104L);
+        excelImport.setStatus(ExcelImportStatus.DA_XAC_NHAN);
+        when(excelImportRepository.findById(104L)).thenReturn(Optional.of(excelImport));
+
+        assertThatThrownBy(() -> validationService.confirm(104L))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessage("Lan import chua san sang xac nhan.");
 

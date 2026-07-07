@@ -6,6 +6,8 @@ import com.smartflow.smestocksensebackend.entity.Category;
 import com.smartflow.smestocksensebackend.entity.ExcelImport;
 import com.smartflow.smestocksensebackend.entity.ExcelImportStatus;
 import com.smartflow.smestocksensebackend.entity.InventoryLevel;
+import com.smartflow.smestocksensebackend.entity.InventoryTransaction;
+import com.smartflow.smestocksensebackend.entity.InventoryTransactionType;
 import com.smartflow.smestocksensebackend.entity.Product;
 import com.smartflow.smestocksensebackend.entity.ProductStatus;
 import com.smartflow.smestocksensebackend.entity.Warehouse;
@@ -15,6 +17,7 @@ import com.smartflow.smestocksensebackend.repository.CategoryRepository;
 import com.smartflow.smestocksensebackend.repository.ExcelImportErrorRepository;
 import com.smartflow.smestocksensebackend.repository.ExcelImportRepository;
 import com.smartflow.smestocksensebackend.repository.InventoryLevelRepository;
+import com.smartflow.smestocksensebackend.repository.InventoryTransactionRepository;
 import com.smartflow.smestocksensebackend.repository.ProductRepository;
 import com.smartflow.smestocksensebackend.repository.WarehouseRepository;
 import lombok.RequiredArgsConstructor;
@@ -47,14 +50,18 @@ public class ExcelImportApplyService {
     private final CategoryRepository categoryRepository;
     private final WarehouseRepository warehouseRepository;
     private final InventoryLevelRepository inventoryLevelRepository;
+    private final InventoryTransactionRepository inventoryTransactionRepository;
 
     @Transactional
     public ExcelImportApplyResponse apply(Long importId, MultipartFile file) {
-        ExcelImport excelImport = excelImportRepository.findById(importId)
+        ExcelImport excelImport = excelImportRepository.findByIdForUpdate(importId)
                 .orElseThrow(() -> new NotFoundException("Lan import khong ton tai."));
 
         validateApplyPreconditions(excelImport, file);
         ExcelImportMode mode = parseMode(excelImport.getImportType());
+        if (mode == ExcelImportMode.PRODUCT_WITH_OPENING_STOCK && excelImport.getCreatedBy() == null) {
+            throw new BadRequestException("Lan import khong co nguoi tao de ghi nhan giao dich kho.");
+        }
         Long warehouseId = excelImport.getWarehouse() == null ? null : excelImport.getWarehouse().getId();
         ExcelImportValidationResponse validation = excelImportValidationService.validate(file, mode.name(), warehouseId);
         if (!validation.valid()) {
@@ -65,7 +72,7 @@ public class ExcelImportApplyService {
              Workbook workbook = WorkbookFactory.create(inputStream)) {
             applyProductsIfNeeded(workbook, mode);
             if (mode == ExcelImportMode.PRODUCT_WITH_OPENING_STOCK) {
-                applyOpeningStock(workbook);
+                applyOpeningStock(workbook, excelImport);
             }
         } catch (BadRequestException | NotFoundException exception) {
             throw exception;
@@ -150,7 +157,7 @@ public class ExcelImportApplyService {
         productRepository.saveAndFlush(product);
     }
 
-    private void applyOpeningStock(Workbook workbook) {
+    private void applyOpeningStock(Workbook workbook, ExcelImport excelImport) {
         Sheet sheet = workbook.getSheet(ExcelImportSheetName.TON_DAU_KY.getSheetName());
         if (sheet == null) {
             throw new BadRequestException("Thieu sheet 02_TonDauKy.");
@@ -161,11 +168,11 @@ public class ExcelImportApplyService {
             if (isBlankRow(row, ExcelImportTemplateConstants.OPENING_STOCK_HEADERS.size())) {
                 continue;
             }
-            setOpeningStock(row);
+            setOpeningStock(row, excelImport);
         }
     }
 
-    private void setOpeningStock(Row row) {
+    private void setOpeningStock(Row row, ExcelImport excelImport) {
         Warehouse warehouse = warehouseRepository.findByCodeIgnoreCase(requiredCell(row, 0, "ma_kho"))
                 .orElseThrow(() -> new BadRequestException("Kho hang khong ton tai."));
         Product product = productRepository.findByCode(requiredCell(row, 1, "ma_san_pham").trim().toUpperCase(Locale.ROOT))
@@ -180,8 +187,22 @@ public class ExcelImportApplyService {
                     created.setWarehouse(warehouse);
                     return created;
                 });
+        Integer quantityBefore = inventoryLevel.getQuantity() == null ? 0 : inventoryLevel.getQuantity();
         inventoryLevel.setQuantity(quantity);
         inventoryLevelRepository.saveAndFlush(inventoryLevel);
+        if (!quantityBefore.equals(quantity)) {
+            InventoryTransaction transaction = new InventoryTransaction();
+            transaction.setProduct(product);
+            transaction.setWarehouse(warehouse);
+            transaction.setTransactionType(InventoryTransactionType.NHAP_DAU_KY);
+            transaction.setQuantity(Math.abs(quantity - quantityBefore));
+            transaction.setQuantityBefore(quantityBefore);
+            transaction.setQuantityAfter(quantity);
+            transaction.setImportBatchId(excelImport.getId());
+            transaction.setCreatedBy(excelImport.getCreatedBy());
+            transaction.setNote("Nhap dau ky tu import Excel.");
+            inventoryTransactionRepository.saveAndFlush(transaction);
+        }
     }
 
     private ProductStatus parseStatusOrDefault(String value) {

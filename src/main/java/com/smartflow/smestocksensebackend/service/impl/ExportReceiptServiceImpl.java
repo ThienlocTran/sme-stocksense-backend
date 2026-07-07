@@ -4,7 +4,6 @@ import com.smartflow.smestocksensebackend.dto.outbound.ExportReceiptPageResponse
 import com.smartflow.smestocksensebackend.dto.outbound.ExportReceiptSummaryResponse;
 import com.smartflow.smestocksensebackend.entity.Employee;
 import com.smartflow.smestocksensebackend.entity.EmployeeStatus;
-import com.smartflow.smestocksensebackend.entity.ExportReceipt;
 import com.smartflow.smestocksensebackend.entity.ExportReceiptStatus;
 import com.smartflow.smestocksensebackend.entity.RoleCode;
 import com.smartflow.smestocksensebackend.exception.AccountInactiveException;
@@ -78,7 +77,7 @@ public class ExportReceiptServiceImpl implements ExportReceiptService {
         try {
             return ExportReceiptStatus.valueOf(status.trim().toUpperCase());
         } catch (IllegalArgumentException exception) {
-            throw new BadRequestException("status khong hop le.");
+            throw new BadRequestException("status khong hop le.", exception);
         }
     }
 }

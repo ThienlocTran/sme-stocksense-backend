@@ -2,6 +2,7 @@ package com.smartflow.smestocksensebackend.dto.outbound;
 
 import com.smartflow.smestocksensebackend.entity.ExportReceipt;
 import com.smartflow.smestocksensebackend.entity.Employee;
+import com.smartflow.smestocksensebackend.entity.ExportReceiptStatus;
 import com.smartflow.smestocksensebackend.entity.Warehouse;
 
 import java.time.LocalDateTime;
@@ -36,13 +37,7 @@ public record ExportReceiptDetailResponse(
     }
 
     private static String approvalLevel(ExportReceipt receipt) {
-        if (receipt.getStatus() == null) {
-            return null;
-        }
-        return switch (receipt.getStatus()) {
-            case CHO_DUYET_CAP_1 -> "LEVEL_1";
-            case CHO_DUYET_CAP_2 -> "LEVEL_2";
-            default -> null;
-        };
+        ExportReceiptStatus status = receipt.getStatus();
+        return status != null ? status.approvalLevel() : null;
     }
 }

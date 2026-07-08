@@ -36,6 +36,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
@@ -114,7 +115,7 @@ class ExportReceiptApprovalServiceTest {
     }
 
     @Test
-    void approve_level1ShouldMoveToPendingLevel2AndRecordApprover() {
+    void approve_level1ShouldMoveToPendingLevel2WithoutRecordingApproverMetadata() {
         ExportReceipt receipt = receiptWithStatus(ExportReceiptStatus.CHO_DUYET_CAP_1);
         when(exportReceiptRepository.findById(100L)).thenReturn(Optional.of(receipt));
         when(exportReceiptRepository.saveAndFlush(any(ExportReceipt.class)))
@@ -125,8 +126,8 @@ class ExportReceiptApprovalServiceTest {
 
         assertEquals("CHO_DUYET_CAP_2", response.status());
         assertEquals(ExportReceiptStatus.CHO_DUYET_CAP_2, receipt.getStatus());
-        assertEquals(manager, receipt.getApprovedBy());
-        assertNotNull(receipt.getApprovedAt());
+        assertNull(receipt.getApprovedBy());
+        assertNull(receipt.getApprovedAt());
         verify(inventoryLevelRepository, never()).findByProductIdAndWarehouseId(any(), any());
     }
 

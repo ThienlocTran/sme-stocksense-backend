@@ -119,6 +119,21 @@ public class ExportReceiptServiceImpl implements ExportReceiptService {
             } else if (receipt.getStatus() == ExportReceiptStatus.CHO_DUYET_CAP_2) {
                 List<ExportReceiptDetail> details = exportReceiptDetailRepository
                         .findByExportReceiptIdOrderByIdAsc(receiptId);
+                details = details.stream()
+                        .sorted((left, right) -> {
+                            Long leftProductId = left.getProduct() != null ? left.getProduct().getId() : null;
+                            Long rightProductId = right.getProduct() != null ? right.getProduct().getId() : null;
+                            int comparison = Integer.compare(
+                                    leftProductId != null ? leftProductId.intValue() : Integer.MAX_VALUE,
+                                    rightProductId != null ? rightProductId.intValue() : Integer.MAX_VALUE);
+                            if (comparison != 0) {
+                                return comparison;
+                            }
+                            return Long.compare(
+                                    left.getId() != null ? left.getId() : Long.MAX_VALUE,
+                                    right.getId() != null ? right.getId() : Long.MAX_VALUE);
+                        })
+                        .toList();
                 for (ExportReceiptDetail detail : details) {
                     Long productId = detail.getProduct() != null ? detail.getProduct().getId() : null;
                     Long warehouseId = receipt.getWarehouse() != null ? receipt.getWarehouse().getId() : null;
@@ -154,8 +169,10 @@ public class ExportReceiptServiceImpl implements ExportReceiptService {
                 throw new ConflictException("Chi duoc duyet phieu xuat o trang thai CHO_DUYET_CAP_1 hoac CHO_DUYET_CAP_2.");
             }
 
-            receipt.setApprovedBy(actor);
-            receipt.setApprovedAt(now);
+            if (receipt.getStatus() == ExportReceiptStatus.HOAN_THANH) {
+                receipt.setApprovedBy(actor);
+                receipt.setApprovedAt(now);
+            }
             ExportReceipt savedReceipt = exportReceiptRepository.saveAndFlush(receipt);
             List<ExportReceiptDetail> details = exportReceiptDetailRepository
                     .findByExportReceiptIdOrderByIdAsc(receiptId);
@@ -169,7 +186,7 @@ public class ExportReceiptServiceImpl implements ExportReceiptService {
                     })
                     .toList());
         } catch (OptimisticLockingFailureException exception) {
-            throw new ConflictException("Phieu xuat da duoc cap nhat boi request khac.");
+            throw new ConflictException("Phieu xuat da duoc cap nhat boi request khac.", exception);
         }
     }
 

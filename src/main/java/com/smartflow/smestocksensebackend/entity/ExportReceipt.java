@@ -11,6 +11,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -75,6 +76,10 @@ public class ExportReceipt {
 
     @Column(name = "ly_do_tu_choi", length = 500)
     private String rejectionReason;
+
+    @Version
+    @Column(name = "version", nullable = false)
+    private Long version = 0L;
 
     @CreationTimestamp
     @Column(name = "ngay_tao", updatable = false)

@@ -4,7 +4,10 @@ import com.smartflow.smestocksensebackend.dto.outbound.ExportReceiptDetailRespon
 import com.smartflow.smestocksensebackend.entity.Employee;
 import com.smartflow.smestocksensebackend.entity.EmployeeStatus;
 import com.smartflow.smestocksensebackend.entity.ExportReceipt;
+import com.smartflow.smestocksensebackend.entity.ExportReceiptDetail;
 import com.smartflow.smestocksensebackend.entity.ExportReceiptStatus;
+import com.smartflow.smestocksensebackend.entity.InventoryLevel;
+import com.smartflow.smestocksensebackend.entity.Product;
 import com.smartflow.smestocksensebackend.entity.Role;
 import com.smartflow.smestocksensebackend.entity.RoleCode;
 import com.smartflow.smestocksensebackend.entity.Warehouse;
@@ -32,6 +35,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -116,6 +121,28 @@ class ExportReceiptApprovalServiceTest {
         assertEquals(ExportReceiptStatus.CHO_DUYET_CAP_2, receipt.getStatus());
         assertEquals(manager, receipt.getApprovedBy());
         assertNotNull(receipt.getApprovedAt());
+        verify(inventoryLevelRepository, never()).findByProductIdAndWarehouseId(any(), any());
+    }
+
+    @Test
+    void approve_withDetailsShouldUseBatchInventoryLookup() {
+        ExportReceipt receipt = receiptWithStatus(ExportReceiptStatus.CHO_DUYET_CAP_1);
+        Product product = new Product();
+        product.setId(10L);
+        ExportReceiptDetail detail = new ExportReceiptDetail();
+        detail.setProduct(product);
+        detail.setQuantity(5);
+        receipt.setWarehouse(warehouse);
+        when(exportReceiptRepository.findById(100L)).thenReturn(Optional.of(receipt));
+        when(exportReceiptRepository.saveAndFlush(any(ExportReceipt.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(exportReceiptDetailRepository.findByExportReceiptIdOrderByIdAsc(100L)).thenReturn(List.of(detail));
+        when(inventoryLevelRepository.findByWarehouseIdAndProductIdIn(eq(1L), anyList()))
+                .thenReturn(List.of());
+
+        exportReceiptService.approve(100L);
+
+        verify(inventoryLevelRepository).findByWarehouseIdAndProductIdIn(eq(1L), anyList());
         verify(inventoryLevelRepository, never()).findByProductIdAndWarehouseId(any(), any());
     }
 

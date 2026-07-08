@@ -31,6 +31,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -57,12 +61,11 @@ public class ExportReceiptServiceImpl implements ExportReceiptService {
         ensureCanReadReceipt(actor, receipt);
 
         List<ExportReceiptDetail> details = exportReceiptDetailRepository.findByExportReceiptIdOrderByIdAsc(receiptId);
+        Map<Long, Integer> inventoryByProductId = loadInventoryByProductId(details, receipt.getWarehouse().getId());
         List<ExportReceiptDetailItemResponse> items = details.stream()
                 .map(detail -> {
-                    Integer currentInventory = inventoryLevelRepository
-                            .findByProductIdAndWarehouseId(detail.getProduct().getId(), receipt.getWarehouse().getId())
-                            .map(InventoryLevel::getQuantity)
-                            .orElse(0);
+                    Long productId = detail.getProduct() != null ? detail.getProduct().getId() : null;
+                    Integer currentInventory = productId != null ? inventoryByProductId.getOrDefault(productId, 0) : 0;
                     boolean warning = detail.getQuantity() > currentInventory;
                     return ExportReceiptDetailItemResponse.from(detail, currentInventory, warning);
                 })
@@ -120,12 +123,11 @@ public class ExportReceiptServiceImpl implements ExportReceiptService {
             ExportReceipt savedReceipt = exportReceiptRepository.saveAndFlush(receipt);
             List<ExportReceiptDetail> details = exportReceiptDetailRepository
                     .findByExportReceiptIdOrderByIdAsc(receiptId);
+            Map<Long, Integer> inventoryByProductId = loadInventoryByProductId(details, savedReceipt.getWarehouse().getId());
             return ExportReceiptDetailResponse.from(savedReceipt, details.stream()
                     .map(detail -> {
-                        Integer currentInventory = inventoryLevelRepository
-                                .findByProductIdAndWarehouseId(detail.getProduct().getId(), savedReceipt.getWarehouse().getId())
-                                .map(InventoryLevel::getQuantity)
-                                .orElse(0);
+                        Long productId = detail.getProduct() != null ? detail.getProduct().getId() : null;
+                        Integer currentInventory = productId != null ? inventoryByProductId.getOrDefault(productId, 0) : 0;
                         boolean warning = detail.getQuantity() > currentInventory;
                         return ExportReceiptDetailItemResponse.from(detail, currentInventory, warning);
                     })
@@ -133,6 +135,24 @@ public class ExportReceiptServiceImpl implements ExportReceiptService {
         } catch (OptimisticLockingFailureException exception) {
             throw new ConflictException("Phieu xuat da duoc cap nhat boi request khac.");
         }
+    }
+
+    private Map<Long, Integer> loadInventoryByProductId(List<ExportReceiptDetail> details, Long warehouseId) {
+        List<Long> productIds = details.stream()
+                .map(detail -> detail.getProduct() != null ? detail.getProduct().getId() : null)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        if (productIds.isEmpty() || warehouseId == null) {
+            return Map.of();
+        }
+
+        return inventoryLevelRepository.findByWarehouseIdAndProductIdIn(warehouseId, productIds).stream()
+                .collect(Collectors.toMap(
+                        inventory -> inventory.getProduct().getId(),
+                        InventoryLevel::getQuantity,
+                        (existing, replacement) -> replacement,
+                        java.util.LinkedHashMap::new));
     }
 
     private Employee currentEmployee() {

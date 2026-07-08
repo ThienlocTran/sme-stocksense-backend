@@ -137,6 +137,8 @@ public class SecurityConfig {
                                                 .hasAnyRole("ADMIN", "MANAGER")
                                                 .requestMatchers(HttpMethod.GET, "/api/import-receipts/*")
                                                 .hasAnyRole("ADMIN", "MANAGER", "EMPLOYEE")
+                                                .requestMatchers(HttpMethod.PUT, "/api/export-receipts/*/approve")
+                                                .hasAnyRole("ADMIN", "MANAGER")
                                                 .requestMatchers(HttpMethod.PUT, "/api/import-receipts/*/arrival")
                                                 .hasAnyRole("ADMIN", "EMPLOYEE")
                                                 .requestMatchers(HttpMethod.PUT, "/api/import-receipts/*/submit")

@@ -5,6 +5,7 @@ import com.smartflow.smestocksensebackend.config.SecurityConfig;
 import com.smartflow.smestocksensebackend.dto.inbound.RejectExportReceiptRequest;
 import com.smartflow.smestocksensebackend.dto.outbound.ExportReceiptDetailResponse;
 import com.smartflow.smestocksensebackend.exception.ApiExceptionHandler;
+import com.smartflow.smestocksensebackend.exception.BadRequestException;
 import com.smartflow.smestocksensebackend.exception.ConflictException;
 import com.smartflow.smestocksensebackend.exception.MissingRoleException;
 import com.smartflow.smestocksensebackend.exception.NotFoundException;
@@ -64,6 +65,63 @@ class ExportReceiptApprovalControllerTest {
         }
 
         @Test
+        void reject_withoutTokenShouldReturn401() throws Exception {
+                mockMvc.perform(put("/api/export-receipts/100/reject")
+                                .contentType("application/json")
+                                .content("{\"rejectReason\":\"Sai thông tin khách hàng\"}"))
+                                .andExpect(status().isUnauthorized());
+        }
+
+        @Test
+        void reject_employeeShouldReturn403() throws Exception {
+                when(exportReceiptService.reject(eq(100L), any(RejectExportReceiptRequest.class)))
+                                .thenThrow(new MissingRoleException("Khong co quyen duyet phieu xuat."));
+
+                mockMvc.perform(put("/api/export-receipts/100/reject")
+                                .with(user("employee@example.com").roles("EMPLOYEE"))
+                                .contentType("application/json")
+                                .content("{\"rejectReason\":\"Sai thông tin khách hàng\"}"))
+                                .andExpect(status().isForbidden());
+        }
+
+        @Test
+        void reject_notFoundShouldReturn404() throws Exception {
+                when(exportReceiptService.reject(eq(404L), any(RejectExportReceiptRequest.class)))
+                                .thenThrow(new NotFoundException("Phieu xuat khong ton tai."));
+
+                mockMvc.perform(put("/api/export-receipts/404/reject")
+                                .with(user("manager@example.com").roles("MANAGER"))
+                                .contentType("application/json")
+                                .content("{\"rejectReason\":\"Sai thông tin khách hàng\"}"))
+                                .andExpect(status().isNotFound());
+        }
+
+        @Test
+        void reject_conflictShouldReturn409() throws Exception {
+                when(exportReceiptService.reject(eq(100L), any(RejectExportReceiptRequest.class)))
+                                .thenThrow(new ConflictException(
+                                                "Chi duoc tu choi phieu xuat o trang thai cho duyet."));
+
+                mockMvc.perform(put("/api/export-receipts/100/reject")
+                                .with(user("manager@example.com").roles("MANAGER"))
+                                .contentType("application/json")
+                                .content("{\"rejectReason\":\"Sai thông tin khách hàng\"}"))
+                                .andExpect(status().isConflict());
+        }
+
+        @Test
+        void reject_blankReasonShouldReturn400() throws Exception {
+                when(exportReceiptService.reject(eq(100L), any(RejectExportReceiptRequest.class)))
+                                .thenThrow(new BadRequestException("Ly do tu choi khong duoc de trong."));
+
+                mockMvc.perform(put("/api/export-receipts/100/reject")
+                                .with(user("manager@example.com").roles("MANAGER"))
+                                .contentType("application/json")
+                                .content("{\"rejectReason\":\"   \"}"))
+                                .andExpect(status().isBadRequest());
+        }
+
+        @Test
         void approve_managerShouldReturn200() throws Exception {
                 when(exportReceiptService.approve(eq(100L))).thenReturn(detailResponse("CHO_DUYET_CAP_2"));
 
@@ -115,6 +173,9 @@ class ExportReceiptApprovalControllerTest {
                                 "Ghi chú",
                                 status,
                                 "LEVEL_1",
+                                null,
+                                null,
+                                null,
                                 List.of());
         }
 }

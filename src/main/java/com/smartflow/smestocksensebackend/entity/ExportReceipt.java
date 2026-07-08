@@ -75,6 +75,13 @@ public class ExportReceipt {
     private LocalDateTime approvedAt;
 
     @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "nguoi_duyet_cap_1_id")
+    private Employee level1ApprovedBy;
+
+    @Column(name = "ngay_duyet_cap_1")
+    private LocalDateTime level1ApprovedAt;
+
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "nguoi_tu_choi_id")
     private Employee rejectedBy;
 

@@ -31,89 +31,93 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Import({ SecurityConfig.class, JwtAuthenticationFilter.class, ApiExceptionHandler.class })
 class ExportReceiptDetailControllerTest {
 
-    @Autowired
-    private MockMvc mockMvc;
+        @Autowired
+        private MockMvc mockMvc;
 
-    @MockitoBean
-    private ExportReceiptService exportReceiptService;
+        @MockitoBean
+        private ExportReceiptService exportReceiptService;
 
-    @MockitoBean
-    private JwtService jwtService;
+        @MockitoBean
+        private JwtService jwtService;
 
-    @MockitoBean
-    private EmployeeRepository employeeRepository;
+        @MockitoBean
+        private EmployeeRepository employeeRepository;
 
-    @Test
-    void getDetail_foundAndAuthorized_shouldReturn200() throws Exception {
-        when(exportReceiptService.getDetail(100L)).thenReturn(detailResponse(100L, 12, false));
+        @Test
+        void getDetail_foundAndAuthorized_shouldReturn200() throws Exception {
+                when(exportReceiptService.getDetail(100L)).thenReturn(detailResponse(100L, 12, false));
 
-        mockMvc.perform(get("/api/export-receipts/100")
-                .with(user("manager@example.com").roles("MANAGER")))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.id").value(100))
-                .andExpect(jsonPath("$.code").value("XUAT-001"))
-                .andExpect(jsonPath("$.items[0].warning").value(false));
-    }
+                mockMvc.perform(get("/api/export-receipts/100")
+                                .with(user("manager@example.com").roles("MANAGER")))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.id").value(100))
+                                .andExpect(jsonPath("$.code").value("XUAT-001"))
+                                .andExpect(jsonPath("$.items[0].warning").value(false));
+        }
 
-    @Test
-    void getDetail_notFound_shouldReturn404() throws Exception {
-        when(exportReceiptService.getDetail(404L)).thenThrow(new NotFoundException("Phieu xuat khong ton tai."));
+        @Test
+        void getDetail_notFound_shouldReturn404() throws Exception {
+                when(exportReceiptService.getDetail(404L))
+                                .thenThrow(new NotFoundException("Phieu xuat khong ton tai."));
 
-        mockMvc.perform(get("/api/export-receipts/404")
-                .with(user("manager@example.com").roles("MANAGER")))
-                .andExpect(status().isNotFound());
-    }
+                mockMvc.perform(get("/api/export-receipts/404")
+                                .with(user("manager@example.com").roles("MANAGER")))
+                                .andExpect(status().isNotFound());
+        }
 
-    @Test
-    void getDetail_noPermission_shouldReturn403() throws Exception {
-        when(exportReceiptService.getDetail(403L))
-                .thenThrow(new MissingRoleException("Khong co quyen xem phieu xuat."));
+        @Test
+        void getDetail_noPermission_shouldReturn403() throws Exception {
+                when(exportReceiptService.getDetail(403L))
+                                .thenThrow(new MissingRoleException("Khong co quyen xem phieu xuat."));
 
-        mockMvc.perform(get("/api/export-receipts/403")
-                .with(user("employee@example.com").roles("EMPLOYEE")))
-                .andExpect(status().isForbidden());
-    }
+                mockMvc.perform(get("/api/export-receipts/403")
+                                .with(user("employee@example.com").roles("EMPLOYEE")))
+                                .andExpect(status().isForbidden());
+        }
 
-    @Test
-    void getDetail_lowInventory_shouldReturnTrue() throws Exception {
-        when(exportReceiptService.getDetail(200L)).thenReturn(detailResponse(200L, 6, true));
+        @Test
+        void getDetail_lowInventory_shouldReturnTrue() throws Exception {
+                when(exportReceiptService.getDetail(200L)).thenReturn(detailResponse(200L, 6, true));
 
-        mockMvc.perform(get("/api/export-receipts/200")
-                .with(user("manager@example.com").roles("MANAGER")))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.items[0].warning").value(true));
-    }
+                mockMvc.perform(get("/api/export-receipts/200")
+                                .with(user("manager@example.com").roles("MANAGER")))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.items[0].warning").value(true));
+        }
 
-    @Test
-    void getDetail_highInventory_shouldReturnFalse() throws Exception {
-        when(exportReceiptService.getDetail(201L)).thenReturn(detailResponse(201L, 20, false));
+        @Test
+        void getDetail_highInventory_shouldReturnFalse() throws Exception {
+                when(exportReceiptService.getDetail(201L)).thenReturn(detailResponse(201L, 20, false));
 
-        mockMvc.perform(get("/api/export-receipts/201")
-                .with(user("manager@example.com").roles("MANAGER")))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.items[0].warning").value(false));
-    }
+                mockMvc.perform(get("/api/export-receipts/201")
+                                .with(user("manager@example.com").roles("MANAGER")))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.items[0].warning").value(false));
+        }
 
-    private ExportReceiptDetailResponse detailResponse(Long id, int currentInventory, boolean warning) {
-        ExportReceiptDetailItemResponse item = new ExportReceiptDetailItemResponse(
-                1L,
-                10L,
-                "SP-001",
-                "Sản phẩm A",
-                "hộp",
-                5,
-                currentInventory,
-                warning);
-        return new ExportReceiptDetailResponse(
-                id,
-                "XUAT-001",
-                "Nguyen Van A",
-                LocalDateTime.of(2026, 7, 5, 8, 0),
-                LocalDateTime.of(2026, 7, 5, 7, 0),
-                "Kho A",
-                "Ghi chú",
-                "CHO_DUYET_CAP_1",
-                "LEVEL_1",
-                List.of(item));
-    }
+        private ExportReceiptDetailResponse detailResponse(Long id, int currentInventory, boolean warning) {
+                ExportReceiptDetailItemResponse item = new ExportReceiptDetailItemResponse(
+                                1L,
+                                10L,
+                                "SP-001",
+                                "Sản phẩm A",
+                                "hộp",
+                                5,
+                                currentInventory,
+                                warning);
+                return new ExportReceiptDetailResponse(
+                                id,
+                                "XUAT-001",
+                                "Nguyen Van A",
+                                LocalDateTime.of(2026, 7, 5, 8, 0),
+                                LocalDateTime.of(2026, 7, 5, 7, 0),
+                                "Kho A",
+                                "Ghi chú",
+                                "CHO_DUYET_CAP_1",
+                                "LEVEL_1",
+                                null,
+                                null,
+                                null,
+                                List.of(item));
+        }
 }

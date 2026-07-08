@@ -152,6 +152,32 @@ class ExportReceiptApprovalServiceTest {
     }
 
     @Test
+    void reject_withEmployeeRoleShouldThrowMissingRole() {
+        authenticate(employeeWith(RoleCode.EMPLOYEE));
+
+        assertThrows(MissingRoleException.class,
+                () -> exportReceiptService.reject(100L, new RejectExportReceiptRequest("Lý do")));
+        verify(exportReceiptRepository, never()).findById(any());
+    }
+
+    @Test
+    void reject_withInactiveAccountShouldThrowAccountInactive() {
+        manager.setStatus(EmployeeStatus.TAM_KHOA);
+
+        assertThrows(AccountInactiveException.class,
+                () -> exportReceiptService.reject(100L, new RejectExportReceiptRequest("Lý do")));
+        verify(exportReceiptRepository, never()).findById(any());
+    }
+
+    @Test
+    void reject_withMissingReceiptShouldThrowNotFound() {
+        when(exportReceiptRepository.findById(404L)).thenReturn(Optional.empty());
+
+        assertThrows(NotFoundException.class,
+                () -> exportReceiptService.reject(404L, new RejectExportReceiptRequest("Lý do")));
+    }
+
+    @Test
     void approve_level1ShouldMoveToPendingLevel2WithoutRecordingApproverMetadata() {
         ExportReceipt receipt = receiptWithStatus(ExportReceiptStatus.CHO_DUYET_CAP_1);
         when(exportReceiptRepository.findById(100L)).thenReturn(Optional.of(receipt));
@@ -163,6 +189,8 @@ class ExportReceiptApprovalServiceTest {
 
         assertEquals("CHO_DUYET_CAP_2", response.status());
         assertEquals(ExportReceiptStatus.CHO_DUYET_CAP_2, receipt.getStatus());
+        assertEquals(manager, receipt.getLevel1ApprovedBy());
+        assertNotNull(receipt.getLevel1ApprovedAt());
         assertNull(receipt.getApprovedBy());
         assertNull(receipt.getApprovedAt());
         verify(inventoryLevelRepository, never()).findByProductIdAndWarehouseId(any(), any());

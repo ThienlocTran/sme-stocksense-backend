@@ -63,18 +63,7 @@ public class ExportReceiptServiceImpl implements ExportReceiptService {
                 .orElseThrow(() -> new NotFoundException("Phieu xuat khong ton tai."));
         ensureCanReadReceipt(actor, receipt);
 
-        List<ExportReceiptDetail> details = exportReceiptDetailRepository.findByExportReceiptIdOrderByIdAsc(receiptId);
-        Map<Long, Integer> inventoryByProductId = loadInventoryByProductId(details, receipt.getWarehouse().getId());
-        List<ExportReceiptDetailItemResponse> items = details.stream()
-                .map(detail -> {
-                    Long productId = detail.getProduct() != null ? detail.getProduct().getId() : null;
-                    Integer currentInventory = productId != null ? inventoryByProductId.getOrDefault(productId, 0) : 0;
-                    boolean warning = detail.getQuantity() > currentInventory;
-                    return ExportReceiptDetailItemResponse.from(detail, currentInventory, warning);
-                })
-                .toList();
-
-        return ExportReceiptDetailResponse.from(receipt, items);
+        return buildDetailResponse(receipt);
     }
 
     @Override
@@ -136,19 +125,7 @@ public class ExportReceiptServiceImpl implements ExportReceiptService {
             receipt.setRejectedBy(actor);
             receipt.setRejectedAt(LocalDateTime.now());
             ExportReceipt savedReceipt = exportReceiptRepository.saveAndFlush(receipt);
-            List<ExportReceiptDetail> details = exportReceiptDetailRepository
-                    .findByExportReceiptIdOrderByIdAsc(receiptId);
-            Map<Long, Integer> inventoryByProductId = loadInventoryByProductId(details,
-                    savedReceipt.getWarehouse().getId());
-            return ExportReceiptDetailResponse.from(savedReceipt, details.stream()
-                    .map(detail -> {
-                        Long productId = detail.getProduct() != null ? detail.getProduct().getId() : null;
-                        Integer currentInventory = productId != null ? inventoryByProductId.getOrDefault(productId, 0)
-                                : 0;
-                        boolean warning = detail.getQuantity() > currentInventory;
-                        return ExportReceiptDetailItemResponse.from(detail, currentInventory, warning);
-                    })
-                    .toList());
+            return buildDetailResponse(savedReceipt);
         } catch (OptimisticLockingFailureException exception) {
             throw new ConflictException("Phieu xuat da duoc cap nhat boi request khac.", exception);
         }
@@ -170,6 +147,8 @@ public class ExportReceiptServiceImpl implements ExportReceiptService {
         try {
             if (receipt.getStatus() == ExportReceiptStatus.CHO_DUYET_CAP_1) {
                 receipt.setStatus(ExportReceiptStatus.CHO_DUYET_CAP_2);
+                receipt.setLevel1ApprovedBy(actor);
+                receipt.setLevel1ApprovedAt(now);
             } else if (receipt.getStatus() == ExportReceiptStatus.CHO_DUYET_CAP_2) {
                 List<ExportReceiptDetail> details = exportReceiptDetailRepository
                         .findByExportReceiptIdOrderByIdAsc(receiptId);
@@ -177,9 +156,9 @@ public class ExportReceiptServiceImpl implements ExportReceiptService {
                         .sorted((left, right) -> {
                             Long leftProductId = left.getProduct() != null ? left.getProduct().getId() : null;
                             Long rightProductId = right.getProduct() != null ? right.getProduct().getId() : null;
-                            int comparison = Integer.compare(
-                                    leftProductId != null ? leftProductId.intValue() : Integer.MAX_VALUE,
-                                    rightProductId != null ? rightProductId.intValue() : Integer.MAX_VALUE);
+                            int comparison = Long.compare(
+                                    leftProductId != null ? leftProductId : Long.MAX_VALUE,
+                                    rightProductId != null ? rightProductId : Long.MAX_VALUE);
                             if (comparison != 0) {
                                 return comparison;
                             }
@@ -230,22 +209,26 @@ public class ExportReceiptServiceImpl implements ExportReceiptService {
                 receipt.setApprovedAt(now);
             }
             ExportReceipt savedReceipt = exportReceiptRepository.saveAndFlush(receipt);
-            List<ExportReceiptDetail> details = exportReceiptDetailRepository
-                    .findByExportReceiptIdOrderByIdAsc(receiptId);
-            Map<Long, Integer> inventoryByProductId = loadInventoryByProductId(details,
-                    savedReceipt.getWarehouse().getId());
-            return ExportReceiptDetailResponse.from(savedReceipt, details.stream()
-                    .map(detail -> {
-                        Long productId = detail.getProduct() != null ? detail.getProduct().getId() : null;
-                        Integer currentInventory = productId != null ? inventoryByProductId.getOrDefault(productId, 0)
-                                : 0;
-                        boolean warning = detail.getQuantity() > currentInventory;
-                        return ExportReceiptDetailItemResponse.from(detail, currentInventory, warning);
-                    })
-                    .toList());
+            return buildDetailResponse(savedReceipt);
         } catch (OptimisticLockingFailureException exception) {
             throw new ConflictException("Phieu xuat da duoc cap nhat boi request khac.", exception);
         }
+    }
+
+    private ExportReceiptDetailResponse buildDetailResponse(ExportReceipt receipt) {
+        List<ExportReceiptDetail> details = exportReceiptDetailRepository
+                .findByExportReceiptIdOrderByIdAsc(receipt.getId());
+        Map<Long, Integer> inventoryByProductId = loadInventoryByProductId(details,
+                receipt.getWarehouse() != null ? receipt.getWarehouse().getId() : null);
+        List<ExportReceiptDetailItemResponse> items = details.stream()
+                .map(detail -> {
+                    Long productId = detail.getProduct() != null ? detail.getProduct().getId() : null;
+                    Integer currentInventory = productId != null ? inventoryByProductId.getOrDefault(productId, 0) : 0;
+                    boolean warning = detail.getQuantity() > currentInventory;
+                    return ExportReceiptDetailItemResponse.from(detail, currentInventory, warning);
+                })
+                .toList();
+        return ExportReceiptDetailResponse.from(receipt, items);
     }
 
     private Map<Long, Integer> loadInventoryByProductId(List<ExportReceiptDetail> details, Long warehouseId) {

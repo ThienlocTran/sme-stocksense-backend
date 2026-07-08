@@ -18,9 +18,13 @@ public record ExportReceiptDetailResponse(
         String note,
         String status,
         String approvalLevel,
+        String rejectedBy,
+        LocalDateTime rejectedAt,
+        String rejectionReason,
         List<ExportReceiptDetailItemResponse> items) {
     public static ExportReceiptDetailResponse from(ExportReceipt receipt, List<ExportReceiptDetailItemResponse> items) {
         Employee createdBy = receipt.getCreatedBy();
+        Employee rejectedBy = receipt.getRejectedBy();
         Warehouse warehouse = receipt.getWarehouse();
 
         return new ExportReceiptDetailResponse(
@@ -33,6 +37,9 @@ public record ExportReceiptDetailResponse(
                 receipt.getNote(),
                 receipt.getStatus() != null ? receipt.getStatus().name() : null,
                 approvalLevel(receipt),
+                rejectedBy != null ? rejectedBy.getFullName() : null,
+                receipt.getRejectedAt(),
+                receipt.getRejectionReason(),
                 items);
     }
 

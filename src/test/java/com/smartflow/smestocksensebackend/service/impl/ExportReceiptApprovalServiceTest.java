@@ -1,5 +1,6 @@
 package com.smartflow.smestocksensebackend.service.impl;
 
+import com.smartflow.smestocksensebackend.dto.inbound.RejectExportReceiptRequest;
 import com.smartflow.smestocksensebackend.dto.outbound.ExportReceiptDetailResponse;
 import com.smartflow.smestocksensebackend.entity.Employee;
 import com.smartflow.smestocksensebackend.entity.EmployeeStatus;
@@ -14,6 +15,7 @@ import com.smartflow.smestocksensebackend.entity.Role;
 import com.smartflow.smestocksensebackend.entity.RoleCode;
 import com.smartflow.smestocksensebackend.entity.Warehouse;
 import com.smartflow.smestocksensebackend.exception.AccountInactiveException;
+import com.smartflow.smestocksensebackend.exception.BadRequestException;
 import com.smartflow.smestocksensebackend.exception.ConflictException;
 import com.smartflow.smestocksensebackend.exception.MissingRoleException;
 import com.smartflow.smestocksensebackend.exception.NotFoundException;
@@ -115,6 +117,41 @@ class ExportReceiptApprovalServiceTest {
     }
 
     @Test
+    void reject_pendingReceiptShouldMoveToRejectedAndStoreMetadata() {
+        ExportReceipt receipt = receiptWithStatus(ExportReceiptStatus.CHO_DUYET_CAP_1);
+        when(exportReceiptRepository.findById(100L)).thenReturn(Optional.of(receipt));
+        when(exportReceiptRepository.saveAndFlush(any(ExportReceipt.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(exportReceiptDetailRepository.findByExportReceiptIdOrderByIdAsc(100L)).thenReturn(List.of());
+
+        ExportReceiptDetailResponse response = exportReceiptService.reject(100L,
+                new RejectExportReceiptRequest("Sai thông tin khách hàng"));
+
+        assertEquals("TU_CHOI", response.status());
+        assertEquals(ExportReceiptStatus.TU_CHOI, receipt.getStatus());
+        assertEquals("Sai thông tin khách hàng", receipt.getRejectionReason());
+        assertEquals(manager, receipt.getRejectedBy());
+        assertNotNull(receipt.getRejectedAt());
+    }
+
+    @Test
+    void reject_withoutReasonShouldThrowBadRequest() {
+        assertThrows(BadRequestException.class,
+                () -> exportReceiptService.reject(100L, new RejectExportReceiptRequest("   ")));
+        verify(exportReceiptRepository, never()).findById(any());
+    }
+
+    @Test
+    void reject_withWrongStatusShouldThrowConflict() {
+        ExportReceipt receipt = receiptWithStatus(ExportReceiptStatus.HOAN_THANH);
+        when(exportReceiptRepository.findById(100L)).thenReturn(Optional.of(receipt));
+
+        assertThrows(ConflictException.class,
+                () -> exportReceiptService.reject(100L, new RejectExportReceiptRequest("Lý do")));
+        verify(exportReceiptRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
     void approve_level1ShouldMoveToPendingLevel2WithoutRecordingApproverMetadata() {
         ExportReceipt receipt = receiptWithStatus(ExportReceiptStatus.CHO_DUYET_CAP_1);
         when(exportReceiptRepository.findById(100L)).thenReturn(Optional.of(receipt));
@@ -180,7 +217,8 @@ class ExportReceiptApprovalServiceTest {
         assertEquals(ExportReceiptStatus.HOAN_THANH, receipt.getStatus());
         assertEquals(manager, receipt.getApprovedBy());
         assertEquals(2, inventoryLevel.getQuantity());
-        verify(inventoryTransactionService).recordTransaction(eq(10L), eq(1L), eq(InventoryTransactionType.XUAT_KHO), eq(3), eq(5), eq(2), any(), any());
+        verify(inventoryTransactionService).recordTransaction(eq(10L), eq(1L), eq(InventoryTransactionType.XUAT_KHO),
+                eq(3), eq(5), eq(2), any(), any());
     }
 
     @Test
@@ -201,7 +239,8 @@ class ExportReceiptApprovalServiceTest {
                 .thenReturn(Optional.of(inventoryLevel));
 
         assertThrows(ConflictException.class, () -> exportReceiptService.approve(100L));
-        verify(inventoryTransactionService, never()).recordTransaction(any(), any(), any(), any(), any(), any(), any(), any());
+        verify(inventoryTransactionService, never()).recordTransaction(any(), any(), any(), any(), any(), any(), any(),
+                any());
     }
 
     @Test

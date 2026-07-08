@@ -1,5 +1,6 @@
 package com.smartflow.smestocksensebackend.service.impl;
 
+import com.smartflow.smestocksensebackend.dto.inbound.RejectExportReceiptRequest;
 import com.smartflow.smestocksensebackend.dto.outbound.ExportReceiptDetailItemResponse;
 import com.smartflow.smestocksensebackend.dto.outbound.ExportReceiptDetailResponse;
 import com.smartflow.smestocksensebackend.dto.outbound.ExportReceiptPageResponse;
@@ -102,6 +103,59 @@ public class ExportReceiptServiceImpl implements ExportReceiptService {
 
     @Override
     @Transactional
+    public ExportReceiptDetailResponse reject(Long receiptId, RejectExportReceiptRequest request) {
+        if (request == null || request.rejectReason() == null) {
+            throw new BadRequestException("Ly do tu choi khong duoc de trong.");
+        }
+
+        String trimmedReason = request.rejectReason().trim();
+        if (trimmedReason.isBlank()) {
+            throw new BadRequestException("Ly do tu choi khong duoc de trong.");
+        }
+        if (trimmedReason.length() > 500) {
+            throw new BadRequestException("Ly do tu choi khong duoc vuot qua 500 ky tu.");
+        }
+
+        Employee actor = currentEmployee();
+        if (actor.getStatus() != EmployeeStatus.HOAT_DONG) {
+            throw new AccountInactiveException();
+        }
+        ensureCanApprove(actor);
+
+        ExportReceipt receipt = exportReceiptRepository.findById(receiptId)
+                .orElseThrow(() -> new NotFoundException("Phieu xuat khong ton tai."));
+
+        ExportReceiptStatus current = receipt.getStatus();
+        if (!PENDING_APPROVAL_STATUSES.contains(current)) {
+            throw new ConflictException("Chi duoc tu choi phieu xuat o trang thai cho duyet.");
+        }
+
+        try {
+            receipt.setStatus(ExportReceiptStatus.TU_CHOI);
+            receipt.setRejectionReason(trimmedReason);
+            receipt.setRejectedBy(actor);
+            receipt.setRejectedAt(LocalDateTime.now());
+            ExportReceipt savedReceipt = exportReceiptRepository.saveAndFlush(receipt);
+            List<ExportReceiptDetail> details = exportReceiptDetailRepository
+                    .findByExportReceiptIdOrderByIdAsc(receiptId);
+            Map<Long, Integer> inventoryByProductId = loadInventoryByProductId(details,
+                    savedReceipt.getWarehouse().getId());
+            return ExportReceiptDetailResponse.from(savedReceipt, details.stream()
+                    .map(detail -> {
+                        Long productId = detail.getProduct() != null ? detail.getProduct().getId() : null;
+                        Integer currentInventory = productId != null ? inventoryByProductId.getOrDefault(productId, 0)
+                                : 0;
+                        boolean warning = detail.getQuantity() > currentInventory;
+                        return ExportReceiptDetailItemResponse.from(detail, currentInventory, warning);
+                    })
+                    .toList());
+        } catch (OptimisticLockingFailureException exception) {
+            throw new ConflictException("Phieu xuat da duoc cap nhat boi request khac.", exception);
+        }
+    }
+
+    @Override
+    @Transactional
     public ExportReceiptDetailResponse approve(Long receiptId) {
         Employee actor = currentEmployee();
         if (actor.getStatus() != EmployeeStatus.HOAT_DONG) {
@@ -143,7 +197,8 @@ public class ExportReceiptServiceImpl implements ExportReceiptService {
 
                     InventoryLevel inventoryLevel = inventoryLevelRepository
                             .findByProductIdAndWarehouseIdForUpdate(productId, warehouseId)
-                            .orElseThrow(() -> new ConflictException("Khong du ton kho cho san pham " + productId + "."));
+                            .orElseThrow(
+                                    () -> new ConflictException("Khong du ton kho cho san pham " + productId + "."));
 
                     int quantityBefore = inventoryLevel.getQuantity();
                     int quantityNeeded = detail.getQuantity() != null ? detail.getQuantity() : 0;
@@ -166,7 +221,8 @@ public class ExportReceiptServiceImpl implements ExportReceiptService {
                 }
                 receipt.setStatus(ExportReceiptStatus.HOAN_THANH);
             } else {
-                throw new ConflictException("Chi duoc duyet phieu xuat o trang thai CHO_DUYET_CAP_1 hoac CHO_DUYET_CAP_2.");
+                throw new ConflictException(
+                        "Chi duoc duyet phieu xuat o trang thai CHO_DUYET_CAP_1 hoac CHO_DUYET_CAP_2.");
             }
 
             if (receipt.getStatus() == ExportReceiptStatus.HOAN_THANH) {
@@ -176,11 +232,13 @@ public class ExportReceiptServiceImpl implements ExportReceiptService {
             ExportReceipt savedReceipt = exportReceiptRepository.saveAndFlush(receipt);
             List<ExportReceiptDetail> details = exportReceiptDetailRepository
                     .findByExportReceiptIdOrderByIdAsc(receiptId);
-            Map<Long, Integer> inventoryByProductId = loadInventoryByProductId(details, savedReceipt.getWarehouse().getId());
+            Map<Long, Integer> inventoryByProductId = loadInventoryByProductId(details,
+                    savedReceipt.getWarehouse().getId());
             return ExportReceiptDetailResponse.from(savedReceipt, details.stream()
                     .map(detail -> {
                         Long productId = detail.getProduct() != null ? detail.getProduct().getId() : null;
-                        Integer currentInventory = productId != null ? inventoryByProductId.getOrDefault(productId, 0) : 0;
+                        Integer currentInventory = productId != null ? inventoryByProductId.getOrDefault(productId, 0)
+                                : 0;
                         boolean warning = detail.getQuantity() > currentInventory;
                         return ExportReceiptDetailItemResponse.from(detail, currentInventory, warning);
                     })

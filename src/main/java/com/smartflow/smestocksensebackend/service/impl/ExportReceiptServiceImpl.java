@@ -10,6 +10,7 @@ import com.smartflow.smestocksensebackend.entity.ExportReceipt;
 import com.smartflow.smestocksensebackend.entity.ExportReceiptDetail;
 import com.smartflow.smestocksensebackend.entity.ExportReceiptStatus;
 import com.smartflow.smestocksensebackend.entity.InventoryLevel;
+import com.smartflow.smestocksensebackend.entity.InventoryTransactionType;
 import com.smartflow.smestocksensebackend.entity.RoleCode;
 import com.smartflow.smestocksensebackend.exception.AccountInactiveException;
 import com.smartflow.smestocksensebackend.exception.BadRequestException;
@@ -20,6 +21,7 @@ import com.smartflow.smestocksensebackend.repository.ExportReceiptDetailReposito
 import com.smartflow.smestocksensebackend.repository.ExportReceiptRepository;
 import com.smartflow.smestocksensebackend.repository.InventoryLevelRepository;
 import com.smartflow.smestocksensebackend.service.ExportReceiptService;
+import com.smartflow.smestocksensebackend.service.InventoryTransactionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.data.domain.Pageable;
@@ -33,7 +35,6 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
@@ -47,6 +48,7 @@ public class ExportReceiptServiceImpl implements ExportReceiptService {
     private final ExportReceiptRepository exportReceiptRepository;
     private final ExportReceiptDetailRepository exportReceiptDetailRepository;
     private final InventoryLevelRepository inventoryLevelRepository;
+    private final InventoryTransactionService inventoryTransactionService;
 
     @Override
     @Transactional(readOnly = true)
@@ -110,16 +112,50 @@ public class ExportReceiptServiceImpl implements ExportReceiptService {
         ExportReceipt receipt = exportReceiptRepository.findById(receiptId)
                 .orElseThrow(() -> new NotFoundException("Phieu xuat khong ton tai."));
 
-        if (receipt.getStatus() != ExportReceiptStatus.CHO_DUYET_CAP_1) {
-            throw new ConflictException("Chi duoc duyet phieu xuat o trang thai CHO_DUYET_CAP_1.");
-        }
-
         LocalDateTime now = LocalDateTime.now();
-        receipt.setStatus(ExportReceiptStatus.CHO_DUYET_CAP_2);
-        receipt.setApprovedBy(actor);
-        receipt.setApprovedAt(now);
-
         try {
+            if (receipt.getStatus() == ExportReceiptStatus.CHO_DUYET_CAP_1) {
+                receipt.setStatus(ExportReceiptStatus.CHO_DUYET_CAP_2);
+            } else if (receipt.getStatus() == ExportReceiptStatus.CHO_DUYET_CAP_2) {
+                List<ExportReceiptDetail> details = exportReceiptDetailRepository
+                        .findByExportReceiptIdOrderByIdAsc(receiptId);
+                for (ExportReceiptDetail detail : details) {
+                    Long productId = detail.getProduct() != null ? detail.getProduct().getId() : null;
+                    Long warehouseId = receipt.getWarehouse() != null ? receipt.getWarehouse().getId() : null;
+                    if (productId == null || warehouseId == null) {
+                        throw new BadRequestException("Chi tiet phieu xuat khong hop le.");
+                    }
+
+                    InventoryLevel inventoryLevel = inventoryLevelRepository
+                            .findByProductIdAndWarehouseIdForUpdate(productId, warehouseId)
+                            .orElseThrow(() -> new ConflictException("Khong du ton kho cho san pham " + productId + "."));
+
+                    int quantityBefore = inventoryLevel.getQuantity();
+                    int quantityNeeded = detail.getQuantity() != null ? detail.getQuantity() : 0;
+                    if (quantityBefore < quantityNeeded) {
+                        throw new ConflictException("Khong du ton kho cho san pham " + productId + ".");
+                    }
+
+                    int quantityAfter = quantityBefore - quantityNeeded;
+                    inventoryLevel.setQuantity(quantityAfter);
+                    inventoryLevelRepository.saveAndFlush(inventoryLevel);
+                    inventoryTransactionService.recordTransaction(
+                            productId,
+                            warehouseId,
+                            InventoryTransactionType.XUAT_KHO,
+                            quantityNeeded,
+                            quantityBefore,
+                            quantityAfter,
+                            null,
+                            "Duyet phieu xuat cap 2");
+                }
+                receipt.setStatus(ExportReceiptStatus.HOAN_THANH);
+            } else {
+                throw new ConflictException("Chi duoc duyet phieu xuat o trang thai CHO_DUYET_CAP_1 hoac CHO_DUYET_CAP_2.");
+            }
+
+            receipt.setApprovedBy(actor);
+            receipt.setApprovedAt(now);
             ExportReceipt savedReceipt = exportReceiptRepository.saveAndFlush(receipt);
             List<ExportReceiptDetail> details = exportReceiptDetailRepository
                     .findByExportReceiptIdOrderByIdAsc(receiptId);

@@ -7,6 +7,8 @@ import com.smartflow.smestocksensebackend.entity.ExportReceipt;
 import com.smartflow.smestocksensebackend.entity.ExportReceiptDetail;
 import com.smartflow.smestocksensebackend.entity.ExportReceiptStatus;
 import com.smartflow.smestocksensebackend.entity.InventoryLevel;
+import com.smartflow.smestocksensebackend.entity.InventoryTransaction;
+import com.smartflow.smestocksensebackend.entity.InventoryTransactionType;
 import com.smartflow.smestocksensebackend.entity.Product;
 import com.smartflow.smestocksensebackend.entity.Role;
 import com.smartflow.smestocksensebackend.entity.RoleCode;
@@ -18,6 +20,7 @@ import com.smartflow.smestocksensebackend.exception.NotFoundException;
 import com.smartflow.smestocksensebackend.repository.ExportReceiptDetailRepository;
 import com.smartflow.smestocksensebackend.repository.ExportReceiptRepository;
 import com.smartflow.smestocksensebackend.repository.InventoryLevelRepository;
+import com.smartflow.smestocksensebackend.service.InventoryTransactionService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -52,6 +55,9 @@ class ExportReceiptApprovalServiceTest {
 
     @Mock
     private InventoryLevelRepository inventoryLevelRepository;
+
+    @Mock
+    private InventoryTransactionService inventoryTransactionService;
 
     @InjectMocks
     private ExportReceiptServiceImpl exportReceiptService;
@@ -147,8 +153,59 @@ class ExportReceiptApprovalServiceTest {
     }
 
     @Test
-    void approve_withWrongStatusShouldThrowConflict() {
+    void approve_pendingLevel2ShouldCompleteAndDeductInventory() {
         ExportReceipt receipt = receiptWithStatus(ExportReceiptStatus.CHO_DUYET_CAP_2);
+        Product product = new Product();
+        product.setId(10L);
+        ExportReceiptDetail detail = new ExportReceiptDetail();
+        detail.setProduct(product);
+        detail.setQuantity(3);
+        InventoryLevel inventoryLevel = new InventoryLevel();
+        inventoryLevel.setProduct(product);
+        inventoryLevel.setWarehouse(warehouse);
+        inventoryLevel.setQuantity(5);
+        when(exportReceiptRepository.findById(100L)).thenReturn(Optional.of(receipt));
+        when(exportReceiptRepository.saveAndFlush(any(ExportReceipt.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(exportReceiptDetailRepository.findByExportReceiptIdOrderByIdAsc(100L)).thenReturn(List.of(detail));
+        when(inventoryLevelRepository.findByProductIdAndWarehouseIdForUpdate(10L, 1L))
+                .thenReturn(Optional.of(inventoryLevel));
+        when(inventoryTransactionService.recordTransaction(any(), any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(new InventoryTransaction());
+
+        ExportReceiptDetailResponse response = exportReceiptService.approve(100L);
+
+        assertEquals("HOAN_THANH", response.status());
+        assertEquals(ExportReceiptStatus.HOAN_THANH, receipt.getStatus());
+        assertEquals(manager, receipt.getApprovedBy());
+        assertEquals(2, inventoryLevel.getQuantity());
+        verify(inventoryTransactionService).recordTransaction(eq(10L), eq(1L), eq(InventoryTransactionType.XUAT_KHO), eq(3), eq(5), eq(2), any(), any());
+    }
+
+    @Test
+    void approve_whenInventoryInsufficientShouldThrowConflict() {
+        ExportReceipt receipt = receiptWithStatus(ExportReceiptStatus.CHO_DUYET_CAP_2);
+        Product product = new Product();
+        product.setId(10L);
+        ExportReceiptDetail detail = new ExportReceiptDetail();
+        detail.setProduct(product);
+        detail.setQuantity(3);
+        InventoryLevel inventoryLevel = new InventoryLevel();
+        inventoryLevel.setProduct(product);
+        inventoryLevel.setWarehouse(warehouse);
+        inventoryLevel.setQuantity(2);
+        when(exportReceiptRepository.findById(100L)).thenReturn(Optional.of(receipt));
+        when(exportReceiptDetailRepository.findByExportReceiptIdOrderByIdAsc(100L)).thenReturn(List.of(detail));
+        when(inventoryLevelRepository.findByProductIdAndWarehouseIdForUpdate(10L, 1L))
+                .thenReturn(Optional.of(inventoryLevel));
+
+        assertThrows(ConflictException.class, () -> exportReceiptService.approve(100L));
+        verify(inventoryTransactionService, never()).recordTransaction(any(), any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void approve_withWrongStatusShouldThrowConflict() {
+        ExportReceipt receipt = receiptWithStatus(ExportReceiptStatus.HOAN_THANH);
         when(exportReceiptRepository.findById(100L)).thenReturn(Optional.of(receipt));
 
         assertThrows(ConflictException.class, () -> exportReceiptService.approve(100L));

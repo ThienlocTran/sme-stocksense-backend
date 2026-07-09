@@ -1,5 +1,6 @@
 package com.smartflow.smestocksensebackend.entity;
 
+import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -10,6 +11,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import lombok.Getter;
@@ -22,6 +24,8 @@ import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Getter
 @Setter
@@ -82,6 +86,13 @@ public class ExportReceipt {
     private LocalDateTime level1ApprovedAt;
 
     @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "nguoi_duyet_cap_2_id")
+    private Employee level2ApprovedBy;
+
+    @Column(name = "ngay_duyet_cap_2")
+    private LocalDateTime level2ApprovedAt;
+
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "nguoi_tu_choi_id")
     private Employee rejectedBy;
 
@@ -90,6 +101,23 @@ public class ExportReceipt {
 
     @Column(name = "ly_do_tu_choi", length = 500)
     private String rejectionReason;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "nguoi_huy_id")
+    private Employee cancelledBy;
+
+    @Column(name = "ngay_huy")
+    private LocalDateTime cancelledAt;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "nguoi_hoan_thanh_id")
+    private Employee completedBy;
+
+    @Column(name = "ngay_hoan_thanh")
+    private LocalDateTime completedAt;
+
+    @OneToMany(mappedBy = "exportReceipt", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<ExportReceiptDetail> details = new ArrayList<>();
 
     @Version
     @Column(name = "version", nullable = false)

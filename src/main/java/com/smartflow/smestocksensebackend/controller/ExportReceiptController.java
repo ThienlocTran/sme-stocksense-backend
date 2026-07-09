@@ -2,20 +2,20 @@ package com.smartflow.smestocksensebackend.controller;
 
 import com.smartflow.smestocksensebackend.dto.outbound.ExportReceiptDetailResponse;
 import com.smartflow.smestocksensebackend.dto.outbound.ExportReceiptPageResponse;
+import com.smartflow.smestocksensebackend.dto.request.outbound.ExportReceiptDraftRequest;
+import com.smartflow.smestocksensebackend.dto.response.outbound.ExportReceiptResponse;
 import com.smartflow.smestocksensebackend.exception.BadRequestException;
 import com.smartflow.smestocksensebackend.service.ExportReceiptService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api/export-receipts")
+@RequestMapping("/api/v1/export-receipts")
 @RequiredArgsConstructor
 public class ExportReceiptController {
 
@@ -42,6 +42,22 @@ public class ExportReceiptController {
     @PutMapping("/{id:\\d+}/approve")
     public ExportReceiptDetailResponse approve(@PathVariable Long id) {
         return exportReceiptService.approve(id);
+    }
+
+    @PostMapping("/draft")
+    public ResponseEntity<ExportReceiptResponse> createDraft(@Valid @RequestBody ExportReceiptDraftRequest request) {
+        ExportReceiptResponse response = exportReceiptService.createDraft(request);
+        return new ResponseEntity<>(response, HttpStatus.CREATED);
+    }
+
+    @PutMapping("/{id}/draft")
+    public ResponseEntity<ExportReceiptResponse> updateDraft(
+            @PathVariable Long id,
+            @Valid @RequestBody ExportReceiptDraftRequest request) {
+        ExportReceiptResponse response = exportReceiptService.updateDraft(id, request);
+        return ResponseEntity.ok(response);
+    }
+
     private void validatePageAndSize(int page, int size) {
         if (page < 0) {
             throw new BadRequestException("page must be greater than or equal to 0.");

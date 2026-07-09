@@ -120,4 +120,17 @@ public class ExportReceiptController {
         ExportReceiptResponse response = exportReceiptService.getReceiptDetails(id);
         return ResponseEntity.ok(response);
     }
+
+    /**
+     * API Hủy Phiếu Xuất Nháp (T117)
+     * Đánh dấu phiếu chuyển sang trạng thái DA_HUY (Soft Delete).
+     *
+     * @param id ID của phiếu xuất cần hủy.
+     * @return HTTP 204 No Content.
+     */
+    @DeleteMapping("/{id}/draft")
+    public ResponseEntity<Void> cancelDraft(@PathVariable Long id) {
+        exportReceiptService.cancelDraft(id);
+        return ResponseEntity.noContent().build();
+    }
 }

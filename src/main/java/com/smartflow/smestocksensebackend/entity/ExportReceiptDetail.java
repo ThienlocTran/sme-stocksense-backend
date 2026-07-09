@@ -23,7 +23,7 @@ public class ExportReceiptDetail {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "phieu_xuat_id", nullable = false)
-    private ExportReceipt document;
+    private ExportReceipt exportReceipt;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "san_pham_id", nullable = false)
@@ -36,7 +36,7 @@ public class ExportReceiptDetail {
     private BigDecimal unitPrice;
 
     @Column(name = "thanh_tien", precision = 15, scale = 2)
-    private BigDecimal totalPrice;
+    private BigDecimal lineTotal;
 
     @Column(name = "ghi_chu", length = 255)
     private String note;
@@ -51,5 +51,5 @@ public class ExportReceiptDetail {
 
     @Version
     @Column(name = "version", nullable = false)
-    private Long version;
+    private Long version = 0L;
 }

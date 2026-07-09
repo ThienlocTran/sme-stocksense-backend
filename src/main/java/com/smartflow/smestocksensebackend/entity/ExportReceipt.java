@@ -1,6 +1,19 @@
 package com.smartflow.smestocksensebackend.entity;
 
-import jakarta.persistence.*;
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -28,13 +41,13 @@ public class ExportReceipt {
     @Column(name = "ma_phieu_xuat", nullable = false, unique = true, length = 50)
     private String code;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "kho_id", nullable = false)
-    private Warehouse warehouse;
-
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "doi_tac_id")
     private Partner partner;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "kho_id", nullable = false)
+    private Warehouse warehouse;
 
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
@@ -47,19 +60,23 @@ public class ExportReceipt {
     @Column(name = "ghi_chu", length = 255)
     private String note;
 
-    @Column(name = "ly_do_tu_choi", length = 500)
-    private String rejectionReason;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "nguoi_tao_id")
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "nguoi_tao_id", nullable = false)
     private Employee createdBy;
+
+    @Column(name = "ngay_gui_duyet")
+    private LocalDateTime submittedAt;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "nguoi_gui_duyet_id")
     private Employee submittedBy;
 
-    @Column(name = "ngay_gui_duyet")
-    private LocalDateTime submittedAt;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "nguoi_duyet_id")
+    private Employee approvedBy;
+
+    @Column(name = "ngay_duyet")
+    private LocalDateTime approvedAt;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "nguoi_duyet_cap_1_id")
@@ -76,6 +93,16 @@ public class ExportReceipt {
     private LocalDateTime level2ApprovedAt;
 
     @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "nguoi_tu_choi_id")
+    private Employee rejectedBy;
+
+    @Column(name = "ngay_tu_choi")
+    private LocalDateTime rejectedAt;
+
+    @Column(name = "ly_do_tu_choi", length = 500)
+    private String rejectionReason;
+
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "nguoi_huy_id")
     private Employee cancelledBy;
 
@@ -89,8 +116,12 @@ public class ExportReceipt {
     @Column(name = "ngay_hoan_thanh")
     private LocalDateTime completedAt;
 
-    @OneToMany(mappedBy = "document", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToMany(mappedBy = "exportReceipt", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<ExportReceiptDetail> details = new ArrayList<>();
+
+    @Version
+    @Column(name = "version", nullable = false)
+    private Long version = 0L;
 
     @CreationTimestamp
     @Column(name = "ngay_tao", updatable = false)
@@ -99,8 +130,4 @@ public class ExportReceipt {
     @UpdateTimestamp
     @Column(name = "ngay_cap_nhat")
     private LocalDateTime updatedAt;
-
-    @Version
-    @Column(name = "version", nullable = false)
-    private Long version;
 }

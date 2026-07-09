@@ -62,8 +62,9 @@ public class InventoryTransaction {
     @JoinColumn(name = "phieu_nhap_id")
     private ImportReceipt importReceipt;
 
-    @Column(name = "phieu_xuat_id")
-    private Long exportReceiptId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "phieu_xuat_id")
+    private ExportReceipt exportReceipt;
 
     @Column(name = "lan_import_id")
     private Long importBatchId;

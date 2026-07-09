@@ -419,6 +419,28 @@ public class ExportReceiptServiceImpl implements ExportReceiptService {
         return exportReceiptRepository.findAll(spec, pageable)
                 .map(com.smartflow.smestocksensebackend.dto.response.outbound.ExportReceiptSummaryResponse::from);
     }
+    @Override
+    @Transactional(readOnly = true)
+    public ExportReceiptResponse getReceiptDetails(Long id) {
+        // 1. Lấy thông tin user hiện tại
+        Employee actor = currentEmployee();
+
+        // 2. Tìm phiếu xuất trong CSDL (Không filter status HUY để hỗ trợ truy vấn lại lịch sử)
+        // ponytail: Dùng thẳng findById của JpaRepository, tái sử dụng method có sẵn.
+        ExportReceipt receipt = exportReceiptRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException("Phiếu xuất không tồn tại."));
+
+        // 3. Phân quyền: Chỉ tác giả phiếu HOẶC Admin mới được phép xem chi tiết
+        if (!actor.getId().equals(receipt.getCreatedBy().getId()) && actor.getRole().getCode() != RoleCode.ADMIN) {
+            throw new MissingRoleException("Bạn không có quyền xem chi tiết phiếu xuất này.");
+        }
+
+        // 4. Lấy danh sách sản phẩm chi tiết của phiếu xuất
+        List<ExportReceiptDetail> details = exportReceiptDetailRepository.findByExportReceiptIdOrderByIdAsc(id);
+
+        // 5. Build và trả về Response DTO tái sử dụng
+        return ExportReceiptResponse.from(receipt, details);
+    }
     // --- Helper Methods ---
 
     // ponytail: Tối giản hóa logic build JPA Specification, không đẻ thêm file Specification/Criteria cồng kềnh.

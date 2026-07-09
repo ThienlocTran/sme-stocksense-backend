@@ -28,4 +28,6 @@ public interface ExportReceiptService {
 
     org.springframework.data.domain.Page<com.smartflow.smestocksensebackend.dto.response.outbound.ExportReceiptSummaryResponse> listMyReceipts(
             String status, java.time.LocalDate fromDate, java.time.LocalDate toDate, Long warehouseId, String code, org.springframework.data.domain.Pageable pageable);
+
+    ExportReceiptResponse getReceiptDetails(Long id);
 }

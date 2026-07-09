@@ -105,4 +105,11 @@ public class ExportReceiptController {
             @org.springframework.data.web.PageableDefault(sort = "createdAt", direction = org.springframework.data.domain.Sort.Direction.DESC) org.springframework.data.domain.Pageable pageable) {
         return exportReceiptService.listMyReceipts(status, fromDate, toDate, warehouseId, code, pageable);
     }
+
+    // ponytail: Trả về DTO tái sử dụng ExportReceiptResponse, tránh viết DTO rườm rà.
+    @GetMapping("/{id}")
+    public ResponseEntity<ExportReceiptResponse> getReceiptDetails(@PathVariable Long id) {
+        ExportReceiptResponse response = exportReceiptService.getReceiptDetails(id);
+        return ResponseEntity.ok(response);
+    }
 }

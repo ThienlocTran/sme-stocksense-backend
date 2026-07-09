@@ -197,7 +197,7 @@ public class InventoryTransactionServiceImpl implements InventoryTransactionServ
         }
         r.setCreatedAt(t.getCreatedAt());
         r.setImportReceiptId(t.getImportReceipt() != null ? t.getImportReceipt().getId() : null);
-        r.setExportReceiptId(t.getExportReceiptId());
+        r.setExportReceiptId(t.getExportReceipt() != null ? t.getExportReceipt().getId() : null);
         return r;
     }
 

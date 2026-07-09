@@ -7,6 +7,7 @@ import com.smartflow.smestocksensebackend.dto.outbound.ExportReceiptPageResponse
 import com.smartflow.smestocksensebackend.dto.outbound.ExportReceiptSummaryResponse;
 import com.smartflow.smestocksensebackend.dto.request.outbound.ExportReceiptDetailRequest;
 import com.smartflow.smestocksensebackend.dto.request.outbound.ExportReceiptDraftRequest;
+import com.smartflow.smestocksensebackend.dto.request.outbound.ExportReceiptSubmitRequest;
 import com.smartflow.smestocksensebackend.dto.response.outbound.ExportReceiptResponse;
 import com.smartflow.smestocksensebackend.entity.*;
 import com.smartflow.smestocksensebackend.exception.AccountInactiveException;
@@ -234,30 +235,19 @@ public class ExportReceiptServiceImpl implements ExportReceiptService {
             receipt.setTotalAmount(totalAmount);
             receipt.setNote(request.getNote());
 
-            ExportReceipt savedReceipt;
             try {
-<<<<<<< HEAD
                 ExportReceipt savedReceipt = exportReceiptRepository.saveAndFlush(receipt);
                 for (ExportReceiptDetail detail : details) {
                     detail.setExportReceipt(savedReceipt);
                 }
                 exportReceiptDetailRepository.saveAllAndFlush(details);
                 return ExportReceiptResponse.from(savedReceipt, details);
-=======
-                savedReceipt = exportReceiptRepository.saveAndFlush(receipt);
->>>>>>> ff8d3c2 (fix(export): resolve critical transactional bug, add DTO validations and doc updates)
             } catch (DataIntegrityViolationException exception) {
                 if (attempt == MAX_CODE_ATTEMPTS - 1) {
                     throw new ConflictException("Không thể tạo mã phiếu xuất duy nhất.");
                 }
                 continue;
             }
-
-            for (ExportReceiptDetail detail : details) {
-                detail.setDocument(savedReceipt);
-            }
-            exportReceiptDetailRepository.saveAllAndFlush(details);
-            return ExportReceiptResponse.from(savedReceipt, details);
         }
 
         throw new ConflictException("Không thể tạo mã phiếu xuất duy nhất.");
@@ -311,6 +301,88 @@ public class ExportReceiptServiceImpl implements ExportReceiptService {
         return ExportReceiptResponse.from(savedReceipt, newDetails);
     }
 
+    @Override
+    @Transactional
+    public void cancelDraft(Long id) {
+        // 1. Lấy thông tin người dùng đang thực hiện request
+        Employee actor = currentEmployee();
+        if (actor.getStatus() != EmployeeStatus.HOAT_DONG) {
+            throw new AccountInactiveException();
+        }
+
+        // 2. Tìm phiếu xuất kho trong Database
+        ExportReceipt receipt = exportReceiptRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException("Phiếu xuất không tồn tại."));
+
+        // 3. Phân quyền (Authorization): Chỉ người tạo phiếu HOẶC Admin mới được quyền Hủy
+        if (!actor.getId().equals(receipt.getCreatedBy().getId()) && actor.getRole().getCode() != RoleCode.ADMIN) {
+            throw new MissingRoleException("Bạn không có quyền hủy phiếu xuất này.");
+        }
+
+        // 4. Kiểm tra vòng đời trạng thái (State Policy): Chỉ Hủy khi phiếu đang NHÁP hoặc TỪ CHỐI
+        if (!ExportReceiptStatePolicy.isEditable(receipt.getStatus())) {
+            throw new ConflictException("Chỉ được hủy phiếu xuất ở trạng thái NHÁP hoặc TỪ CHỐI.");
+        }
+
+        // 5. Cập nhật trạng thái thành ĐÃ HỦY (Soft Delete) thay vì xóa vật lý khỏi DB
+        receipt.setStatus(ExportReceiptStatus.HUY);
+        exportReceiptRepository.saveAndFlush(receipt);
+    }
+
+    @Override
+    @Transactional
+    public ExportReceiptResponse submitForApproval(Long id, ExportReceiptSubmitRequest request) {
+        // 1. Xác thực người dùng đang thực hiện
+        Employee actor = currentEmployee();
+        if (actor.getStatus() != EmployeeStatus.HOAT_DONG) {
+            throw new AccountInactiveException();
+        }
+
+        // 2. Tìm phiếu xuất
+        ExportReceipt receipt = exportReceiptRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException("Phiếu xuất không tồn tại."));
+
+        // 3. Phân quyền: Chỉ người tạo phiếu HOẶC Admin mới được quyền Gửi duyệt
+        if (!actor.getId().equals(receipt.getCreatedBy().getId()) && actor.getRole().getCode() != RoleCode.ADMIN) {
+            throw new MissingRoleException("Bạn không có quyền gửi duyệt phiếu xuất này.");
+        }
+
+        // 4. Kiểm tra trạng thái: Chỉ Gửi duyệt khi phiếu đang NHÁP hoặc TỪ CHỐI
+        if (!ExportReceiptStatePolicy.isEditable(receipt.getStatus())) {
+            throw new ConflictException("Chỉ được gửi duyệt phiếu xuất ở trạng thái NHÁP hoặc TỪ CHỐI.");
+        }
+
+        // 5. Optimistic Locking: Kiểm tra version để tránh xung đột đồng thời
+        if (!receipt.getVersion().equals(request.getVersion())) {
+            throw new ConflictException("Phiếu xuất đã được cập nhật bởi người khác. Vui lòng tải lại trang.");
+        }
+
+        // 6. Kiểm tra lại toàn bộ Tồn kho (Strict Inventory Check) tại chính thời điểm Submit
+        List<ExportReceiptDetail> details = exportReceiptDetailRepository.findByExportReceiptIdOrderByIdAsc(id);
+        if (details.isEmpty()) {
+            throw new BadRequestException("Phiếu xuất chưa có sản phẩm nào.");
+        }
+
+        for (ExportReceiptDetail detail : details) {
+            Product product = detail.getProduct();
+            Warehouse warehouse = receipt.getWarehouse();
+            
+            InventoryLevel inventory = inventoryLevelRepository.findByProductIdAndWarehouseId(product.getId(), warehouse.getId())
+                    .orElseThrow(() -> new BadRequestException("Sản phẩm " + product.getName() + " không có trong kho " + warehouse.getName() + "."));
+
+            if (detail.getQuantity() > inventory.getQuantity()) {
+                throw new BadRequestException("Sản phẩm " + product.getName() + " chỉ còn " + inventory.getQuantity() + " trong kho, không đủ xuất " + detail.getQuantity() + ". Vui lòng sửa lại phiếu nháp.");
+            }
+        }
+
+        // 7. Chuyển trạng thái sang Chờ Duyệt Cấp 1
+        receipt.setStatus(ExportReceiptStatus.CHO_DUYET_CAP_1);
+        
+        // Lưu ý: Trường version sẽ được Hibernate tự động tăng lên 1 nhờ @Version trên Entity
+        ExportReceipt savedReceipt = exportReceiptRepository.saveAndFlush(receipt);
+
+        return ExportReceiptResponse.from(savedReceipt, details);
+    }
     // --- Helper Methods ---
 
     private Employee currentEmployee() {

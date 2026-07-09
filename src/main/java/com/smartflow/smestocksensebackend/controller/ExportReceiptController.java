@@ -66,4 +66,20 @@ public class ExportReceiptController {
             throw new BadRequestException("size must be between 1 and 100.");
         }
     }
+
+    /**
+     * API Gửi Phiếu Xuất Kho Chờ Duyệt (T118)
+     * Kích hoạt quy trình duyệt 2 cấp.
+     *
+     * @param id ID của phiếu xuất cần gửi duyệt.
+     * @param request Chứa version để kiểm tra Optimistic Locking.
+     * @return DTO chứa thông tin phiếu xuất đã cập nhật trạng thái.
+     */
+    @PutMapping("/{id}/submit")
+    public ResponseEntity<ExportReceiptResponse> submitForApproval(
+            @PathVariable Long id,
+            @Valid @RequestBody com.smartflow.smestocksensebackend.dto.request.outbound.ExportReceiptSubmitRequest request) {
+        ExportReceiptResponse response = exportReceiptService.submitForApproval(id, request);
+        return ResponseEntity.ok(response);
+    }
 }

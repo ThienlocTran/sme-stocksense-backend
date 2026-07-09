@@ -16,4 +16,6 @@ public interface ExportReceiptService {
     ExportReceiptResponse createDraft(ExportReceiptDraftRequest request);
 
     ExportReceiptResponse updateDraft(Long id, ExportReceiptDraftRequest request);
+    void cancelDraft(Long id);
+    ExportReceiptResponse submitForApproval(Long id, com.smartflow.smestocksensebackend.dto.request.outbound.ExportReceiptSubmitRequest request);
 }

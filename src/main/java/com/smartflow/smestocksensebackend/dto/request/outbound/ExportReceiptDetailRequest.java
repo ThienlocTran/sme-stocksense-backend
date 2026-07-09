@@ -21,6 +21,7 @@ public class ExportReceiptDetailRequest {
     @Min(value = 1, message = "Số lượng xuất phải lớn hơn 0")
     private Integer quantity;
 
+    @Min(value = 0, message = "Đơn giá không được âm")
     private BigDecimal unitPrice;
 
     private String note;

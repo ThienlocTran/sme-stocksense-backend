@@ -63,6 +63,7 @@ public class ExportReceiptResponse {
     }
 
     public static ExportReceiptResponse from(ExportReceipt entity, List<com.smartflow.smestocksensebackend.entity.ExportReceiptDetail> details) {
+        if (entity == null) return null;
         ExportReceiptResponse response = from(entity);
         if (details != null) {
             response.setDetails(details.stream().map(ExportReceiptDetailResponse::from).collect(Collectors.toList()));

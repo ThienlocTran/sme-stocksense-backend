@@ -4,7 +4,7 @@
 - **Endpoint:** `POST /api/v1/export-receipts/draft`
 - **Mục đích:** Khởi tạo một Phiếu Xuất Nháp mới (trạng thái `NHAP`).
 - **Luồng xử lý (Logic):**
-  - Sinh mã tự động `PXK-YYYYMMDD-XXXX`.
+  - Sinh mã tự động `PXK-YYYYMMDD-XXXXXXXXXXXX` (12 ký tự ngẫu nhiên).
   - Validate nghiêm ngặt `so_luong` xuất không được lớn hơn `ton_hien_tai` trong kho.
   - Chặn nếu mảng chi tiết chứa 2 dòng cùng 1 `productId`.
 
@@ -38,7 +38,7 @@
 ```json
 {
   "id": 10,
-  "code": "PXK-20231023-A1B2C3",
+  "code": "PXK-20231023-A1B2C3D4E5F6",
   "warehouseId": 1,
   "partnerId": 2,
   "status": "NHAP",

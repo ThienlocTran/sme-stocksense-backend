@@ -234,18 +234,30 @@ public class ExportReceiptServiceImpl implements ExportReceiptService {
             receipt.setTotalAmount(totalAmount);
             receipt.setNote(request.getNote());
 
+            ExportReceipt savedReceipt;
             try {
+<<<<<<< HEAD
                 ExportReceipt savedReceipt = exportReceiptRepository.saveAndFlush(receipt);
                 for (ExportReceiptDetail detail : details) {
                     detail.setExportReceipt(savedReceipt);
                 }
                 exportReceiptDetailRepository.saveAllAndFlush(details);
                 return ExportReceiptResponse.from(savedReceipt, details);
+=======
+                savedReceipt = exportReceiptRepository.saveAndFlush(receipt);
+>>>>>>> ff8d3c2 (fix(export): resolve critical transactional bug, add DTO validations and doc updates)
             } catch (DataIntegrityViolationException exception) {
                 if (attempt == MAX_CODE_ATTEMPTS - 1) {
                     throw new ConflictException("Không thể tạo mã phiếu xuất duy nhất.");
                 }
+                continue;
             }
+
+            for (ExportReceiptDetail detail : details) {
+                detail.setDocument(savedReceipt);
+            }
+            exportReceiptDetailRepository.saveAllAndFlush(details);
+            return ExportReceiptResponse.from(savedReceipt, details);
         }
 
         throw new ConflictException("Không thể tạo mã phiếu xuất duy nhất.");

@@ -21,4 +21,11 @@ public interface ExportReceiptService {
 
     ExportReceiptResponse submitForApproval(Long id,
             com.smartflow.smestocksensebackend.dto.request.outbound.ExportReceiptSubmitRequest request);
+
+    // ponytail: Truyền thẳng param vào hàm thay vì tạo FilterRequest class.
+    org.springframework.data.domain.Page<com.smartflow.smestocksensebackend.dto.response.outbound.ExportReceiptSummaryResponse> listReceipts(
+            String status, java.time.LocalDate fromDate, java.time.LocalDate toDate, Long warehouseId, String code, org.springframework.data.domain.Pageable pageable);
+
+    org.springframework.data.domain.Page<com.smartflow.smestocksensebackend.dto.response.outbound.ExportReceiptSummaryResponse> listMyReceipts(
+            String status, java.time.LocalDate fromDate, java.time.LocalDate toDate, Long warehouseId, String code, org.springframework.data.domain.Pageable pageable);
 }

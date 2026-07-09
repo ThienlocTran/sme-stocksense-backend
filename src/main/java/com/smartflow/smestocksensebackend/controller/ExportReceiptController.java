@@ -82,4 +82,27 @@ public class ExportReceiptController {
         ExportReceiptResponse response = exportReceiptService.submitForApproval(id, request);
         return ResponseEntity.ok(response);
     }
+
+    // ponytail: Dùng thẳng Page<T> của Spring. Khai báo các tham số rỗng thay vì request param object.
+    @GetMapping
+    public org.springframework.data.domain.Page<com.smartflow.smestocksensebackend.dto.response.outbound.ExportReceiptSummaryResponse> listReceipts(
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate fromDate,
+            @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate toDate,
+            @RequestParam(required = false) Long warehouseId,
+            @RequestParam(required = false) String code,
+            @org.springframework.data.web.PageableDefault(sort = "createdAt", direction = org.springframework.data.domain.Sort.Direction.DESC) org.springframework.data.domain.Pageable pageable) {
+        return exportReceiptService.listReceipts(status, fromDate, toDate, warehouseId, code, pageable);
+    }
+
+    @GetMapping("/my")
+    public org.springframework.data.domain.Page<com.smartflow.smestocksensebackend.dto.response.outbound.ExportReceiptSummaryResponse> listMyReceipts(
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate fromDate,
+            @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate toDate,
+            @RequestParam(required = false) Long warehouseId,
+            @RequestParam(required = false) String code,
+            @org.springframework.data.web.PageableDefault(sort = "createdAt", direction = org.springframework.data.domain.Sort.Direction.DESC) org.springframework.data.domain.Pageable pageable) {
+        return exportReceiptService.listMyReceipts(status, fromDate, toDate, warehouseId, code, pageable);
+    }
 }

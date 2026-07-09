@@ -390,7 +390,72 @@ public class ExportReceiptServiceImpl implements ExportReceiptService {
 
         return ExportReceiptResponse.from(savedReceipt, details);
     }
+    @Override
+    @Transactional(readOnly = true)
+    public org.springframework.data.domain.Page<com.smartflow.smestocksensebackend.dto.response.outbound.ExportReceiptSummaryResponse> listReceipts(
+            String status, java.time.LocalDate fromDate, java.time.LocalDate toDate, Long warehouseId, String code, org.springframework.data.domain.Pageable pageable) {
+        
+        // 1. Khởi tạo Specification cho việc lọc động nhiều tiêu chí
+        org.springframework.data.jpa.domain.Specification<ExportReceipt> spec = buildSearchSpec(null, status, fromDate, toDate, warehouseId, code);
+        
+        // 2. Query từ CSDL kết hợp phân trang
+        // ponytail: Trực tiếp map sang DTO thông qua hàm record, bỏ qua wrapper
+        return exportReceiptRepository.findAll(spec, pageable)
+                .map(com.smartflow.smestocksensebackend.dto.response.outbound.ExportReceiptSummaryResponse::from);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public org.springframework.data.domain.Page<com.smartflow.smestocksensebackend.dto.response.outbound.ExportReceiptSummaryResponse> listMyReceipts(
+            String status, java.time.LocalDate fromDate, java.time.LocalDate toDate, Long warehouseId, String code, org.springframework.data.domain.Pageable pageable) {
+        
+        // 1. Xác thực user đang gọi API để ép tham số `employeeId`
+        Employee actor = currentEmployee();
+        
+        // 2. Khởi tạo Specification lọc phiếu (trong đó bắt buộc phải có điều kiện `employeeId`)
+        org.springframework.data.jpa.domain.Specification<ExportReceipt> spec = buildSearchSpec(actor.getId(), status, fromDate, toDate, warehouseId, code);
+        
+        // 3. Truy vấn và map sang dạng DTO rút gọn
+        return exportReceiptRepository.findAll(spec, pageable)
+                .map(com.smartflow.smestocksensebackend.dto.response.outbound.ExportReceiptSummaryResponse::from);
+    }
     // --- Helper Methods ---
+
+    // ponytail: Tối giản hóa logic build JPA Specification, không đẻ thêm file Specification/Criteria cồng kềnh.
+    private org.springframework.data.jpa.domain.Specification<ExportReceipt> buildSearchSpec(
+            Long employeeId, String status, java.time.LocalDate fromDate, java.time.LocalDate toDate, Long warehouseId, String code) {
+        return (root, query, cb) -> {
+            java.util.List<jakarta.persistence.criteria.Predicate> predicates = new java.util.ArrayList<>();
+            
+            // Lọc theo người tạo phiếu (Dùng cho API listMyReceipts)
+            if (employeeId != null) {
+                predicates.add(cb.equal(root.get("createdBy").get("id"), employeeId));
+            }
+            if (status != null && !status.isBlank()) {
+                try {
+                    ExportReceiptStatus parsedStatus = ExportReceiptStatus.valueOf(status.toUpperCase());
+                    predicates.add(cb.equal(root.get("status"), parsedStatus));
+                } catch (IllegalArgumentException e) {
+                    throw new BadRequestException("Trạng thái không hợp lệ: " + status);
+                }
+            }
+            if (warehouseId != null) {
+                predicates.add(cb.equal(root.get("warehouse").get("id"), warehouseId));
+            }
+            if (code != null && !code.isBlank()) {
+                predicates.add(cb.like(cb.lower(root.get("code")), "%" + code.toLowerCase() + "%"));
+            }
+            if (fromDate != null) {
+                predicates.add(cb.greaterThanOrEqualTo(root.get("createdAt"), fromDate.atStartOfDay()));
+            }
+            if (toDate != null) {
+                // To the end of the day
+                predicates.add(cb.lessThanOrEqualTo(root.get("createdAt"), toDate.atTime(23, 59, 59, 999999999)));
+            }
+
+            return cb.and(predicates.toArray(new jakarta.persistence.criteria.Predicate[0]));
+        };
+    }
 
     private Employee currentEmployee() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();

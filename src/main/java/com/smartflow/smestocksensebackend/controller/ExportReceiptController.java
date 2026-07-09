@@ -1,15 +1,18 @@
 package com.smartflow.smestocksensebackend.controller;
 
+import com.smartflow.smestocksensebackend.dto.inbound.RejectExportReceiptRequest;
 import com.smartflow.smestocksensebackend.dto.outbound.ExportReceiptDetailResponse;
 import com.smartflow.smestocksensebackend.dto.outbound.ExportReceiptPageResponse;
 import com.smartflow.smestocksensebackend.exception.BadRequestException;
 import com.smartflow.smestocksensebackend.service.ExportReceiptService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -49,5 +52,12 @@ public class ExportReceiptController {
         if (size < 1 || size > 100) {
             throw new BadRequestException("size must be between 1 and 100.");
         }
+    }
+
+    @PutMapping("/{id:\\d+}/reject")
+    public ExportReceiptDetailResponse reject(
+            @PathVariable Long id,
+            @Valid @RequestBody RejectExportReceiptRequest request) {
+        return exportReceiptService.reject(id, request);
     }
 }

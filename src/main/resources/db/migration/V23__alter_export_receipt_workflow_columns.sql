@@ -6,6 +6,7 @@ ALTER TABLE "phieu_xuat_kho"
     ADD COLUMN IF NOT EXISTS "nguoi_huy_id" bigint,
     ADD COLUMN IF NOT EXISTS "ngay_huy" timestamp,
     ADD COLUMN IF NOT EXISTS "nguoi_hoan_thanh_id" bigint,
+    ADD COLUMN IF NOT EXISTS "ngay_hoan_thanh" timestamp,
     ADD COLUMN IF NOT EXISTS "ngay_cap_nhat" timestamp,
     ADD COLUMN IF NOT EXISTS "version" bigint NOT NULL DEFAULT 0;
 
@@ -15,6 +16,12 @@ ALTER TABLE "chi_tiet_phieu_xuat"
 
 ALTER TABLE "phieu_xuat_kho"
     ALTER COLUMN "trang_thai" SET DEFAULT 'NHAP';
+
+-- Backfill legacy approval data
+UPDATE "phieu_xuat_kho"
+SET "nguoi_duyet_cap_1_id" = "nguoi_duyet_id",
+    "ngay_duyet_cap_1" = "ngay_duyet"
+WHERE "nguoi_duyet_id" IS NOT NULL AND "nguoi_duyet_cap_1_id" IS NULL;
 
 ALTER TABLE "phieu_xuat_kho"
     ADD CONSTRAINT "chk_phieu_xuat_trang_thai_t75"
@@ -39,16 +46,10 @@ ALTER TABLE "chi_tiet_phieu_xuat"
 
 ALTER TABLE "phieu_xuat_kho"
     ADD CONSTRAINT "fk_phieu_xuat_nguoi_duyet_cap_1"
-        FOREIGN KEY ("nguoi_duyet_cap_1_id") REFERENCES "nhan_vien" ("id") DEFERRABLE INITIALLY IMMEDIATE,
+        FOREIGN KEY ("nguoi_duyet_cap_1_id") REFERENCES "nhan_vien" ("id") DEFERRABLE INITIALLY IMMEDIATE NOT VALID,
     ADD CONSTRAINT "fk_phieu_xuat_nguoi_duyet_cap_2"
-        FOREIGN KEY ("nguoi_duyet_cap_2_id") REFERENCES "nhan_vien" ("id") DEFERRABLE INITIALLY IMMEDIATE,
+        FOREIGN KEY ("nguoi_duyet_cap_2_id") REFERENCES "nhan_vien" ("id") DEFERRABLE INITIALLY IMMEDIATE NOT VALID,
     ADD CONSTRAINT "fk_phieu_xuat_nguoi_huy"
-        FOREIGN KEY ("nguoi_huy_id") REFERENCES "nhan_vien" ("id") DEFERRABLE INITIALLY IMMEDIATE,
+        FOREIGN KEY ("nguoi_huy_id") REFERENCES "nhan_vien" ("id") DEFERRABLE INITIALLY IMMEDIATE NOT VALID,
     ADD CONSTRAINT "fk_phieu_xuat_nguoi_hoan_thanh"
-        FOREIGN KEY ("nguoi_hoan_thanh_id") REFERENCES "nhan_vien" ("id") DEFERRABLE INITIALLY IMMEDIATE;
-
-CREATE INDEX IF NOT EXISTS "idx_phieu_xuat_trang_thai" ON "phieu_xuat_kho" ("trang_thai");
-CREATE INDEX IF NOT EXISTS "idx_phieu_xuat_kho_id" ON "phieu_xuat_kho" ("kho_id");
-CREATE INDEX IF NOT EXISTS "idx_phieu_xuat_doi_tac_id" ON "phieu_xuat_kho" ("doi_tac_id");
-CREATE INDEX IF NOT EXISTS "idx_phieu_xuat_nguoi_tao_id" ON "phieu_xuat_kho" ("nguoi_tao_id");
-CREATE INDEX IF NOT EXISTS "idx_phieu_xuat_ngay_tao" ON "phieu_xuat_kho" ("ngay_tao");
+        FOREIGN KEY ("nguoi_hoan_thanh_id") REFERENCES "nhan_vien" ("id") DEFERRABLE INITIALLY IMMEDIATE NOT VALID;

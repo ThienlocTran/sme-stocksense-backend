@@ -9,6 +9,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -38,6 +39,9 @@ public class ExportReceiptController {
         return exportReceiptService.listPendingApproval(status, pageable);
     }
 
+    @PutMapping("/{id:\\d+}/approve")
+    public ExportReceiptDetailResponse approve(@PathVariable Long id) {
+        return exportReceiptService.approve(id);
     private void validatePageAndSize(int page, int size) {
         if (page < 0) {
             throw new BadRequestException("page must be greater than or equal to 0.");

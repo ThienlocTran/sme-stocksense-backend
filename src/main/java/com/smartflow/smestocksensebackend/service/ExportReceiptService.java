@@ -8,4 +8,6 @@ public interface ExportReceiptService {
     ExportReceiptPageResponse listPendingApproval(String status, Pageable pageable);
 
     ExportReceiptDetailResponse getDetail(Long receiptId);
+
+    ExportReceiptDetailResponse approve(Long receiptId);
 }

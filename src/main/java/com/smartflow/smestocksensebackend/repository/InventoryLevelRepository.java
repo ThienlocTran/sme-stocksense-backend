@@ -11,6 +11,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -40,6 +41,10 @@ public interface InventoryLevelRepository extends JpaRepository<InventoryLevel, 
     @Query("select i from InventoryLevel i where i.product.id = :productId and i.warehouse.id = :warehouseId")
     Optional<InventoryLevel> findByProductIdAndWarehouseIdForUpdate(@Param("productId") Long productId,
             @Param("warehouseId") Long warehouseId);
+
+    @Query("select i from InventoryLevel i where i.warehouse.id = :warehouseId and i.product.id in :productIds")
+    List<InventoryLevel> findByWarehouseIdAndProductIdIn(@Param("warehouseId") Long warehouseId,
+            @Param("productIds") List<Long> productIds);
 
     @Query(value = "SELECT t.id AS \"inventoryId\", sp.id AS \"productId\", sp.ma_san_pham AS \"productCode\", sp.ten_san_pham AS \"productName\", sp.ma_vach AS \"barcode\", "
             +

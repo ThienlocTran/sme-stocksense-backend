@@ -13,6 +13,7 @@ import com.smartflow.smestocksensebackend.entity.InventoryLevel;
 import com.smartflow.smestocksensebackend.entity.RoleCode;
 import com.smartflow.smestocksensebackend.exception.AccountInactiveException;
 import com.smartflow.smestocksensebackend.exception.BadRequestException;
+import com.smartflow.smestocksensebackend.exception.ConflictException;
 import com.smartflow.smestocksensebackend.exception.MissingRoleException;
 import com.smartflow.smestocksensebackend.exception.NotFoundException;
 import com.smartflow.smestocksensebackend.repository.ExportReceiptDetailRepository;
@@ -20,6 +21,7 @@ import com.smartflow.smestocksensebackend.repository.ExportReceiptRepository;
 import com.smartflow.smestocksensebackend.repository.InventoryLevelRepository;
 import com.smartflow.smestocksensebackend.service.ExportReceiptService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
 import org.springframework.security.core.Authentication;
@@ -27,7 +29,12 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -54,12 +61,11 @@ public class ExportReceiptServiceImpl implements ExportReceiptService {
         ensureCanReadReceipt(actor, receipt);
 
         List<ExportReceiptDetail> details = exportReceiptDetailRepository.findByExportReceiptIdOrderByIdAsc(receiptId);
+        Map<Long, Integer> inventoryByProductId = loadInventoryByProductId(details, receipt.getWarehouse().getId());
         List<ExportReceiptDetailItemResponse> items = details.stream()
                 .map(detail -> {
-                    Integer currentInventory = inventoryLevelRepository
-                            .findByProductIdAndWarehouseId(detail.getProduct().getId(), receipt.getWarehouse().getId())
-                            .map(InventoryLevel::getQuantity)
-                            .orElse(0);
+                    Long productId = detail.getProduct() != null ? detail.getProduct().getId() : null;
+                    Integer currentInventory = productId != null ? inventoryByProductId.getOrDefault(productId, 0) : 0;
                     boolean warning = detail.getQuantity() > currentInventory;
                     return ExportReceiptDetailItemResponse.from(detail, currentInventory, warning);
                 })
@@ -90,6 +96,63 @@ public class ExportReceiptServiceImpl implements ExportReceiptService {
         return ExportReceiptPageResponse.from(exportReceiptRepository
                 .findByStatus(parsedStatus, pageable)
                 .map(ExportReceiptSummaryResponse::from));
+    }
+
+    @Override
+    @Transactional
+    public ExportReceiptDetailResponse approve(Long receiptId) {
+        Employee actor = currentEmployee();
+        if (actor.getStatus() != EmployeeStatus.HOAT_DONG) {
+            throw new AccountInactiveException();
+        }
+        ensureCanApprove(actor);
+
+        ExportReceipt receipt = exportReceiptRepository.findById(receiptId)
+                .orElseThrow(() -> new NotFoundException("Phieu xuat khong ton tai."));
+
+        if (receipt.getStatus() != ExportReceiptStatus.CHO_DUYET_CAP_1) {
+            throw new ConflictException("Chi duoc duyet phieu xuat o trang thai CHO_DUYET_CAP_1.");
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        receipt.setStatus(ExportReceiptStatus.CHO_DUYET_CAP_2);
+        receipt.setApprovedBy(actor);
+        receipt.setApprovedAt(now);
+
+        try {
+            ExportReceipt savedReceipt = exportReceiptRepository.saveAndFlush(receipt);
+            List<ExportReceiptDetail> details = exportReceiptDetailRepository
+                    .findByExportReceiptIdOrderByIdAsc(receiptId);
+            Map<Long, Integer> inventoryByProductId = loadInventoryByProductId(details, savedReceipt.getWarehouse().getId());
+            return ExportReceiptDetailResponse.from(savedReceipt, details.stream()
+                    .map(detail -> {
+                        Long productId = detail.getProduct() != null ? detail.getProduct().getId() : null;
+                        Integer currentInventory = productId != null ? inventoryByProductId.getOrDefault(productId, 0) : 0;
+                        boolean warning = detail.getQuantity() > currentInventory;
+                        return ExportReceiptDetailItemResponse.from(detail, currentInventory, warning);
+                    })
+                    .toList());
+        } catch (OptimisticLockingFailureException exception) {
+            throw new ConflictException("Phieu xuat da duoc cap nhat boi request khac.");
+        }
+    }
+
+    private Map<Long, Integer> loadInventoryByProductId(List<ExportReceiptDetail> details, Long warehouseId) {
+        List<Long> productIds = details.stream()
+                .map(detail -> detail.getProduct() != null ? detail.getProduct().getId() : null)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        if (productIds.isEmpty() || warehouseId == null) {
+            return Map.of();
+        }
+
+        return inventoryLevelRepository.findByWarehouseIdAndProductIdIn(warehouseId, productIds).stream()
+                .collect(Collectors.toMap(
+                        inventory -> inventory.getProduct().getId(),
+                        InventoryLevel::getQuantity,
+                        (existing, replacement) -> replacement,
+                        java.util.LinkedHashMap::new));
     }
 
     private Employee currentEmployee() {

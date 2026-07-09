@@ -129,7 +129,7 @@ public class ExportReceiptServiceImpl implements ExportReceiptService {
         try {
             return ExportReceiptStatus.valueOf(status.trim().toUpperCase());
         } catch (IllegalArgumentException exception) {
-            throw new BadRequestException("status khong hop le.");
+            throw new BadRequestException("status khong hop le.", exception);
         }
     }
 }

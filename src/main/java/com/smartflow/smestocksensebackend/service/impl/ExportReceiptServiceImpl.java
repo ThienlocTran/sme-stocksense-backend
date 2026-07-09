@@ -279,7 +279,8 @@ public class ExportReceiptServiceImpl implements ExportReceiptService {
         // 5. Validate dữ liệu đầu vào
         Warehouse warehouse = validateWarehouse(request.getWarehouseId());
         Partner partner = validatePartner(request.getPartnerId());
-        List<ExportReceiptDetail> newDetails = buildDetailsAndValidateInventory(request.getDetails(), warehouse.getId());
+        List<ExportReceiptDetail> newDetails = buildDetailsAndValidateInventory(request.getDetails(),
+                warehouse.getId());
         BigDecimal totalAmount = newDetails.stream()
                 .map(ExportReceiptDetail::getLineTotal)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -314,12 +315,14 @@ public class ExportReceiptServiceImpl implements ExportReceiptService {
         ExportReceipt receipt = exportReceiptRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Phiếu xuất không tồn tại."));
 
-        // 3. Phân quyền (Authorization): Chỉ người tạo phiếu HOẶC Admin mới được quyền Hủy
+        // 3. Phân quyền (Authorization): Chỉ người tạo phiếu HOẶC Admin mới được quyền
+        // Hủy
         if (!actor.getId().equals(receipt.getCreatedBy().getId()) && actor.getRole().getCode() != RoleCode.ADMIN) {
             throw new MissingRoleException("Bạn không có quyền hủy phiếu xuất này.");
         }
 
-        // 4. Kiểm tra vòng đời trạng thái (State Policy): Chỉ Hủy khi phiếu đang NHÁP hoặc TỪ CHỐI
+        // 4. Kiểm tra vòng đời trạng thái (State Policy): Chỉ Hủy khi phiếu đang NHÁP
+        // hoặc TỪ CHỐI
         if (!ExportReceiptStatePolicy.isEditable(receipt.getStatus())) {
             throw new ConflictException("Chỉ được hủy phiếu xuất ở trạng thái NHÁP hoặc TỪ CHỐI.");
         }
@@ -366,19 +369,23 @@ public class ExportReceiptServiceImpl implements ExportReceiptService {
         for (ExportReceiptDetail detail : details) {
             Product product = detail.getProduct();
             Warehouse warehouse = receipt.getWarehouse();
-            
-            InventoryLevel inventory = inventoryLevelRepository.findByProductIdAndWarehouseId(product.getId(), warehouse.getId())
-                    .orElseThrow(() -> new BadRequestException("Sản phẩm " + product.getName() + " không có trong kho " + warehouse.getName() + "."));
+
+            InventoryLevel inventory = inventoryLevelRepository
+                    .findByProductIdAndWarehouseId(product.getId(), warehouse.getId())
+                    .orElseThrow(() -> new BadRequestException(
+                            "Sản phẩm " + product.getName() + " không có trong kho " + warehouse.getName() + "."));
 
             if (detail.getQuantity() > inventory.getQuantity()) {
-                throw new BadRequestException("Sản phẩm " + product.getName() + " chỉ còn " + inventory.getQuantity() + " trong kho, không đủ xuất " + detail.getQuantity() + ". Vui lòng sửa lại phiếu nháp.");
+                throw new BadRequestException("Sản phẩm " + product.getName() + " chỉ còn " + inventory.getQuantity()
+                        + " trong kho, không đủ xuất " + detail.getQuantity() + ". Vui lòng sửa lại phiếu nháp.");
             }
         }
 
         // 7. Chuyển trạng thái sang Chờ Duyệt Cấp 1
         receipt.setStatus(ExportReceiptStatus.CHO_DUYET_CAP_1);
-        
-        // Lưu ý: Trường version sẽ được Hibernate tự động tăng lên 1 nhờ @Version trên Entity
+
+        // Lưu ý: Trường version sẽ được Hibernate tự động tăng lên 1 nhờ @Version trên
+        // Entity
         ExportReceipt savedReceipt = exportReceiptRepository.saveAndFlush(receipt);
 
         return ExportReceiptResponse.from(savedReceipt, details);
@@ -403,7 +410,8 @@ public class ExportReceiptServiceImpl implements ExportReceiptService {
     }
 
     private Partner validatePartner(Long partnerId) {
-        if (partnerId == null) return null;
+        if (partnerId == null)
+            return null;
         Partner partner = partnerRepository.findById(partnerId)
                 .orElseThrow(() -> new NotFoundException("Khách hàng không tồn tại."));
         if (partner.getStatus() != PartnerStatus.HOAT_DONG) {
@@ -412,7 +420,8 @@ public class ExportReceiptServiceImpl implements ExportReceiptService {
         return partner;
     }
 
-    private List<ExportReceiptDetail> buildDetailsAndValidateInventory(List<ExportReceiptDetailRequest> detailRequests, Long warehouseId) {
+    private List<ExportReceiptDetail> buildDetailsAndValidateInventory(List<ExportReceiptDetailRequest> detailRequests,
+            Long warehouseId) {
         if (detailRequests == null || detailRequests.isEmpty()) {
             throw new BadRequestException("Danh sách sản phẩm không được rỗng.");
         }
@@ -430,22 +439,25 @@ public class ExportReceiptServiceImpl implements ExportReceiptService {
                     .orElseThrow(() -> new NotFoundException("Sản phẩm không tồn tại: " + req.getProductId()));
 
             // Kiểm tra tồn kho nghiêm ngặt
-            InventoryLevel inventory = inventoryLevelRepository.findByProductIdAndWarehouseId(product.getId(), warehouseId)
-                    .orElseThrow(() -> new BadRequestException("Sản phẩm " + product.getName() + " không có trong kho này."));
+            InventoryLevel inventory = inventoryLevelRepository
+                    .findByProductIdAndWarehouseId(product.getId(), warehouseId)
+                    .orElseThrow(() -> new BadRequestException(
+                            "Sản phẩm " + product.getName() + " không có trong kho này."));
 
             if (req.getQuantity() > inventory.getQuantity()) {
-                throw new BadRequestException("Sản phẩm " + product.getName() + " chỉ còn " + inventory.getQuantity() + " trong kho, không đủ xuất " + req.getQuantity() + ".");
+                throw new BadRequestException("Sản phẩm " + product.getName() + " chỉ còn " + inventory.getQuantity()
+                        + " trong kho, không đủ xuất " + req.getQuantity() + ".");
             }
 
             ExportReceiptDetail detail = new ExportReceiptDetail();
             detail.setProduct(product);
             detail.setQuantity(req.getQuantity());
-            
+
             BigDecimal unitPrice = req.getUnitPrice() != null ? req.getUnitPrice() : BigDecimal.ZERO;
             detail.setUnitPrice(unitPrice);
             detail.setLineTotal(unitPrice.multiply(BigDecimal.valueOf(req.getQuantity())));
             detail.setNote(req.getNote());
-            
+
             details.add(detail);
         }
         return details;

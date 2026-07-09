@@ -71,7 +71,7 @@ public class ExportReceiptController {
      * API Gửi Phiếu Xuất Kho Chờ Duyệt (T118)
      * Kích hoạt quy trình duyệt 2 cấp.
      *
-     * @param id ID của phiếu xuất cần gửi duyệt.
+     * @param id      ID của phiếu xuất cần gửi duyệt.
      * @param request Chứa version để kiểm tra Optimistic Locking.
      * @return DTO chứa thông tin phiếu xuất đã cập nhật trạng thái.
      */

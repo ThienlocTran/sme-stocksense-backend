@@ -1,0 +1,1 @@
+ALTER TYPE trang_thai_import ADD VALUE IF NOT EXISTS 'DA_XAC_NHAN';

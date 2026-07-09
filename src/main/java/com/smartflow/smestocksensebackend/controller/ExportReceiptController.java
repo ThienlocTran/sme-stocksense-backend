@@ -2,6 +2,7 @@ package com.smartflow.smestocksensebackend.controller;
 
 import com.smartflow.smestocksensebackend.dto.outbound.ExportReceiptDetailResponse;
 import com.smartflow.smestocksensebackend.dto.outbound.ExportReceiptPageResponse;
+import com.smartflow.smestocksensebackend.exception.BadRequestException;
 import com.smartflow.smestocksensebackend.service.ExportReceiptService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
@@ -30,6 +31,7 @@ public class ExportReceiptController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(required = false) String status) {
+        validatePageAndSize(page, size);
         PageRequest pageable = PageRequest.of(
                 page,
                 size,
@@ -40,5 +42,12 @@ public class ExportReceiptController {
     @PutMapping("/{id:\\d+}/approve")
     public ExportReceiptDetailResponse approve(@PathVariable Long id) {
         return exportReceiptService.approve(id);
+    private void validatePageAndSize(int page, int size) {
+        if (page < 0) {
+            throw new BadRequestException("page must be greater than or equal to 0.");
+        }
+        if (size < 1 || size > 100) {
+            throw new BadRequestException("size must be between 1 and 100.");
+        }
     }
 }

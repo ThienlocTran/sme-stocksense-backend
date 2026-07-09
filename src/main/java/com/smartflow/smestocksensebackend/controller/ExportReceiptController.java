@@ -1,5 +1,6 @@
 package com.smartflow.smestocksensebackend.controller;
 
+import com.smartflow.smestocksensebackend.dto.inbound.RejectExportReceiptRequest;
 import com.smartflow.smestocksensebackend.dto.outbound.ExportReceiptDetailResponse;
 import com.smartflow.smestocksensebackend.dto.outbound.ExportReceiptPageResponse;
 import com.smartflow.smestocksensebackend.dto.request.outbound.ExportReceiptDraftRequest;
@@ -42,6 +43,13 @@ public class ExportReceiptController {
     @PutMapping("/{id:\\d+}/approve")
     public ExportReceiptDetailResponse approve(@PathVariable Long id) {
         return exportReceiptService.approve(id);
+    }
+
+    @PutMapping("/{id:\\d+}/reject")
+    public ExportReceiptDetailResponse reject(
+            @PathVariable Long id,
+            @Valid @RequestBody RejectExportReceiptRequest request) {
+        return exportReceiptService.reject(id, request);
     }
 
     @PostMapping("/draft")

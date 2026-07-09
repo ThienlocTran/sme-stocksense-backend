@@ -56,8 +56,8 @@ public class ExportReceipt {
     @Column(name = "ghi_chu", length = 255)
     private String note;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "nguoi_tao_id")
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "nguoi_tao_id", nullable = false)
     private Employee createdBy;
 
     @Column(name = "ngay_gui_duyet")

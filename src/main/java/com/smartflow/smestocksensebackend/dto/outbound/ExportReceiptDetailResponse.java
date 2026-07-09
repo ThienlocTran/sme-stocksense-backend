@@ -1,38 +1,39 @@
 package com.smartflow.smestocksensebackend.dto.outbound;
 
-import com.smartflow.smestocksensebackend.entity.Employee;
 import com.smartflow.smestocksensebackend.entity.ExportReceipt;
+import com.smartflow.smestocksensebackend.entity.Employee;
 import com.smartflow.smestocksensebackend.entity.ExportReceiptStatus;
 import com.smartflow.smestocksensebackend.entity.Warehouse;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
-public record ExportReceiptSummaryResponse(
+public record ExportReceiptDetailResponse(
         Long id,
         String code,
-        Long warehouseId,
-        String warehouseName,
-        Long createdById,
-        String createdByName,
+        String createdBy,
+        LocalDateTime createdAt,
+        LocalDateTime submittedAt,
+        String warehouse,
+        String note,
         String status,
         String approvalLevel,
-        LocalDateTime submittedAt,
-        LocalDateTime createdAt) {
-    public static ExportReceiptSummaryResponse from(ExportReceipt receipt) {
-        Warehouse warehouse = receipt.getWarehouse();
+        List<ExportReceiptDetailItemResponse> items) {
+    public static ExportReceiptDetailResponse from(ExportReceipt receipt, List<ExportReceiptDetailItemResponse> items) {
         Employee createdBy = receipt.getCreatedBy();
+        Warehouse warehouse = receipt.getWarehouse();
 
-        return new ExportReceiptSummaryResponse(
+        return new ExportReceiptDetailResponse(
                 receipt.getId(),
                 receipt.getCode(),
-                warehouse != null ? warehouse.getId() : null,
-                warehouse != null ? warehouse.getName() : null,
-                createdBy != null ? createdBy.getId() : null,
                 createdBy != null ? createdBy.getFullName() : null,
+                receipt.getCreatedAt(),
+                receipt.getSubmittedAt(),
+                warehouse != null ? warehouse.getName() : null,
+                receipt.getNote(),
                 receipt.getStatus() != null ? receipt.getStatus().name() : null,
                 approvalLevel(receipt),
-                receipt.getSubmittedAt(),
-                receipt.getCreatedAt());
+                items);
     }
 
     private static String approvalLevel(ExportReceipt receipt) {

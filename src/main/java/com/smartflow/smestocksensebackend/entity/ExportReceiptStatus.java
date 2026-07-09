@@ -7,5 +7,13 @@ public enum ExportReceiptStatus {
     CHO_XUAT,
     HOAN_THANH,
     TU_CHOI,
-    HUY
+    HUY;
+
+    public String approvalLevel() {
+        return switch (this) {
+            case CHO_DUYET_CAP_1 -> "LEVEL_1";
+            case CHO_DUYET_CAP_2 -> "LEVEL_2";
+            default -> null;
+        };
+    }
 }

@@ -4,4 +4,4 @@ ALTER TABLE "phieu_xuat_kho"
 
 ALTER TABLE "phieu_xuat_kho"
     ADD CONSTRAINT "fk_phieu_xuat_nguoi_tu_choi"
-        FOREIGN KEY ("nguoi_tu_choi_id") REFERENCES "nhan_vien" ("id") DEFERRABLE INITIALLY IMMEDIATE;
+        FOREIGN KEY ("nguoi_tu_choi_id") REFERENCES "nhan_vien" ("id") DEFERRABLE INITIALLY IMMEDIATE NOT VALID;

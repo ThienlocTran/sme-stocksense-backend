@@ -6,6 +6,8 @@ import com.smartflow.smestocksensebackend.dto.outbound.ExportReceiptPageResponse
 import com.smartflow.smestocksensebackend.dto.request.outbound.ExportReceiptDraftRequest;
 import com.smartflow.smestocksensebackend.dto.response.outbound.ExportReceiptResponse;
 import org.springframework.data.domain.Pageable;
+import java.util.List;
+import com.smartflow.smestocksensebackend.dto.outbound.ExportReceiptHistoryResponse;
 
 public interface ExportReceiptService {
     ExportReceiptPageResponse listPendingApproval(String status, Pageable pageable);
@@ -33,4 +35,6 @@ public interface ExportReceiptService {
             String status, java.time.LocalDate fromDate, java.time.LocalDate toDate, Long warehouseId, String code, org.springframework.data.domain.Pageable pageable);
 
     ExportReceiptResponse getReceiptDetails(Long id);
+
+    List<ExportReceiptHistoryResponse> getHistory(Long id);
 }

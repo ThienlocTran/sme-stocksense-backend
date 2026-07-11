@@ -2,6 +2,7 @@ package com.smartflow.smestocksensebackend.dto.outbound;
 
 import com.smartflow.smestocksensebackend.entity.ExportReceiptDetail;
 import com.smartflow.smestocksensebackend.entity.Product;
+import java.math.BigDecimal;
 
 public record ExportReceiptDetailItemResponse(
         Long id,
@@ -11,7 +12,15 @@ public record ExportReceiptDetailItemResponse(
         String unit,
         Integer quantity,
         Integer currentInventory,
-        Boolean warning) {
+        Boolean warning,
+        BigDecimal unitPrice,
+        BigDecimal lineTotal,
+        String note) {
+
+    public ExportReceiptDetailItemResponse(Long id, Long productId, String productCode, String productName,
+            String unit, Integer quantity, Integer currentInventory, Boolean warning) {
+        this(id, productId, productCode, productName, unit, quantity, currentInventory, warning, null, null, null);
+    }
     public static ExportReceiptDetailItemResponse from(ExportReceiptDetail detail, Integer currentInventory,
             boolean warning) {
         Product product = detail.getProduct();
@@ -23,6 +32,9 @@ public record ExportReceiptDetailItemResponse(
                 product != null ? product.getUnit() : null,
                 detail.getQuantity(),
                 currentInventory,
-                warning);
+                warning,
+                detail.getUnitPrice(),
+                detail.getLineTotal(),
+                detail.getNote());
     }
 }

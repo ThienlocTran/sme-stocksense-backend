@@ -82,8 +82,7 @@ class ExportReceiptItemServiceTest {
     private InventoryLevelRepository inventoryLevelRepository;
 
     // ─── SUT (System Under Test) ────────────────────────────────
-    // TDD RED: Class này chưa tồn tại → compile error mong muốn.
-    private ExportReceiptServiceImpl exportReceiptService;
+    private ExportReceiptItemServiceImpl exportReceiptService;
 
     // ─── Test fixtures ──────────────────────────────────────────
 
@@ -103,13 +102,12 @@ class ExportReceiptItemServiceTest {
         warehouse = warehouse(WAREHOUSE_ID);
         owner = employee(5L, RoleCode.EMPLOYEE);
         product = product(PRODUCT_ID, ProductStatus.HOAT_DONG);
-        receipt = exportReceipt(RECEIPT_ID, owner, warehouse, ExportReceiptStatus.DRAFT);
+        receipt = exportReceipt(RECEIPT_ID, owner, warehouse, ExportReceiptStatus.NHAP);
         inventoryLevel = inventoryLevel(PRODUCT_ID, WAREHOUSE_ID, AVAILABLE_STOCK);
 
         authenticate(owner);
 
-        // TDD RED: Sẽ compile khi tạo ExportReceiptServiceImpl
-        exportReceiptService = new ExportReceiptServiceImpl(
+        exportReceiptService = new ExportReceiptItemServiceImpl(
                 exportReceiptRepository,
                 exportReceiptItemRepository,
                 productRepository,
@@ -160,7 +158,7 @@ class ExportReceiptItemServiceTest {
         void shouldSaveItemWhenRejectedAndStockSufficient() {
             // Arrange: phiếu REJECTED → cho phép sửa lại
             int exportQty = 20;
-            receipt.setStatus(ExportReceiptStatus.REJECTED);
+            receipt.setStatus(ExportReceiptStatus.TU_CHOI);
             stubHappyPath();
 
             // Act
@@ -214,7 +212,7 @@ class ExportReceiptItemServiceTest {
         @Test
         @DisplayName("Phiếu đang PENDING_APPROVAL_L1 → BadRequestException, KHÔNG lưu item")
         void shouldThrowWhenPendingApprovalL1() {
-            receipt.setStatus(ExportReceiptStatus.PENDING_APPROVAL_L1);
+            receipt.setStatus(ExportReceiptStatus.CHO_DUYET_CAP_1);
             when(exportReceiptRepository.findById(RECEIPT_ID)).thenReturn(Optional.of(receipt));
 
             BadRequestException ex = assertThrows(BadRequestException.class,
@@ -227,7 +225,7 @@ class ExportReceiptItemServiceTest {
         @Test
         @DisplayName("Phiếu đang PENDING_APPROVAL_L2 → BadRequestException, KHÔNG lưu item")
         void shouldThrowWhenPendingApprovalL2() {
-            receipt.setStatus(ExportReceiptStatus.PENDING_APPROVAL_L2);
+            receipt.setStatus(ExportReceiptStatus.CHO_DUYET_CAP_2);
             when(exportReceiptRepository.findById(RECEIPT_ID)).thenReturn(Optional.of(receipt));
 
             BadRequestException ex = assertThrows(BadRequestException.class,
@@ -240,7 +238,7 @@ class ExportReceiptItemServiceTest {
         @Test
         @DisplayName("Phiếu đã COMPLETED → BadRequestException, KHÔNG lưu item")
         void shouldThrowWhenCompleted() {
-            receipt.setStatus(ExportReceiptStatus.COMPLETED);
+            receipt.setStatus(ExportReceiptStatus.HOAN_THANH);
             when(exportReceiptRepository.findById(RECEIPT_ID)).thenReturn(Optional.of(receipt));
 
             assertThrows(BadRequestException.class,

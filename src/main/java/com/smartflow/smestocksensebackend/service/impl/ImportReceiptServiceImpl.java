@@ -474,10 +474,20 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
         LocalDateTime now = LocalDateTime.now();
 
         ImportReceiptStatus nextStatus;
-        if (current == ImportReceiptStatus.CHO_DUYET_CAP_1 || current == ImportReceiptStatus.CHO_DUYET_CAP_2) {
+        ImportReceiptAction action;
+        
+        if (current == ImportReceiptStatus.CHO_DUYET_CAP_1) {
+            // Duyệt cấp 1 → chuyển sang chờ duyệt cấp 2
+            nextStatus = ImportReceiptStatus.CHO_DUYET_CAP_2;
+            receipt.setLevel1ApprovedBy(actor);
+            receipt.setLevel1ApprovedAt(now);
+            action = ImportReceiptAction.DUYET_CAP_1;
+        } else if (current == ImportReceiptStatus.CHO_DUYET_CAP_2) {
+            // Duyệt cấp 2 → chuyển sang chờ hàng về
             nextStatus = ImportReceiptStatus.CHO_HANG_VE;
             receipt.setLevel2ApprovedBy(actor);
             receipt.setLevel2ApprovedAt(now);
+            action = ImportReceiptAction.DUYET_CAP_2;
         } else {
             throw new ConflictException("Chi duoc duyet phieu nhap o trang thai cho duyet (CHO_DUYET_CAP_1 hoac CHO_DUYET_CAP_2).");
         }
@@ -490,7 +500,7 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
         try {
             receipt.setStatus(nextStatus);
             ImportReceipt savedReceipt = importReceiptRepository.saveAndFlush(receipt);
-            saveHistory(savedReceipt, actor, ImportReceiptAction.DUYET_CAP_2, null);
+            saveHistory(savedReceipt, actor, action, null);
             List<ImportReceiptDetail> details = importReceiptDetailRepository.findByDocumentIdOrderByIdAsc(receiptId);
             return ImportReceiptDraftResponse.from(savedReceipt, details);
         } catch (OptimisticLockingFailureException exception) {

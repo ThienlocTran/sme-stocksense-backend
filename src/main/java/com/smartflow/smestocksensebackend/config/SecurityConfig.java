@@ -147,6 +147,8 @@ public class SecurityConfig {
                                                 .requestMatchers(HttpMethod.GET,
                                                                 "/api/export-receipts/pending-approval")
                                                 .hasAnyRole("ADMIN", "MANAGER")
+                                                .requestMatchers(HttpMethod.GET, "/api/export-receipts/*/history")
+                                                .hasAnyRole("ADMIN", "MANAGER", "EMPLOYEE")
                                                 .requestMatchers(HttpMethod.GET,
                                                                 "/api/import-receipts/*/approval-detail")
                                                 .hasAnyRole("ADMIN", "MANAGER")

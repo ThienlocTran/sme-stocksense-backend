@@ -12,8 +12,15 @@ public record ExportReceiptSummaryResponse(
     String status,
     BigDecimal totalAmount,
     String createdBy,
-    LocalDateTime createdAt
+    LocalDateTime createdAt,
+    Long version,
+    String partnerName,
+    String rejectionReason
 ) {
+    public ExportReceiptSummaryResponse(Long id, String code, String warehouseName, String status,
+            BigDecimal totalAmount, String createdBy, LocalDateTime createdAt) {
+        this(id, code, warehouseName, status, totalAmount, createdBy, createdAt, null, null, null);
+    }
     public static ExportReceiptSummaryResponse from(ExportReceipt r) {
         return new ExportReceiptSummaryResponse(
             r.getId(),
@@ -22,7 +29,10 @@ public record ExportReceiptSummaryResponse(
             r.getStatus().name(),
             r.getTotalAmount(),
             r.getCreatedBy() != null ? r.getCreatedBy().getFullName() : null,
-            r.getCreatedAt()
+            r.getCreatedAt(),
+            r.getVersion(),
+            r.getPartner() != null ? r.getPartner().getName() : null,
+            r.getRejectionReason()
         );
     }
 }

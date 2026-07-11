@@ -25,6 +25,7 @@ public class ExportReceiptResponse {
     private BigDecimal totalAmount;
     private String note;
     private String rejectionReason;
+    private Long version;
     private Long createdById;
     private String createdByName;
     private LocalDateTime createdAt;
@@ -51,6 +52,7 @@ public class ExportReceiptResponse {
         response.setTotalAmount(entity.getTotalAmount());
         response.setNote(entity.getNote());
         response.setRejectionReason(entity.getRejectionReason());
+        response.setVersion(entity.getVersion());
         
         if (entity.getCreatedBy() != null) {
             response.setCreatedById(entity.getCreatedBy().getId());

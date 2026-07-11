@@ -6,6 +6,7 @@ import com.smartflow.smestocksensebackend.dto.outbound.ExportReceiptDetailItemRe
 import com.smartflow.smestocksensebackend.dto.outbound.ExportReceiptDetailResponse;
 import com.smartflow.smestocksensebackend.dto.outbound.ExportReceiptPageResponse;
 import com.smartflow.smestocksensebackend.dto.outbound.ExportReceiptSummaryResponse;
+import com.smartflow.smestocksensebackend.dto.outbound.ExportReceiptHistoryResponse;
 import com.smartflow.smestocksensebackend.dto.request.outbound.ExportReceiptDetailRequest;
 import com.smartflow.smestocksensebackend.dto.request.outbound.ExportReceiptDraftRequest;
 import com.smartflow.smestocksensebackend.dto.request.outbound.ExportReceiptSubmitRequest;
@@ -58,6 +59,9 @@ public class ExportReceiptServiceImpl implements ExportReceiptService {
     private final InventoryLevelRepository inventoryLevelRepository;
     private final ExportReceiptCodeGenerator codeGenerator;
     private final InventoryTransactionService inventoryTransactionService;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private ExportReceiptHistoryRepository exportReceiptHistoryRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -133,6 +137,7 @@ public class ExportReceiptServiceImpl implements ExportReceiptService {
             receipt.setRejectedBy(actor);
             receipt.setRejectedAt(LocalDateTime.now());
             ExportReceipt savedReceipt = exportReceiptRepository.saveAndFlush(receipt);
+            saveHistory(savedReceipt, actor, ExportReceiptAction.TU_CHOI, trimmedReason);
             return buildDetailResponse(savedReceipt);
         } catch (OptimisticLockingFailureException exception) {
             throw new ConflictException("Phieu xuat da duoc cap nhat boi request khac.", exception);
@@ -153,10 +158,12 @@ public class ExportReceiptServiceImpl implements ExportReceiptService {
 
         LocalDateTime now = LocalDateTime.now();
         try {
+            ExportReceiptAction historyAction;
             if (receipt.getStatus() == ExportReceiptStatus.CHO_DUYET_CAP_1) {
                 receipt.setStatus(ExportReceiptStatus.CHO_DUYET_CAP_2);
                 receipt.setLevel1ApprovedBy(actor);
                 receipt.setLevel1ApprovedAt(now);
+                historyAction = ExportReceiptAction.DUYET_CAP_1;
             } else if (receipt.getStatus() == ExportReceiptStatus.CHO_DUYET_CAP_2) {
                 List<ExportReceiptDetail> details = exportReceiptDetailRepository
                         .findByExportReceiptIdOrderByIdAsc(receiptId);
@@ -207,6 +214,7 @@ public class ExportReceiptServiceImpl implements ExportReceiptService {
                             "Duyet phieu xuat cap 2");
                 }
                 receipt.setStatus(ExportReceiptStatus.HOAN_THANH);
+                historyAction = ExportReceiptAction.DUYET_CAP_2;
             } else {
                 throw new ConflictException(
                         "Chi duoc duyet phieu xuat o trang thai CHO_DUYET_CAP_1 hoac CHO_DUYET_CAP_2.");
@@ -217,6 +225,7 @@ public class ExportReceiptServiceImpl implements ExportReceiptService {
                 receipt.setApprovedAt(now);
             }
             ExportReceipt savedReceipt = exportReceiptRepository.saveAndFlush(receipt);
+            saveHistory(savedReceipt, actor, historyAction, null);
             return buildDetailResponse(savedReceipt);
         } catch (OptimisticLockingFailureException exception) {
             throw new ConflictException("Phieu xuat da duoc cap nhat boi request khac.", exception);
@@ -356,7 +365,8 @@ public class ExportReceiptServiceImpl implements ExportReceiptService {
 
         // 5. Cập nhật trạng thái thành ĐÃ HỦY (Soft Delete) thay vì xóa vật lý khỏi DB
         receipt.setStatus(ExportReceiptStatus.HUY);
-        exportReceiptRepository.saveAndFlush(receipt);
+        ExportReceipt savedReceipt = exportReceiptRepository.saveAndFlush(receipt);
+        saveHistory(savedReceipt, actor, ExportReceiptAction.HUY, null);
     }
 
     @Override
@@ -414,6 +424,7 @@ public class ExportReceiptServiceImpl implements ExportReceiptService {
         // Lưu ý: Trường version sẽ được Hibernate tự động tăng lên 1 nhờ @Version trên
         // Entity
         ExportReceipt savedReceipt = exportReceiptRepository.saveAndFlush(receipt);
+        saveHistory(savedReceipt, actor, ExportReceiptAction.GUI_DUYET, null);
 
         return ExportReceiptResponse.from(savedReceipt, details);
     }
@@ -469,6 +480,33 @@ public class ExportReceiptServiceImpl implements ExportReceiptService {
 
         // 5. Build và trả về Response DTO tái sử dụng
         return ExportReceiptResponse.from(receipt, details);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ExportReceiptHistoryResponse> getHistory(Long id) {
+        Employee actor = currentEmployee();
+        ExportReceipt receipt = exportReceiptRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException("Phiếu xuất không tồn tại."));
+        ensureCanReadReceipt(actor, receipt);
+        if (exportReceiptHistoryRepository == null) {
+            return List.of();
+        }
+        return exportReceiptHistoryRepository.findByDocumentIdOrderByCreatedAtDesc(id).stream()
+                .map(ExportReceiptHistoryResponse::from)
+                .toList();
+    }
+
+    private void saveHistory(ExportReceipt receipt, Employee actor, ExportReceiptAction action, String note) {
+        if (exportReceiptHistoryRepository == null) {
+            return;
+        }
+        ExportReceiptHistory history = new ExportReceiptHistory();
+        history.setDocument(receipt);
+        history.setActor(actor);
+        history.setAction(action);
+        history.setNote(note);
+        exportReceiptHistoryRepository.save(history);
     }
 
     // --- Helper Methods ---

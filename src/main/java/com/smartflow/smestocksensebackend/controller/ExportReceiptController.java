@@ -3,10 +3,15 @@ package com.smartflow.smestocksensebackend.controller;
 import com.smartflow.smestocksensebackend.dto.inbound.RejectExportReceiptRequest;
 import com.smartflow.smestocksensebackend.dto.outbound.ExportReceiptDetailResponse;
 import com.smartflow.smestocksensebackend.dto.outbound.ExportReceiptPageResponse;
+import com.smartflow.smestocksensebackend.dto.outbound.ExportReceiptHistoryResponse;
 import com.smartflow.smestocksensebackend.dto.request.outbound.ExportReceiptDraftRequest;
+import com.smartflow.smestocksensebackend.dto.request.outbound.ExportReceiptItemRequest;
 import com.smartflow.smestocksensebackend.dto.response.outbound.ExportReceiptResponse;
+import com.smartflow.smestocksensebackend.dto.response.outbound.ExportReceiptItemResponse;
+import com.smartflow.smestocksensebackend.dto.response.outbound.StockAvailabilityResponse;
 import com.smartflow.smestocksensebackend.exception.BadRequestException;
 import com.smartflow.smestocksensebackend.service.ExportReceiptService;
+import com.smartflow.smestocksensebackend.service.impl.ExportReceiptItemServiceImpl;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
@@ -16,11 +21,13 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api/v1/export-receipts")
+@RequestMapping("/api/export-receipts")
 @RequiredArgsConstructor
 public class ExportReceiptController {
 
     private final ExportReceiptService exportReceiptService;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private ExportReceiptItemServiceImpl exportReceiptItemService;
 
     @GetMapping("/{id:\\d+}")
     public ExportReceiptDetailResponse getDetail(@PathVariable Long id) {
@@ -115,10 +122,38 @@ public class ExportReceiptController {
     }
 
     // ponytail: Trả về DTO tái sử dụng ExportReceiptResponse, tránh viết DTO rườm rà.
-    @GetMapping("/{id}")
-    public ResponseEntity<ExportReceiptResponse> getReceiptDetails(@PathVariable Long id) {
-        ExportReceiptResponse response = exportReceiptService.getReceiptDetails(id);
-        return ResponseEntity.ok(response);
+    @GetMapping("/{id}/items")
+    public java.util.List<ExportReceiptItemResponse> listItems(@PathVariable Long id) {
+        return exportReceiptItemService.list(id);
+    }
+
+    @PostMapping("/{id}/items")
+    public ResponseEntity<ExportReceiptItemResponse> addItem(
+            @PathVariable Long id, @Valid @RequestBody ExportReceiptItemRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(exportReceiptItemService.add(id, request));
+    }
+
+    @PutMapping("/{id}/items/{itemId}")
+    public ExportReceiptItemResponse updateItem(
+            @PathVariable Long id, @PathVariable Long itemId,
+            @Valid @RequestBody ExportReceiptItemRequest request) {
+        return exportReceiptItemService.update(id, itemId, request);
+    }
+
+    @DeleteMapping("/{id}/items/{itemId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteItem(@PathVariable Long id, @PathVariable Long itemId) {
+        exportReceiptItemService.delete(id, itemId);
+    }
+
+    @GetMapping("/{id}/availability/{productId}")
+    public StockAvailabilityResponse getAvailability(@PathVariable Long id, @PathVariable Long productId) {
+        return exportReceiptItemService.availability(id, productId);
+    }
+
+    @GetMapping("/{id}/history")
+    public java.util.List<ExportReceiptHistoryResponse> getHistory(@PathVariable Long id) {
+        return exportReceiptService.getHistory(id);
     }
 
     /**

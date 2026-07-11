@@ -40,3 +40,14 @@ Do not commit secrets or local profile files.
 - `rules/SPRINT_INTEGRATION_CHECKLIST.md` when preparing merges or integration branches
 
 Module docs such as `docs/inbound-workflow.md` and task READMEs provide business and implementation context. The `rules/` folder contains operating rules.
+
+## Custom Workflow Rules (BẮT BUỘC)
+
+Người dùng đã thiết lập Quy trình làm việc tĩnh (Strict Skills Harness). Đối với MỌI Task code, AI phải tuân thủ tuyệt đối quy trình sau:
+1. **Lệnh /grill-me (Brainstorm Spec):** Luôn dùng skill `@brainstorming` (tạo câu hỏi trắc nghiệm MCQs) để chốt edge cases với người dùng. **Tuyệt đối CẤM viết code** khi chưa có spec được chốt.
+2. **Khai báo chuẩn Core Protocol:** Mọi câu trả lời code phải luôn bắt đầu bằng `🤖 Applying knowledge of @[agent]...` và `📚 Using skill: @[skill]...`.
+3. **Áp dụng `@ponytail`:** Luôn dùng skill `@ponytail` mức độ `full` (viết code ngắn gọn, không đẻ thêm class/DTO thừa nếu framework đã có sẵn).
+4. **Code Comments & Docs:** 
+   - Đánh số và comment bằng Tiếng Việt rõ ràng vào từng khối logic trong các file code (Service, Controller...).
+   - Tạo 1 file `docs/README_T[Mã Task].md` tóm tắt API (Chức năng, Logic, JSON Request/Response).
+5. **Verify:** Bắt buộc chạy lệnh `mvnw clean compile` thành công (BUILD SUCCESS) thì mới được phép cập nhật file `progress.md` và `feature_list.json`.

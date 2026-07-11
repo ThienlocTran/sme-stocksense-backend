@@ -10,14 +10,14 @@ Spring Boot does not automatically load `.env` by itself unless the IDE/plugin/r
 
 Preferred safe options:
 
-Option A - Local ignored `application-neon.yml`:
-1. Copy `src/main/resources/application-neon.yml.example` to `src/main/resources/application-neon.yml`.
-2. Replace placeholders with real local credentials in `application-neon.yml`.
-3. Never commit `application-neon.yml`.
+Option A - Neon profile config:
+1. Keep `src/main/resources/application-neon.yml` using placeholders.
+2. Export `NEON_DB_URL`, `NEON_DB_USERNAME`, and `NEON_DB_PASSWORD` in the runtime environment.
+3. Never commit real credentials.
 
 Option B - Environment variables:
 1. Copy `.env.example` to `.env` for reference.
-2. Configure IntelliJ Run Configuration, EnvFile plugin, terminal environment, or OS environment variables to export `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `JWT_SECRET`, `JWT_EXPIRATION_SECONDS`, and `FLYWAY_ENABLED`.
+2. Configure IntelliJ Run Configuration, EnvFile plugin, terminal environment, or OS environment variables to export `NEON_DB_URL`, `NEON_DB_USERNAME`, `NEON_DB_PASSWORD`, `JWT_SECRET`, `JWT_EXPIRATION_SECONDS`, and `FLYWAY_ENABLED`.
 3. Keep `application-neon.yml` using placeholders.
 4. Never commit `.env`.
 

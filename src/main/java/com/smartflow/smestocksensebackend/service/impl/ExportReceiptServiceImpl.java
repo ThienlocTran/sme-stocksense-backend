@@ -159,12 +159,8 @@ public class ExportReceiptServiceImpl implements ExportReceiptService {
         LocalDateTime now = LocalDateTime.now();
         try {
             ExportReceiptAction historyAction;
-            if (receipt.getStatus() == ExportReceiptStatus.CHO_DUYET_CAP_1) {
-                receipt.setStatus(ExportReceiptStatus.CHO_DUYET_CAP_2);
-                receipt.setLevel1ApprovedBy(actor);
-                receipt.setLevel1ApprovedAt(now);
-                historyAction = ExportReceiptAction.DUYET_CAP_1;
-            } else if (receipt.getStatus() == ExportReceiptStatus.CHO_DUYET_CAP_2) {
+            if (receipt.getStatus() == ExportReceiptStatus.CHO_DUYET_CAP_1
+                    || receipt.getStatus() == ExportReceiptStatus.CHO_DUYET_CAP_2) {
                 List<ExportReceiptDetail> details = exportReceiptDetailRepository
                         .findByExportReceiptIdOrderByIdAsc(receiptId);
                 details = details.stream()
@@ -418,8 +414,13 @@ public class ExportReceiptServiceImpl implements ExportReceiptService {
             }
         }
 
-        // 7. Chuyển trạng thái sang Chờ Duyệt Cấp 1
-        receipt.setStatus(ExportReceiptStatus.CHO_DUYET_CAP_1);
+        // 7. Người tạo gửi phiếu đồng nghĩa đã duyệt cấp 1, chuyển thẳng sang chờ cấp 2.
+        LocalDateTime submittedAt = LocalDateTime.now();
+        receipt.setStatus(ExportReceiptStatus.CHO_DUYET_CAP_2);
+        receipt.setSubmittedBy(actor);
+        receipt.setSubmittedAt(submittedAt);
+        receipt.setLevel1ApprovedBy(actor);
+        receipt.setLevel1ApprovedAt(submittedAt);
 
         // Lưu ý: Trường version sẽ được Hibernate tự động tăng lên 1 nhờ @Version trên
         // Entity

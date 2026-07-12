@@ -128,6 +128,23 @@ class InventoryTransactionServiceImplTest {
         }
 
         @Test
+        void recordExportTransaction_shouldLinkSourceExportReceipt() {
+                ExportReceipt receipt = new ExportReceipt();
+                receipt.setId(8L);
+                Mockito.when(productRepository.findById(1L)).thenReturn(Optional.of(product));
+                Mockito.when(warehouseRepository.findById(1L)).thenReturn(Optional.of(warehouse));
+                Mockito.when(inventoryTransactionRepository.saveAndFlush(any()))
+                                .thenAnswer(invocation -> invocation.getArgument(0));
+
+                InventoryTransaction transaction = inventoryTransactionService.recordExportTransaction(
+                                1L, 1L, InventoryTransactionType.XUAT_KHO, 3, 10, 7, receipt, "Xuất kho");
+
+                assertEquals(receipt, transaction.getExportReceipt());
+                assertNull(transaction.getImportReceipt());
+                assertEquals(7, transaction.getQuantityAfter());
+        }
+
+        @Test
         void recordTransaction_error_whenProductNotFound() {
                 Mockito.when(productRepository.findById(99L)).thenReturn(Optional.empty());
 

@@ -1,6 +1,7 @@
 package com.smartflow.smestocksensebackend.service.impl;
 
 import com.smartflow.smestocksensebackend.entity.Employee;
+import com.smartflow.smestocksensebackend.entity.ExportReceipt;
 import com.smartflow.smestocksensebackend.entity.ImportReceipt;
 import com.smartflow.smestocksensebackend.entity.InventoryTransaction;
 import com.smartflow.smestocksensebackend.entity.InventoryTransactionType;
@@ -55,6 +56,35 @@ public class InventoryTransactionServiceImpl implements InventoryTransactionServ
             Integer quantityAfter,
             ImportReceipt importReceipt,
             String note) {
+        return recordTransaction(productId, warehouseId, transactionType, quantity, quantityBefore, quantityAfter,
+                importReceipt, null, note);
+    }
+
+    @Override
+    @Transactional
+    public InventoryTransaction recordExportTransaction(
+            Long productId,
+            Long warehouseId,
+            InventoryTransactionType transactionType,
+            Integer quantity,
+            Integer quantityBefore,
+            Integer quantityAfter,
+            ExportReceipt exportReceipt,
+            String note) {
+        return recordTransaction(productId, warehouseId, transactionType, quantity, quantityBefore, quantityAfter,
+                null, exportReceipt, note);
+    }
+
+    private InventoryTransaction recordTransaction(
+            Long productId,
+            Long warehouseId,
+            InventoryTransactionType transactionType,
+            Integer quantity,
+            Integer quantityBefore,
+            Integer quantityAfter,
+            ImportReceipt importReceipt,
+            ExportReceipt exportReceipt,
+            String note) {
         validateInput(productId, warehouseId, transactionType, quantity, quantityBefore, quantityAfter);
 
         Product product = productRepository.findById(productId)
@@ -71,6 +101,7 @@ public class InventoryTransactionServiceImpl implements InventoryTransactionServ
         transaction.setQuantityBefore(quantityBefore);
         transaction.setQuantityAfter(quantityAfter);
         transaction.setImportReceipt(importReceipt);
+        transaction.setExportReceipt(exportReceipt);
         transaction.setNote(note);
         transaction.setCreatedBy(currentEmployee());
 

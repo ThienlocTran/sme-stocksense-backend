@@ -1,6 +1,7 @@
 package com.smartflow.smestocksensebackend.service;
 
 import com.smartflow.smestocksensebackend.entity.ImportReceipt;
+import com.smartflow.smestocksensebackend.entity.ExportReceipt;
 import com.smartflow.smestocksensebackend.entity.InventoryTransaction;
 import com.smartflow.smestocksensebackend.entity.InventoryTransactionType;
 import com.smartflow.smestocksensebackend.dto.inventory.InventoryTransactionResponse;
@@ -32,6 +33,17 @@ public interface InventoryTransactionService {
                         Integer quantityBefore,
                         Integer quantityAfter,
                         ImportReceipt importReceipt,
+                        String note);
+
+        /** Ghi giao dịch xuất kho và liên kết trực tiếp với phiếu xuất nguồn. */
+        InventoryTransaction recordExportTransaction(
+                        Long productId,
+                        Long warehouseId,
+                        InventoryTransactionType transactionType,
+                        Integer quantity,
+                        Integer quantityBefore,
+                        Integer quantityAfter,
+                        ExportReceipt exportReceipt,
                         String note);
 
         Page<InventoryTransactionResponse> searchTransactions(

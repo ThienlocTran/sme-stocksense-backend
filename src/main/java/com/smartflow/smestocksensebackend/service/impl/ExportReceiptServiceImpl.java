@@ -199,14 +199,14 @@ public class ExportReceiptServiceImpl implements ExportReceiptService {
                     int quantityAfter = quantityBefore - quantityNeeded;
                     inventoryLevel.setQuantity(quantityAfter);
                     inventoryLevelRepository.saveAndFlush(inventoryLevel);
-                    inventoryTransactionService.recordTransaction(
+                    inventoryTransactionService.recordExportTransaction(
                             productId,
                             warehouseId,
                             InventoryTransactionType.XUAT_KHO,
                             quantityNeeded,
                             quantityBefore,
                             quantityAfter,
-                            null,
+                            receipt,
                             "Duyet phieu xuat cap 2");
                 }
                 receipt.setStatus(ExportReceiptStatus.HOAN_THANH);

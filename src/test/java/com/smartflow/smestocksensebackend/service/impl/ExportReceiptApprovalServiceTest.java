@@ -178,7 +178,7 @@ class ExportReceiptApprovalServiceTest {
     }
 
     @Test
-    void approve_level1ShouldMoveToPendingLevel2WithoutRecordingApproverMetadata() {
+    void approve_legacyLevel1ShouldCompleteAsLevel2Approval() {
         ExportReceipt receipt = receiptWithStatus(ExportReceiptStatus.CHO_DUYET_CAP_1);
         when(exportReceiptRepository.findById(100L)).thenReturn(Optional.of(receipt));
         when(exportReceiptRepository.saveAndFlush(any(ExportReceipt.class)))
@@ -187,35 +187,37 @@ class ExportReceiptApprovalServiceTest {
 
         ExportReceiptDetailResponse response = exportReceiptService.approve(100L);
 
-        assertEquals("CHO_DUYET_CAP_2", response.status());
-        assertEquals(ExportReceiptStatus.CHO_DUYET_CAP_2, receipt.getStatus());
-        assertEquals(manager, receipt.getLevel1ApprovedBy());
-        assertNotNull(receipt.getLevel1ApprovedAt());
-        assertNull(receipt.getApprovedBy());
-        assertNull(receipt.getApprovedAt());
+        assertEquals("HOAN_THANH", response.status());
+        assertEquals(ExportReceiptStatus.HOAN_THANH, receipt.getStatus());
+        assertEquals(manager, receipt.getApprovedBy());
+        assertNotNull(receipt.getApprovedAt());
         verify(inventoryLevelRepository, never()).findByProductIdAndWarehouseId(any(), any());
     }
 
     @Test
-    void approve_withDetailsShouldUseBatchInventoryLookup() {
+    void approve_legacyLevel1WithDetailsShouldLockAndDeductInventory() {
         ExportReceipt receipt = receiptWithStatus(ExportReceiptStatus.CHO_DUYET_CAP_1);
         Product product = new Product();
         product.setId(10L);
         ExportReceiptDetail detail = new ExportReceiptDetail();
         detail.setProduct(product);
         detail.setQuantity(5);
+        InventoryLevel inventoryLevel = new InventoryLevel();
+        inventoryLevel.setProduct(product);
+        inventoryLevel.setWarehouse(warehouse);
+        inventoryLevel.setQuantity(8);
         receipt.setWarehouse(warehouse);
         when(exportReceiptRepository.findById(100L)).thenReturn(Optional.of(receipt));
         when(exportReceiptRepository.saveAndFlush(any(ExportReceipt.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
         when(exportReceiptDetailRepository.findByExportReceiptIdOrderByIdAsc(100L)).thenReturn(List.of(detail));
-        when(inventoryLevelRepository.findByWarehouseIdAndProductIdIn(eq(1L), anyList()))
-                .thenReturn(List.of());
+        when(inventoryLevelRepository.findByProductIdAndWarehouseIdForUpdate(10L, 1L))
+                .thenReturn(Optional.of(inventoryLevel));
 
         exportReceiptService.approve(100L);
 
-        verify(inventoryLevelRepository).findByWarehouseIdAndProductIdIn(eq(1L), anyList());
-        verify(inventoryLevelRepository, never()).findByProductIdAndWarehouseId(any(), any());
+        verify(inventoryLevelRepository).findByProductIdAndWarehouseIdForUpdate(10L, 1L);
+        assertEquals(3, inventoryLevel.getQuantity());
     }
 
     @Test

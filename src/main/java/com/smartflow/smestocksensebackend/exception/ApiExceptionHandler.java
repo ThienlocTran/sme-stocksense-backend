@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import jakarta.validation.ConstraintViolationException;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -78,6 +79,12 @@ public class ApiExceptionHandler {
         }
 
         return new ApiErrorResponse("Dữ liệu không hợp lệ.", errors);
+    }
+
+    @ExceptionHandler(ConstraintViolationException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ApiErrorResponse handleConstraintViolation(ConstraintViolationException exception) {
+        return new ApiErrorResponse("Dữ liệu không hợp lệ.");
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)

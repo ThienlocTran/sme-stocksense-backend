@@ -27,6 +27,7 @@ public interface InventoryLevelRepository extends JpaRepository<InventoryLevel, 
          * @return Optional chứa thông tin tồn kho
          */
         Optional<InventoryLevel> findByProductIdAndWarehouseId(Long productId, Long warehouseId);
+        List<InventoryLevel> findByWarehouseId(Long warehouseId);
 
         /**
          * Tìm bản ghi tồn kho với Pessimistic Write Lock để tránh race condition.

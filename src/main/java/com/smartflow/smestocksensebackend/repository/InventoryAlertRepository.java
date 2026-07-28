@@ -11,30 +11,46 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * Note: [T177 - Khối Repository] Giao diện truy vấn dữ liệu cảnh báo tồn kho từ DB.
- * Kế thừa JpaRepository và JpaSpecificationExecutor để hỗ trợ lọc động cho Dashboard.
+ * Giao diện truy vấn dữ liệu cảnh báo tồn kho từ DB.
+ * Kế thừa JpaRepository và JpaSpecificationExecutor để hỗ trợ lọc động cho
+ * Dashboard.
  */
 @Repository
-public interface InventoryAlertRepository extends JpaRepository<InventoryAlert, Long>, JpaSpecificationExecutor<InventoryAlert> {
+public interface InventoryAlertRepository
+        extends JpaRepository<InventoryAlert, Long>, JpaSpecificationExecutor<InventoryAlert> {
 
     /**
-     * Kiểm tra nhanh sự tồn tại của phiếu cảnh báo theo danh sách trạng thái (Phục vụ Deduplication ở T179).
-     * @return true nếu đã tồn tại phiếu cảnh báo trong danh sách trạng thái cho cặp SP + Kho.
+     * Kiểm tra nhanh sự tồn tại của phiếu cảnh báo theo danh sách trạng thái (Phục
+     * vụ Deduplication ở T179).
+     * 
+     * @return true nếu đã tồn tại phiếu cảnh báo trong danh sách trạng thái cho cặp
+     *         SP + Kho.
      */
-    boolean existsByProductIdAndWarehouseIdAndStatusIn(Long productId, Long warehouseId, Collection<InventoryAlertStatus> statuses);
+    boolean existsByProductIdAndWarehouseIdAndStatusIn(Long productId, Long warehouseId,
+            Collection<InventoryAlertStatus> statuses);
 
     /**
-     * Tìm phiếu cảnh báo đầu tiên theo danh sách trạng thái (Phục vụ cập nhật hoặc tự động giải quyết khi nhập kho ở T183/T184).
+     * Tìm phiếu cảnh báo cũ nhất đang hoạt động theo danh sách trạng thái (Phục vụ Deduplication ở T179
+     * hoặc tự động giải quyết khi nhập kho ở T183/T184). Sắp xếp OrderByCreatedAtAsc giúp lấy đúng phiếu cũ nhất nếu có dữ liệu lịch sử.
      */
-    Optional<InventoryAlert> findFirstByProductIdAndWarehouseIdAndStatusIn(Long productId, Long warehouseId, Collection<InventoryAlertStatus> statuses);
+    Optional<InventoryAlert> findTopByProductIdAndWarehouseIdAndStatusInOrderByCreatedAtAsc(Long productId, Long warehouseId,
+            Collection<InventoryAlertStatus> statuses);
 
     /**
-     * Lấy danh sách phiếu cảnh báo theo kho hàng và trạng thái, sắp xếp mới nhất (Phục vụ Dashboard/List ở T181/T182).
+     * Tìm phiếu cảnh báo đầu tiên đang hoạt động theo danh sách trạng thái (Phục vụ Deduplication ở T179).
+     */
+    Optional<InventoryAlert> findFirstByProductIdAndWarehouseIdAndStatusIn(Long productId, Long warehouseId,
+            Collection<InventoryAlertStatus> statuses);
+
+    /**
+     * Lấy danh sách phiếu cảnh báo theo kho hàng và trạng thái, sắp xếp mới nhất
+     * (Phục vụ Dashboard/List ở T181/T182).
      */
     List<InventoryAlert> findByWarehouseIdAndStatusOrderByCreatedAtDesc(Long warehouseId, InventoryAlertStatus status);
 
     /**
-     * Đếm số lượng phiếu cảnh báo theo kho hàng và trạng thái (Phục vụ KPI huy hiệu trên Dashboard).
+     * Đếm số lượng phiếu cảnh báo theo kho hàng và trạng thái (Phục vụ KPI huy hiệu
+     * trên Dashboard).
      */
     long countByWarehouseIdAndStatus(Long warehouseId, InventoryAlertStatus status);
 }

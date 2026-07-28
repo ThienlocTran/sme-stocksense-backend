@@ -6,8 +6,9 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Note: [T177 - Unit Test] Kiểm thử cơ chế Transition Guard (canAcknowledge / canResolve)
- * và luồng nghiệp vụ chuyển đổi trạng thái (acknowledge / resolve) của Entity InventoryAlert.
+ * Kiểm thử cơ chế Transition Guard (canAcknowledge / canResolve)
+ * và luồng nghiệp vụ chuyển đổi trạng thái (acknowledge / resolve) của Entity
+ * InventoryAlert.
  */
 class InventoryAlertTest {
 

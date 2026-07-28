@@ -1,4 +1,4 @@
--- Note: [T177 - Khối 1] Tạo bảng canh_bao_ton_kho lưu trữ snapshot trạng thái và lịch sử xử lý tụt kho.
+-- Tạo bảng canh_bao_ton_kho lưu trữ snapshot trạng thái và lịch sử xử lý tụt kho.
 -- Sử dụng ON DELETE RESTRICT theo chuẩn Enterprise ERP để bảo toàn dấu vết kiểm toán (Audit Trail), cấm xóa sản phẩm/kho nếu đã có cảnh báo.
 CREATE TABLE canh_bao_ton_kho (
     id BIGSERIAL PRIMARY KEY,
@@ -20,7 +20,7 @@ CREATE TABLE canh_bao_ton_kho (
     CONSTRAINT fk_canh_bao_kho FOREIGN KEY (kho_id) REFERENCES kho (id) ON DELETE RESTRICT
 );
 
--- Note: [T177 - Khối 2] Tạo các Index phục vụ hiệu năng tra cứu danh sách trên Dashboard và hỗ trợ chống spam/tạo trùng lặp (T179).
+-- Tạo các Index phục vụ hiệu năng tra cứu danh sách trên Dashboard và hỗ trợ chống spam/tạo trùng lặp (T179).
 CREATE INDEX idx_canh_bao_sp_kho_trang_thai ON canh_bao_ton_kho (san_pham_id, kho_id, trang_thai);
 CREATE INDEX idx_canh_bao_kho_trang_thai_ngay ON canh_bao_ton_kho (kho_id, trang_thai, ngay_tao DESC);
 CREATE INDEX idx_canh_bao_muc_do ON canh_bao_ton_kho (muc_do);

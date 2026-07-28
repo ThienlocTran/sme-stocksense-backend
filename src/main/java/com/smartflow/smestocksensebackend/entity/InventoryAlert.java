@@ -8,9 +8,11 @@ import org.hibernate.annotations.UpdateTimestamp;
 import java.time.LocalDateTime;
 
 /**
- * Note: [T177 - Khối Entity] Thực thể InventoryAlert ánh xạ bảng canh_bao_ton_kho.
- * - Lưu trữ snapshot số lượng tồn kho (so_luong_hien_tai, ton_toi_thieu, ton_toi_da) tại thời điểm sinh cảnh báo.
- * - Tích hợp Transition Guard (canAcknowledge / canResolve / acknowledge / resolve) bảo vệ toàn vẹn vòng đời xử lý.
+ * Thực thể InventoryAlert ánh xạ bảng canh_bao_ton_kho.
+ * - Lưu trữ snapshot số lượng tồn kho (so_luong_hien_tai, ton_toi_thieu,
+ * ton_toi_da) tại thời điểm sinh cảnh báo.
+ * - Tích hợp Transition Guard (canAcknowledge / canResolve / acknowledge /
+ * resolve) bảo vệ toàn vẹn vòng đời xử lý.
  * - Sử dụng @Version Optimistic Lock chống xung đột cập nhật đồng thời.
  */
 @Entity
@@ -73,7 +75,7 @@ public class InventoryAlert {
     @Column(name = "ngay_giai_quyet")
     private LocalDateTime resolvedAt;
 
-    // Note: [T177 - Khối Transition Guard] Kiểm tra hợp lệ luồng chuyển trạng thái
+    // Kiểm tra hợp lệ luồng chuyển trạng thái
     public boolean canAcknowledge() {
         return this.status == InventoryAlertStatus.OPEN;
     }
@@ -84,6 +86,7 @@ public class InventoryAlert {
 
     /**
      * Chuyển trạng thái sang ACKNOWLEDGED (Đã xem/đang xử lý).
+     * 
      * @throws IllegalStateException nếu trạng thái hiện tại không phải OPEN.
      */
     public void acknowledge(String actor, String note) {
@@ -97,6 +100,7 @@ public class InventoryAlert {
 
     /**
      * Chuyển trạng thái sang RESOLVED (Đã giải quyết). Có tính idempotent.
+     * 
      * @throws IllegalStateException nếu trạng thái hiện tại không hợp lệ.
      */
     public void resolve(String actor) {

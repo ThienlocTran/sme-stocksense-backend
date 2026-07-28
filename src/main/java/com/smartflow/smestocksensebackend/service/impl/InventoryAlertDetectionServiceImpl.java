@@ -5,6 +5,7 @@ import com.smartflow.smestocksensebackend.dto.inventory.InventoryLevelProjection
 import com.smartflow.smestocksensebackend.entity.*;
 import com.smartflow.smestocksensebackend.repository.InventoryAlertRepository;
 import com.smartflow.smestocksensebackend.repository.InventoryLevelRepository;
+import com.smartflow.smestocksensebackend.service.AlertSeverityCalculator;
 import com.smartflow.smestocksensebackend.service.InventoryAlertDetectionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -39,6 +40,7 @@ public class InventoryAlertDetectionServiceImpl implements InventoryAlertDetecti
 
     private final InventoryLevelRepository inventoryLevelRepository;
     private final InventoryAlertRepository inventoryAlertRepository;
+    private final AlertSeverityCalculator alertSeverityCalculator;
 
     private static final String STATUS_HOAT_DONG = "HOAT_DONG";
     private static final String STOCK_STATUS_LOW_STOCK = "LOW_STOCK";
@@ -125,7 +127,7 @@ public class InventoryAlertDetectionServiceImpl implements InventoryAlertDetecti
      * nguyên/phục hồi thì bỏ qua (UNCHANGED).
      */
     private DeduplicationAction processAlertForStock(InventoryLevelProjection stock) {
-        Optional<InventoryAlert> existingOpt = inventoryAlertRepository.findTopByProductIdAndWarehouseIdAndStatusInOrderByCreatedAtAsc(
+        Optional<InventoryAlert> existingOpt = inventoryAlertRepository.findFirstByProductIdAndWarehouseIdAndStatusIn(
                 stock.getProductId(), stock.getWarehouseId(), ACTIVE_STATUSES);
 
         if (existingOpt.isPresent()) {
@@ -133,13 +135,20 @@ public class InventoryAlertDetectionServiceImpl implements InventoryAlertDetecti
             int newQty = stock.getCurrentQuantity() != null ? stock.getCurrentQuantity() : 0;
             int oldQty = existingAlert.getCurrentQuantity() != null ? existingAlert.getCurrentQuantity() : 0;
 
-            // Chỉ cập nhật currentQuantity khi số lượng tụt sâu hơn trước (newQty <
-            // oldQty).
-            // Không tự ý lấn sân sang logic leo thang Severity hay Resolve của
-            // T180/T183/T184.
-            if (newQty < oldQty) {
+            // Kiểm tra xem phiếu có cần nâng cấp từ WARNING lên CRITICAL do tồn kho cạn
+            // kiệt hay không
+            boolean escalated = alertSeverityCalculator.evaluateAndApplyEscalation(existingAlert, newQty,
+                    stock.getStatus());
+
+            // Note: [T179/T180 - Khối 2: Cập nhật DB khi tụt sâu hoặc leo thang]
+            // Chỉ lưu DB khi số lượng tụt sâu hơn trước (newQty < oldQty) hoặc khi xảy ra
+            // leo thang (escalated == true).
+            // Không lấn sân sang logic Resolve của T183/T184.
+            if (newQty < oldQty || escalated) {
                 try {
-                    existingAlert.setCurrentQuantity(newQty);
+                    if (newQty < oldQty) {
+                        existingAlert.setCurrentQuantity(newQty);
+                    }
                     inventoryAlertRepository.save(existingAlert);
                     return DeduplicationAction.UPDATED;
                 } catch (ObjectOptimisticLockingFailureException | DataIntegrityViolationException e) {
@@ -148,6 +157,7 @@ public class InventoryAlertDetectionServiceImpl implements InventoryAlertDetecti
                     return DeduplicationAction.RACE_IGNORED;
                 }
             } else {
+                // Note: [T179/T180 - Khối 3: Bỏ qua khi không thay đổi]
                 // Tồn kho giữ nguyên hoặc phục hồi nhẹ -> Bỏ qua không đổi
                 return DeduplicationAction.UNCHANGED;
             }
@@ -181,9 +191,8 @@ public class InventoryAlertDetectionServiceImpl implements InventoryAlertDetecti
         warehouseProxy.setName(stock.getWarehouse());
 
         int currentQty = stock.getCurrentQuantity() != null ? stock.getCurrentQuantity() : 0;
-        InventoryAlertSeverity severity = (currentQty <= 0 || STOCK_STATUS_OUT_OF_STOCK.equals(stock.getStatus()))
-                ? InventoryAlertSeverity.CRITICAL
-                : InventoryAlertSeverity.WARNING;
+        // Note: [T180 - Khối 4: Tính toán severity ban đầu qua Component chuyên biệt]
+        InventoryAlertSeverity severity = alertSeverityCalculator.calculate(currentQty, stock.getStatus());
 
         InventoryAlert alert = InventoryAlert.builder()
                 .product(productProxy)

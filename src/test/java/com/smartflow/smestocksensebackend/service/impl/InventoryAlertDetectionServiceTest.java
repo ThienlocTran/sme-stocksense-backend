@@ -9,12 +9,14 @@ import com.smartflow.smestocksensebackend.entity.Product;
 import com.smartflow.smestocksensebackend.entity.Warehouse;
 import com.smartflow.smestocksensebackend.repository.InventoryAlertRepository;
 import com.smartflow.smestocksensebackend.repository.InventoryLevelRepository;
+import com.smartflow.smestocksensebackend.service.AlertSeverityCalculator;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageImpl;
@@ -41,6 +43,9 @@ class InventoryAlertDetectionServiceTest {
 
         @Mock
         private InventoryAlertRepository inventoryAlertRepository;
+
+        @Spy
+        private AlertSeverityCalculator alertSeverityCalculator = new AlertSeverityCalculator();
 
         @InjectMocks
         private InventoryAlertDetectionServiceImpl detectionService;
@@ -218,6 +223,34 @@ class InventoryAlertDetectionServiceTest {
                 lenient().when(p.getMaxStock()).thenReturn(100);
                 lenient().when(p.getStatus()).thenReturn(status);
                 return p;
+        }
+
+        @Test
+        @DisplayName("testScanAndCreateAlerts: Khi phát hiện tồn kho tụt xuống cạn kiệt -> Tự động leo thang lên CRITICAL và bổ sung note audit")
+        void testScanAndCreateAlerts_WithEscalation_ShouldEscalateToCritical() {
+                InventoryLevelProjection escalatedItem = mockCreatedProjection(105L, 10L, 0, 20, "OUT_OF_STOCK");
+
+                when(inventoryLevelRepository.findInventory(
+                                eq(10L), isNull(), isNull(), eq("LOW_STOCK"), eq("HOAT_DONG"), eq("HOAT_DONG"),
+                                any(Pageable.class)))
+                                .thenReturn(new PageImpl<>(List.of(escalatedItem)));
+
+                // Phiếu cũ ban đầu đang ở mức WARNING với số lượng = 5
+                InventoryAlert existingAlert = mockAlert(1003L, 105L, 10L, 5);
+                when(inventoryAlertRepository.findFirstByProductIdAndWarehouseIdAndStatusIn(
+                                eq(105L), eq(10L), anyList())).thenReturn(Optional.of(existingAlert));
+
+                AlertDetectionResultResponse result = detectionService.scanAndCreateAlerts(10L);
+
+                assertEquals(1, result.totalScanned());
+                assertEquals(0, result.newAlertsCreated());
+                assertEquals(1, result.existingAlertsUpdated(), "Phải ghi nhận 1 phiếu được cập nhật số lượng và leo thang");
+                assertEquals(0, result.existingAlertsUnchanged());
+                assertEquals(0, existingAlert.getCurrentQuantity());
+                assertEquals(InventoryAlertSeverity.CRITICAL, existingAlert.getSeverity(), "Severity phải nâng lên CRITICAL");
+                assertTrue(existingAlert.getNote().contains("[Auto-Escalate]"), "Note phải chứa audit leo thang");
+
+                verify(inventoryAlertRepository, times(1)).save(existingAlert);
         }
 
         private InventoryAlert mockAlert(Long alertId, Long productId, Long warehouseId, Integer currentQty) {

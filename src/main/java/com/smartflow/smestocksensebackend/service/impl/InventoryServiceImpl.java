@@ -185,6 +185,8 @@ public class InventoryServiceImpl implements InventoryService {
     @Transactional(readOnly = true)
     public Page<InventoryLevelResponse> listInventory(Long warehouseId, Long productId, String keyword,
             String stockStatus, String warehouseStatus, String productStatus, Pageable pageable) {
+        // Note: [T176 - Khối 1] Kiểm tra tính hợp lệ của kho hàng và sản phẩm (nhanh
+        // chóng fail fast nếu ID không tồn tại).
         if (warehouseId != null && !warehouseRepository.existsById(warehouseId)) {
             throw new com.smartflow.smestocksensebackend.exception.NotFoundException("Kho hàng không tồn tại.");
         }
@@ -196,6 +198,8 @@ public class InventoryServiceImpl implements InventoryService {
         String normalizedWarehouseStatus;
         String normalizedProductStatus;
 
+        // Chuẩn hóa các tham số lọc trạng thái đầu vào, đảm bảo nhất quán trước khi đẩy
+        // xuống DB.
         try {
             normalizedStockStatus = normalizeStockStatus(stockStatus);
             normalizedWarehouseStatus = normalizeActiveStatus(warehouseStatus);
@@ -206,6 +210,8 @@ public class InventoryServiceImpl implements InventoryService {
 
         String keywordParam = (keyword == null || keyword.isBlank()) ? null : "%" + keyword.trim() + "%";
 
+        // Truy vấn trực tiếp từ Repository SQL (Single Source of Truth cho việc phân
+        // loại trạng thái).
         Page<InventoryLevelProjection> result = inventoryLevelRepository.findInventory(warehouseId, productId,
                 keywordParam, normalizedStockStatus, normalizedWarehouseStatus, normalizedProductStatus, pageable);
 
@@ -231,6 +237,8 @@ public class InventoryServiceImpl implements InventoryService {
             return null;
         }
 
+        // Note: [T176 - Khối 4] Chuyển đổi các biến thể status input về chuỗi chuẩn hóa
+        // tương ứng với các case trong SQL Repository.
         String normalized = stockStatus.trim().toUpperCase().replace('-', '_');
         return switch (normalized) {
             case "ZERO", "OUT_OF_STOCK", "OUT_OFSTOCK" -> "OUT_OF_STOCK";

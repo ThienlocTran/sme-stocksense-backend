@@ -57,4 +57,7 @@ public interface InventoryAlertRepository
      * trên Dashboard).
      */
     long countByWarehouseIdAndStatus(Long warehouseId, InventoryAlertStatus status);
+
+    @org.springframework.data.jpa.repository.Query("SELECT COUNT(a) FROM InventoryAlert a WHERE a.status IN :statuses")
+    long countByStatusIn(@org.springframework.data.repository.query.Param("statuses") java.util.List<com.smartflow.smestocksensebackend.entity.InventoryAlertStatus> statuses);
 }

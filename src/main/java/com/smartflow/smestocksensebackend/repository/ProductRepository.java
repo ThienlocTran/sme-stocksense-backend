@@ -39,4 +39,6 @@ public interface ProductRepository extends JpaRepository<Product, Long>, JpaSpec
     boolean existsBySkuIgnoreCaseAndIdNot(String sku, Long id);
 
     boolean existsByBarcodeIgnoreCaseAndIdNot(String barcode, Long id);
+
+    long countByStatus(com.smartflow.smestocksensebackend.entity.ProductStatus status);
 }

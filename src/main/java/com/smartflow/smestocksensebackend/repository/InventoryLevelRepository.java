@@ -44,6 +44,12 @@ public interface InventoryLevelRepository extends JpaRepository<InventoryLevel, 
         Optional<InventoryLevel> findByProductIdAndWarehouseIdForUpdate(@Param("productId") Long productId,
                         @Param("warehouseId") Long warehouseId);
 
+        @Query("SELECT v FROM InventoryLevel v JOIN v.warehouse w WHERE w.id = :warehouseId AND w.status = 'HOAT_DONG'")
+        List<InventoryLevel> findActiveInventoryByWarehouse(@Param("warehouseId") Long warehouseId);
+
+        @Query("SELECT COALESCE(SUM(i.quantity), 0) FROM InventoryLevel i")
+        long sumTotalQuantity();
+
         @Query("select i from InventoryLevel i where i.warehouse.id = :warehouseId and i.product.id in :productIds")
         List<InventoryLevel> findByWarehouseIdAndProductIdIn(@Param("warehouseId") Long warehouseId,
                         @Param("productIds") List<Long> productIds);

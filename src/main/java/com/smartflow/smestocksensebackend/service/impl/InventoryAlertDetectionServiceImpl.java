@@ -8,19 +8,28 @@ import com.smartflow.smestocksensebackend.repository.InventoryLevelRepository;
 import com.smartflow.smestocksensebackend.service.InventoryAlertDetectionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
- * Note: [T178 - Service Impl] Triển khai logic phát hiện tồn kho thấp theo chuẩn Ponytail:
- * - Tận dụng tối đa SQL Single Source of Truth (SSOT) từ T176 thông qua InventoryLevelRepository.
- * - Loại bỏ hoàn toàn phụ thuộc vào ProductRepository và WarehouseRepository do projection đã chứa đủ thông tin.
- * - Chống tạo trùng phiếu cảnh báo đang mở (Deduplication) từ T177 trước khi lưu DB.
- * - Tuân thủ Separation of Concerns: Chỉ CREATE phiếu mới, KHÔNG update/resolve phiếu cũ (để dành cho T183/T184).
+ * Triển khai logic phát hiện và chống tạo trùng phiếu cảnh báo tồn kho thấp:
+ * - Tận dụng tối đa SQL Single Source of Truth (SSOT) từ T176 thông qua
+ * InventoryLevelRepository.
+ * - Loại bỏ hoàn toàn phụ thuộc vào ProductRepository và WarehouseRepository do
+ * projection đã chứa đủ thông tin (Ponytail).
+ * - Phòng thủ 2 lớp (Application Check + DB Partial Unique Index V30) chống
+ * Race Condition và spam cảnh báo.
+ * - Tuân thủ Separation of Concerns: T179 chỉ làm Deduplication & Quantity
+ * Update khi tụt sâu hơn (newQty < oldQty),
+ * tuyệt đối KHÔNG lấn sân sang logic leo thang Severity của T180 hay Resolve
+ * của T183/T184.
  */
 @Service
 @RequiredArgsConstructor
@@ -37,15 +46,19 @@ public class InventoryAlertDetectionServiceImpl implements InventoryAlertDetecti
 
     private static final List<InventoryAlertStatus> ACTIVE_STATUSES = List.of(
             InventoryAlertStatus.OPEN,
-            InventoryAlertStatus.ACKNOWLEDGED
-    );
+            InventoryAlertStatus.ACKNOWLEDGED);
+
+    private enum DeduplicationAction {
+        CREATED, UPDATED, UNCHANGED, RACE_IGNORED
+    }
 
     @Override
     public AlertDetectionResultResponse scanAndCreateAlerts(Long warehouseId) {
-        // 1. Quét danh sách mặt hàng đang tụt kho hoặc hết hàng (LOW_STOCK bao gồm cả OUT_OF_STOCK trong SSOT T176)
+        // 1. Quét danh sách mặt hàng đang tụt kho hoặc hết hàng (LOW_STOCK bao gồm cả
+        // OUT_OF_STOCK trong SSOT T176)
         Page<InventoryLevelProjection> lowStockItems = inventoryLevelRepository.findInventory(
-                warehouseId, null, null, STOCK_STATUS_LOW_STOCK, STATUS_HOAT_DONG, STATUS_HOAT_DONG, Pageable.unpaged()
-        );
+                warehouseId, null, null, STOCK_STATUS_LOW_STOCK, STATUS_HOAT_DONG, STATUS_HOAT_DONG,
+                Pageable.unpaged());
 
         List<InventoryLevelProjection> items = lowStockItems.getContent();
         if (items.isEmpty()) {
@@ -55,62 +68,106 @@ public class InventoryAlertDetectionServiceImpl implements InventoryAlertDetecti
 
         int totalScanned = items.size();
         int newAlertsCreated = 0;
-        int existingAlertsSkipped = 0;
+        int existingAlertsUpdated = 0;
+        int existingAlertsUnchanged = 0;
+        int raceConditionIgnored = 0;
 
-        // 2. Duyệt qua từng mặt hàng theo luồng tuần tự đơn giản (Ponytail: không Stream phức tạp, không Async)
+        // 2. Duyệt qua từng mặt hàng theo luồng tuần tự đơn giản (Ponytail: không
+        // Stream phức tạp, không Async)
         for (InventoryLevelProjection stock : items) {
-            boolean exists = inventoryAlertRepository.existsByProductIdAndWarehouseIdAndStatusIn(
-                    stock.getProductId(), stock.getWarehouseId(), ACTIVE_STATUSES
-            );
-
-            if (exists) {
-                // Đã có phiếu OPEN hoặc ACKNOWLEDGED -> Bỏ qua không tạo trùng (Deduplication)
-                existingAlertsSkipped++;
-            } else {
-                // Chưa có phiếu đang xử lý -> Khởi tạo và lưu phiếu cảnh báo mới
-                createAndSaveAlert(stock);
-                newAlertsCreated++;
+            DeduplicationAction action = processAlertForStock(stock);
+            switch (action) {
+                case CREATED -> newAlertsCreated++;
+                case UPDATED -> existingAlertsUpdated++;
+                case UNCHANGED -> existingAlertsUnchanged++;
+                case RACE_IGNORED -> raceConditionIgnored++;
             }
         }
 
-        log.info("Hoàn tất quét tồn kho [{}]: Tổng quét={}, Tạo mới={}, Bỏ qua={}",
-                warehouseId, totalScanned, newAlertsCreated, existingAlertsSkipped);
+        log.info("Hoàn tất quét tồn kho [{}]: Tổng quét={}, Tạo mới={}, Cập nhật={}, Giữ nguyên={}, Bỏ qua Race={}",
+                warehouseId, totalScanned, newAlertsCreated, existingAlertsUpdated, existingAlertsUnchanged,
+                raceConditionIgnored);
 
-        return AlertDetectionResultResponse.of(totalScanned, newAlertsCreated, existingAlertsSkipped);
+        return AlertDetectionResultResponse.of(totalScanned, newAlertsCreated, existingAlertsUpdated,
+                existingAlertsUnchanged, raceConditionIgnored);
     }
 
     @Override
     public boolean checkAndCreateAlert(Long productId, Long warehouseId) {
         // 1. Kiểm tra trạng thái tồn kho của riêng mặt hàng này theo SSOT T176
         Page<InventoryLevelProjection> lowStockItems = inventoryLevelRepository.findInventory(
-                warehouseId, productId, null, STOCK_STATUS_LOW_STOCK, STATUS_HOAT_DONG, STATUS_HOAT_DONG, Pageable.unpaged()
-        );
+                warehouseId, productId, null, STOCK_STATUS_LOW_STOCK, STATUS_HOAT_DONG, STATUS_HOAT_DONG,
+                Pageable.unpaged());
 
-        // 2. Nếu không có trong danh sách LOW_STOCK -> Tồn kho bình thường hoặc ngừng hoạt động -> Trả về false
+        // 2. Nếu không có trong danh sách LOW_STOCK -> Tồn kho bình thường hoặc ngừng
+        // hoạt động -> Trả về false
         if (lowStockItems.isEmpty() || lowStockItems.getContent().isEmpty()) {
             return false;
         }
 
         InventoryLevelProjection stock = lowStockItems.getContent().get(0);
 
-        // 3. Kiểm tra deduplication: Nếu đã tồn tại phiếu OPEN hoặc ACKNOWLEDGED -> Trả về false (bỏ qua)
-        boolean exists = inventoryAlertRepository.existsByProductIdAndWarehouseIdAndStatusIn(
-                productId, warehouseId, ACTIVE_STATUSES
-        );
-
-        if (exists) {
-            return false;
+        // 3. Xử lý deduplication & leo thang số lượng qua helper method
+        DeduplicationAction action = processAlertForStock(stock);
+        if (action == DeduplicationAction.CREATED || action == DeduplicationAction.UPDATED) {
+            log.info("Spot Check: Đã xử lý [{}] phiếu cảnh báo cho Sản phẩm [{}] tại Kho [{}]", action, productId,
+                    warehouseId);
+            return true;
         }
+        return false;
+    }
 
-        // 4. Khởi tạo và tạo phiếu cảnh báo mới
-        createAndSaveAlert(stock);
-        log.info("Spot Check: Đã tạo phiếu cảnh báo tồn kho cho Sản phẩm [{}] tại Kho [{}]", productId, warehouseId);
-        return true;
+    /**
+     * Kiểm tra phiếu cũ theo danh sách trạng thái ACTIVE (OPEN, ACKNOWLEDGED).
+     * - Nếu chưa có -> Tạo mới (CREATED) hoặc bắt ngoại lệ từ DB Unique Index
+     * (RACE_IGNORED).
+     * - Nếu có rồi -> Chỉ cập nhật số lượng khi tụt sâu hơn (UPDATED), nếu giữ
+     * nguyên/phục hồi thì bỏ qua (UNCHANGED).
+     */
+    private DeduplicationAction processAlertForStock(InventoryLevelProjection stock) {
+        Optional<InventoryAlert> existingOpt = inventoryAlertRepository.findTopByProductIdAndWarehouseIdAndStatusInOrderByCreatedAtAsc(
+                stock.getProductId(), stock.getWarehouseId(), ACTIVE_STATUSES);
+
+        if (existingOpt.isPresent()) {
+            InventoryAlert existingAlert = existingOpt.get();
+            int newQty = stock.getCurrentQuantity() != null ? stock.getCurrentQuantity() : 0;
+            int oldQty = existingAlert.getCurrentQuantity() != null ? existingAlert.getCurrentQuantity() : 0;
+
+            // Chỉ cập nhật currentQuantity khi số lượng tụt sâu hơn trước (newQty <
+            // oldQty).
+            // Không tự ý lấn sân sang logic leo thang Severity hay Resolve của
+            // T180/T183/T184.
+            if (newQty < oldQty) {
+                try {
+                    existingAlert.setCurrentQuantity(newQty);
+                    inventoryAlertRepository.save(existingAlert);
+                    return DeduplicationAction.UPDATED;
+                } catch (ObjectOptimisticLockingFailureException | DataIntegrityViolationException e) {
+                    log.warn("Race condition hoặc Optimistic lock khi cập nhật phiếu [{}]: {}", existingAlert.getId(),
+                            e.getMessage());
+                    return DeduplicationAction.RACE_IGNORED;
+                }
+            } else {
+                // Tồn kho giữ nguyên hoặc phục hồi nhẹ -> Bỏ qua không đổi
+                return DeduplicationAction.UNCHANGED;
+            }
+        } else {
+            // Khởi tạo và tạo phiếu mới, bắt ngoại lệ từ DB Partial Unique Index (V30).
+            try {
+                createAndSaveAlert(stock);
+                return DeduplicationAction.CREATED;
+            } catch (DataIntegrityViolationException | ObjectOptimisticLockingFailureException e) {
+                log.warn("Race condition bị cản lại bởi DB unique index cho SP [{}] tại Kho [{}]: {}",
+                        stock.getProductId(), stock.getWarehouseId(), e.getMessage());
+                return DeduplicationAction.RACE_IGNORED;
+            }
+        }
     }
 
     /**
      * Helper method tạo và lưu bản ghi InventoryAlert vào DB từ dữ liệu projection.
-     * Sử dụng proxy object cho Product và Warehouse để tránh truy vấn DB (Ponytail zero N+1).
+     * Sử dụng proxy object cho Product và Warehouse để tránh truy vấn DB (Ponytail
+     * zero N+1).
      */
     private void createAndSaveAlert(InventoryLevelProjection stock) {
         Product productProxy = new Product();
@@ -137,7 +194,7 @@ public class InventoryAlertDetectionServiceImpl implements InventoryAlertDetecti
                 .severity(severity)
                 .status(InventoryAlertStatus.OPEN)
                 .handledBy(null) // Phiếu mới sinh ra chưa có nhân viên xử lý
-                .note("Tự động sinh bởi hệ thống phát hiện tồn kho thấp (T178)")
+                .note("Tự động sinh bởi hệ thống phát hiện tồn kho thấp (T178/T179)")
                 .build();
 
         inventoryAlertRepository.save(alert);

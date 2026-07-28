@@ -43,8 +43,8 @@ class InventoryAlertRepositoryTest {
     }
 
     @Test
-    @DisplayName("findFirstByProductIdAndWarehouseIdAndStatusIn trả về phiếu cảnh báo đang hoạt động đầu tiên")
-    void testFindFirst_ActiveAlert() {
+    @DisplayName("findTopByProductIdAndWarehouseIdAndStatusInOrderByCreatedAtAsc trả về phiếu cảnh báo cũ nhất đang hoạt động")
+    void testFindTop_ActiveAlert() {
         InventoryAlert mockAlert = InventoryAlert.builder()
                 .id(1L)
                 .currentQuantity(2)
@@ -53,11 +53,11 @@ class InventoryAlertRepositoryTest {
                 .status(InventoryAlertStatus.OPEN)
                 .build();
 
-        when(repository.findFirstByProductIdAndWarehouseIdAndStatusIn(
+        when(repository.findTopByProductIdAndWarehouseIdAndStatusInOrderByCreatedAtAsc(
                 eq(100L), eq(10L), any()))
                 .thenReturn(Optional.of(mockAlert));
 
-        Optional<InventoryAlert> result = repository.findFirstByProductIdAndWarehouseIdAndStatusIn(
+        Optional<InventoryAlert> result = repository.findTopByProductIdAndWarehouseIdAndStatusInOrderByCreatedAtAsc(
                 100L, 10L, List.of(InventoryAlertStatus.OPEN, InventoryAlertStatus.ACKNOWLEDGED));
 
         assertTrue(result.isPresent());

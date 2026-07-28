@@ -25,4 +25,6 @@ public interface WarehouseRepository extends JpaRepository<Warehouse, Long>, Jpa
     boolean existsByCodeIgnoreCase(String code);
 
     Optional<Warehouse> findByCodeIgnoreCase(String code);
+
+    long countByStatus(com.smartflow.smestocksensebackend.entity.WarehouseStatus status);
 }

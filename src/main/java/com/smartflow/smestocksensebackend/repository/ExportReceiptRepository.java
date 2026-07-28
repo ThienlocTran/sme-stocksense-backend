@@ -18,8 +18,12 @@ public interface ExportReceiptRepository extends JpaRepository<ExportReceipt, Lo
     @EntityGraph(attributePaths = { "warehouse", "createdBy" })
     Page<ExportReceipt> findByStatus(ExportReceiptStatus status, Pageable pageable);
 
-    @EntityGraph(attributePaths = { "warehouse", "createdBy" })
+    @EntityGraph(attributePaths = {"warehouse", "customer", "createdBy"})
     Page<ExportReceipt> findByStatusIn(Collection<ExportReceiptStatus> statuses, Pageable pageable);
+
+    long countByStatusIn(java.util.List<com.smartflow.smestocksensebackend.entity.ExportReceiptStatus> statuses);
+
+    long countByStatusInAndCreatedById(java.util.List<com.smartflow.smestocksensebackend.entity.ExportReceiptStatus> statuses, Long createdById);
 
     @EntityGraph(attributePaths = { "warehouse", "createdBy" })
     Optional<ExportReceipt> findById(Long id);

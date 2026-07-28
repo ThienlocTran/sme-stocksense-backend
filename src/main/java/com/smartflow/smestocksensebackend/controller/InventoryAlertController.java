@@ -5,6 +5,7 @@ import com.smartflow.smestocksensebackend.dto.response.InventoryAlertResponse;
 import com.smartflow.smestocksensebackend.entity.InventoryAlertSeverity;
 import com.smartflow.smestocksensebackend.entity.InventoryAlertStatus;
 import com.smartflow.smestocksensebackend.service.InventoryAlertQueryService;
+import com.smartflow.smestocksensebackend.service.InventoryAlertActionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -25,6 +26,7 @@ import java.util.List;
 public class InventoryAlertController {
 
     private final InventoryAlertQueryService inventoryAlertQueryService;
+    private final InventoryAlertActionService inventoryAlertActionService;
 
     @GetMapping
     public ResponseEntity<PageResponse<InventoryAlertResponse>> getAlerts(
@@ -45,5 +47,17 @@ public class InventoryAlertController {
                 pageable);
 
         return ResponseEntity.ok(PageResponse.from(resultPage));
+    }
+
+    /**
+     * T183: Đánh dấu cảnh báo đã tiếp nhận (Acknowledge)
+     */
+    @PutMapping("/{id}/acknowledge")
+    public ResponseEntity<InventoryAlertResponse> acknowledgeAlert(
+            @PathVariable Long id) {
+        
+        InventoryAlertResponse response = inventoryAlertActionService.acknowledgeAlert(id);
+        
+        return ResponseEntity.ok(response);
     }
 }

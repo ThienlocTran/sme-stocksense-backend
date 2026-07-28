@@ -18,6 +18,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
+import com.smartflow.smestocksensebackend.dto.mapper.InventoryAlertMapper;
+
 @Service
 @RequiredArgsConstructor
 public class InventoryAlertQueryServiceImpl implements InventoryAlertQueryService {
@@ -56,29 +58,7 @@ public class InventoryAlertQueryServiceImpl implements InventoryAlertQueryServic
         Page<InventoryAlert> alertPage = inventoryAlertRepository.findAll(spec, finalPageable);
 
         // Map sang DTO
-        return alertPage.map(this::mapToResponse);
+        return alertPage.map(InventoryAlertMapper::toResponse);
     }
 
-    private InventoryAlertResponse mapToResponse(InventoryAlert entity) {
-        var product = entity.getProduct();
-        var warehouse = entity.getWarehouse();
-
-        return InventoryAlertResponse.builder()
-                .id(entity.getId())
-                .productId(product != null ? product.getId() : null)
-                .productCode(product != null ? product.getCode() : null)
-                .productName(product != null ? product.getName() : null)
-                .warehouseId(warehouse != null ? warehouse.getId() : null)
-                .warehouseCode(warehouse != null ? warehouse.getCode() : null)
-                .warehouseName(warehouse != null ? warehouse.getName() : null)
-                .currentQuantity(entity.getCurrentQuantity())
-                .minStock(entity.getMinStock())
-                .severity(entity.getSeverity())
-                .status(entity.getStatus())
-                .note(entity.getNote())
-                .handledBy(entity.getHandledBy())
-                .createdAt(entity.getCreatedAt())
-                .updatedAt(entity.getUpdatedAt())
-                .build();
-    }
 }

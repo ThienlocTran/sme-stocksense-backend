@@ -1,6 +1,7 @@
 package com.smartflow.smestocksensebackend.service;
 
 import com.smartflow.smestocksensebackend.dto.inventory.AlertDetectionResultResponse;
+import com.smartflow.smestocksensebackend.event.InventoryLevelChangedEvent;
 
 /**
  * Service chuyên biệt phát hiện tồn kho thấp (Low Stock Detection Service).
@@ -31,5 +32,14 @@ public interface InventoryAlertDetectionService {
      *         không bị tụt kho hoặc đã bị bỏ qua (trùng lặp).
      */
     boolean checkAndCreateAlert(Long productId, Long warehouseId);
+
+    /**
+     * Xử lý biến động tồn kho từ Event (T184).
+     * - Nếu còn thiếu hụt (newQuantity <= minStock): tạo mới hoặc cập nhật cảnh báo hiện tại.
+     * - Nếu đã đủ hàng (newQuantity > minStock): tự động đóng (Auto-Resolve) cảnh báo OPEN/ACKNOWLEDGED.
+     *
+     * @param event Sự kiện biến động tồn kho từ Inventory Service.
+     */
+    void processInventoryChange(InventoryLevelChangedEvent event);
 
 }

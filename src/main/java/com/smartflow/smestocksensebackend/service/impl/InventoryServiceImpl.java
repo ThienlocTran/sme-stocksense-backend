@@ -16,7 +16,9 @@ import com.smartflow.smestocksensebackend.dto.inventory.InventoryLevelResponse;
 import com.smartflow.smestocksensebackend.exception.BadRequestException;
 import com.smartflow.smestocksensebackend.exception.ConflictException;
 import com.smartflow.smestocksensebackend.service.InventoryTransactionService;
+import com.smartflow.smestocksensebackend.event.InventoryLevelChangedEvent;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -38,6 +40,8 @@ public class InventoryServiceImpl implements InventoryService {
     private final ProductRepository productRepository;
     private final WarehouseRepository warehouseRepository;
     private final InventoryTransactionService inventoryTransactionService;
+    // T184: Publisher để bắn sự kiện biến động tồn kho sau khi commit
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * Tăng số lượng tồn kho cho một sản phẩm tại một kho hàng cụ thể (Không log
@@ -105,8 +109,7 @@ public class InventoryServiceImpl implements InventoryService {
             try {
                 inventoryLevelRepository.saveAndFlush(newInventory);
             } catch (DataIntegrityViolationException e) {
-                // Race condition: bản ghi đã được tạo bởi transaction khác -> query lại và cộng
-                // dồn
+                // Race condition: bản ghi đã được tạo bởi transaction khác -> query lại và cộng dồn
                 InventoryLevel locked = inventoryLevelRepository
                         .findByProductIdAndWarehouseIdForUpdate(productId, warehouseId)
                         .orElseThrow(() -> e);
@@ -123,6 +126,13 @@ public class InventoryServiceImpl implements InventoryService {
             existingInventory.setQuantity(quantityAfter);
             inventoryLevelRepository.saveAndFlush(existingInventory);
         }
+
+        // T184: Bắn sự kiện biến động tồn kho sau khi InventoryLevel đã cập nhật thành công.
+        // Dùng Integer minStock từ Product entity (đã load ở bước 1).
+        // Listener sẽ nhận event này SAU KHI transaction commit (AFTER_COMMIT) để xử lý cảnh báo.
+        Integer minStockValue = product.getMinStock();
+        eventPublisher.publishEvent(new InventoryLevelChangedEvent(
+                warehouseId, productId, quantityBefore, quantityAfter, minStockValue));
 
         // 6. Ghi log giao dịch kho loại NHAP_KHO nếu có phiếu nhập
         if (importReceipt != null) {

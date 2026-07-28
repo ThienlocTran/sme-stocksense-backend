@@ -3,6 +3,7 @@ package com.smartflow.smestocksensebackend.service.impl;
 import com.smartflow.smestocksensebackend.dto.inventory.AlertDetectionResultResponse;
 import com.smartflow.smestocksensebackend.dto.inventory.InventoryLevelProjection;
 import com.smartflow.smestocksensebackend.entity.*;
+import com.smartflow.smestocksensebackend.event.InventoryLevelChangedEvent;
 import com.smartflow.smestocksensebackend.repository.InventoryAlertRepository;
 import com.smartflow.smestocksensebackend.repository.InventoryLevelRepository;
 import com.smartflow.smestocksensebackend.service.AlertSeverityCalculator;
@@ -49,6 +50,9 @@ public class InventoryAlertDetectionServiceImpl implements InventoryAlertDetecti
     private static final List<InventoryAlertStatus> ACTIVE_STATUSES = List.of(
             InventoryAlertStatus.OPEN,
             InventoryAlertStatus.ACKNOWLEDGED);
+
+    // T184: Người xử lý hệ thống khi Auto-Resolve (không phải user thủ công)
+    private static final String SYSTEM_USER = "System";
 
     private enum DeduplicationAction {
         CREATED, UPDATED, UNCHANGED, RACE_IGNORED
@@ -176,7 +180,7 @@ public class InventoryAlertDetectionServiceImpl implements InventoryAlertDetecti
 
     /**
      * Helper method tạo và lưu bản ghi InventoryAlert vào DB từ dữ liệu projection.
-     * Sử dụng proxy object cho Product và Warehouse để tránh truy vấn DB (Ponytail
+     * Sử dụng proxy object cho Product và Warehouse để tránh trụy vấn DB (Ponytail
      * zero N+1).
      */
     private void createAndSaveAlert(InventoryLevelProjection stock) {
@@ -204,6 +208,104 @@ public class InventoryAlertDetectionServiceImpl implements InventoryAlertDetecti
                 .status(InventoryAlertStatus.OPEN)
                 .handledBy(null) // Phiếu mới sinh ra chưa có nhân viên xử lý
                 .note("Tự động sinh bởi hệ thống phát hiện tồn kho thấp (T178/T179)")
+                .build();
+
+        inventoryAlertRepository.save(alert);
+    }
+
+    // --- T184: Xử lý biến động tồn kho từ Event ---
+
+    @Override
+    @Transactional
+    public void processInventoryChange(InventoryLevelChangedEvent event) {
+        int newQty = event.newQuantity() != null ? event.newQuantity() : 0;
+        int minStock = event.minStock() != null ? event.minStock() : 0;
+
+        if (newQty <= minStock) {
+            // Khối 1: Tồn kho vẫn ở mức thiếu hụt -> Tạo mới hoặc cập nhật cảnh báo
+            handleLowStockFromEvent(event, newQty);
+        } else {
+            // Khối 2: Tồn kho đã về mức an toàn -> Auto-Resolve nếu có cảnh báo đang mở
+            autoResolveAlertFromEvent(event);
+        }
+    }
+
+    /**
+     * [T184 - Khối 1] Tồn kho thiếu hụt: Kiểm tra cảnh báo hiện tại và tạo/cập nhật.
+     * Deduplication: nếu đã có cảnh báo OPEN/ACKNOWLEDGED thì cập nhật currentQuantity, không tạo thêm.
+     */
+    private void handleLowStockFromEvent(InventoryLevelChangedEvent event, int newQty) {
+        Optional<InventoryAlert> existingOpt = inventoryAlertRepository
+                .findFirstByProductIdAndWarehouseIdAndStatusIn(
+                        event.productId(), event.warehouseId(), ACTIVE_STATUSES);
+
+        if (existingOpt.isPresent()) {
+            // Đã có cảnh báo đang mở -> Chỉ cập nhật số lượng hiện tại (không tạo thêm, chống duplicate)
+            InventoryAlert existing = existingOpt.get();
+            existing.setCurrentQuantity(newQty);
+            // Hibernate dirty checking tự flush khi commit, không cần gọi save()
+            log.info("[T184] Cập nhật số lượng cảnh báo [{}] -> {}", existing.getId(), newQty);
+        } else {
+            // Chưa có cảnh báo nào -> Tạo mới
+            try {
+                createAlertFromEvent(event, newQty);
+                log.info("[T184] Tạo mới cảnh báo cho SP [{}] tại Kho [{}]",
+                        event.productId(), event.warehouseId());
+            } catch (DataIntegrityViolationException | ObjectOptimisticLockingFailureException e) {
+                // DB Unique Index (T179) đã chặn race condition
+                log.warn("[T184] Race condition bị chặn bởi DB constraint: SP [{}] Kho [{}]",
+                        event.productId(), event.warehouseId());
+            }
+        }
+    }
+
+    /**
+     * [T184 - Khối 2] Tồn kho đã đủ hàng (newQuantity > minStock) -> Auto-Resolve.
+     * Chỉ đồng cảnh báo nếu hiện có cảnh báo OPEN hoặc ACKNOWLEDGED.
+     * Ghi handledBy = "System" để phân biệt với user xử lý thủ công.
+     */
+    private void autoResolveAlertFromEvent(InventoryLevelChangedEvent event) {
+        Optional<InventoryAlert> existingOpt = inventoryAlertRepository
+                .findFirstByProductIdAndWarehouseIdAndStatusIn(
+                        event.productId(), event.warehouseId(), ACTIVE_STATUSES);
+
+        if (existingOpt.isEmpty()) {
+            // Không có cảnh báo đang mở -> Bỏ qua (no-op)
+            return;
+        }
+
+        // Gọi resolve() tại Domain method của Entity (Idempotent, bảo vệ state machine)
+        InventoryAlert alert = existingOpt.get();
+        alert.resolve(SYSTEM_USER);
+        // Hibernate dirty checking tự flush, không cần gọi save()
+        log.info("[T184] Auto-Resolve cảnh báo [{}] cho SP [{}] tại Kho [{}]",
+                alert.getId(), event.productId(), event.warehouseId());
+    }
+
+    /**
+     * Tạo mới cảnh báo từ event (dùng proxy entity để tránh N+1 query).
+     */
+    private void createAlertFromEvent(InventoryLevelChangedEvent event, int newQty) {
+        Product productProxy = new Product();
+        productProxy.setId(event.productId());
+
+        Warehouse warehouseProxy = new Warehouse();
+        warehouseProxy.setId(event.warehouseId());
+
+        // Tính severity dựa trên tỷ lệ tồn kho hiện tại / minStock
+        // Dùng status string tương đương như SSOT batch scan
+        String stockStatus = newQty <= 0 ? "OUT_OF_STOCK" : "LOW_STOCK";
+        InventoryAlertSeverity severity = alertSeverityCalculator.calculate(newQty, stockStatus);
+
+        InventoryAlert alert = InventoryAlert.builder()
+                .product(productProxy)
+                .warehouse(warehouseProxy)
+                .currentQuantity(newQty)
+                .minStock(event.minStock())
+                .severity(severity)
+                .status(InventoryAlertStatus.OPEN)
+                .handledBy(null)
+                .note("Tự động sinh từ biến động tồn kho (T184)")
                 .build();
 
         inventoryAlertRepository.save(alert);

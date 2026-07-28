@@ -99,9 +99,12 @@ public class InventoryController {
             @RequestParam(required = false) String productStatus,
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
+        // Kiểm tra hợp lệ các tham số lọc trạng thái kho và sản phẩm.
         validateOptionalValue(warehouseStatus, ALLOWED_ACTIVE_STATUSES, "Trạng thái kho không hợp lệ");
         validateOptionalValue(productStatus, ALLOWED_ACTIVE_STATUSES, "Trạng thái sản phẩm không hợp lệ");
         Pageable pageable = PageRequest.of(page, size, Sort.unsorted());
+        // Gọi service với tham số 'LOW_STOCK' để lấy toàn bộ mặt hàng thuộc diện cảnh
+        // báo (bao gồm LOW_STOCK và OUT_OF_STOCK theo Rule 2 trong Spec).
         return PageResponse.from(inventoryService.listInventory(warehouseId, productId, keyword, "LOW_STOCK",
                 warehouseStatus, productStatus, pageable));
     }

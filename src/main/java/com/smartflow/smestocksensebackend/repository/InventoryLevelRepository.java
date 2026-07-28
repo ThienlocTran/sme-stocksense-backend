@@ -27,6 +27,7 @@ public interface InventoryLevelRepository extends JpaRepository<InventoryLevel, 
          * @return Optional chứa thông tin tồn kho
          */
         Optional<InventoryLevel> findByProductIdAndWarehouseId(Long productId, Long warehouseId);
+
         List<InventoryLevel> findByWarehouseId(Long warehouseId);
 
         /**
@@ -47,12 +48,27 @@ public interface InventoryLevelRepository extends JpaRepository<InventoryLevel, 
         List<InventoryLevel> findByWarehouseIdAndProductIdIn(@Param("warehouseId") Long warehouseId,
                         @Param("productIds") List<Long> productIds);
 
+        /**
+         * Chuẩn hóa Rule cảnh báo tồn kho thấp (Single Source of Truth tại DB SQL).
+         * 1. Luồng đánh giá trạng thái (Evaluation Order):
+         * - OUT_OF_STOCK: t.so_luong <= 0 (khẩn cấp Critical, bao gồm tồn kho = 0 và âm
+         * do chênh lệch kiểm kê).
+         * - LOW_STOCK: sp.ton_toi_thieu IS NOT NULL AND sp.ton_toi_thieu > 0 AND
+         * t.so_luong <= sp.ton_toi_thieu (cảnh báo Warning).
+         * - OVER_STOCK: sp.ton_toi_da IS NOT NULL AND sp.ton_toi_da > 0 AND t.so_luong
+         * > sp.ton_toi_da (vượt định mức).
+         * - NORMAL: Các trường hợp còn lại nằm trong ngưỡng an toàn.
+         * 2. Phạm vi cảnh báo (/low-stock):
+         * - Khi tham số :stockStatus = 'LOW_STOCK', query sẽ lọc cả 2 nhóm
+         * ('LOW_STOCK', 'OUT_OF_STOCK')
+         * để quản lý kho không bỏ sót mặt hàng đã hết hẳn theo Rule 2 trong Spec.
+         */
         @Query(value = "SELECT t.id AS \"inventoryId\", sp.id AS \"productId\", sp.ma_san_pham AS \"productCode\", sp.ten_san_pham AS \"productName\", sp.ma_vach AS \"barcode\", "
                         +
                         "k.id AS \"warehouseId\", k.ma_kho AS \"warehouseCode\", k.ten_kho AS \"warehouse\", t.so_luong AS \"currentQuantity\", sp.ton_toi_thieu AS \"minStock\", sp.ton_toi_da AS \"maxStock\", "
                         +
                         "sp.trang_thai AS \"productStatus\", k.trang_thai AS \"warehouseStatus\", " +
-                        "CASE WHEN t.so_luong = 0 THEN 'OUT_OF_STOCK' WHEN t.so_luong <= sp.ton_toi_thieu THEN 'LOW_STOCK' WHEN sp.ton_toi_da IS NOT NULL AND t.so_luong >= sp.ton_toi_da THEN 'OVER_STOCK' ELSE 'NORMAL' END AS \"status\", t.ngay_cap_nhat AS \"lastUpdatedAt\" "
+                        "CASE WHEN t.so_luong <= 0 THEN 'OUT_OF_STOCK' WHEN sp.ton_toi_thieu IS NOT NULL AND sp.ton_toi_thieu > 0 AND t.so_luong <= sp.ton_toi_thieu THEN 'LOW_STOCK' WHEN sp.ton_toi_da IS NOT NULL AND sp.ton_toi_da > 0 AND t.so_luong > sp.ton_toi_da THEN 'OVER_STOCK' ELSE 'NORMAL' END AS \"status\", t.ngay_cap_nhat AS \"lastUpdatedAt\" "
                         +
                         "FROM ton_kho t " +
                         "JOIN san_pham sp ON sp.id = t.san_pham_id " +
@@ -64,7 +80,7 @@ public interface InventoryLevelRepository extends JpaRepository<InventoryLevel, 
                         "OR sp.ma_vach::text ILIKE :keyword " +
                         "OR k.ma_kho::text ILIKE :keyword " +
                         "OR k.ten_kho::text ILIKE :keyword)) " +
-                        "AND (:stockStatus IS NULL OR (CASE WHEN t.so_luong = 0 THEN 'OUT_OF_STOCK' WHEN t.so_luong <= sp.ton_toi_thieu THEN 'LOW_STOCK' WHEN sp.ton_toi_da IS NOT NULL AND t.so_luong >= sp.ton_toi_da THEN 'OVER_STOCK' ELSE 'NORMAL' END) = :stockStatus) "
+                        "AND (:stockStatus IS NULL OR (:stockStatus = 'LOW_STOCK' AND (CASE WHEN t.so_luong <= 0 THEN 'OUT_OF_STOCK' WHEN sp.ton_toi_thieu IS NOT NULL AND sp.ton_toi_thieu > 0 AND t.so_luong <= sp.ton_toi_thieu THEN 'LOW_STOCK' WHEN sp.ton_toi_da IS NOT NULL AND sp.ton_toi_da > 0 AND t.so_luong > sp.ton_toi_da THEN 'OVER_STOCK' ELSE 'NORMAL' END) IN ('LOW_STOCK', 'OUT_OF_STOCK')) OR (:stockStatus != 'LOW_STOCK' AND (CASE WHEN t.so_luong <= 0 THEN 'OUT_OF_STOCK' WHEN sp.ton_toi_thieu IS NOT NULL AND sp.ton_toi_thieu > 0 AND t.so_luong <= sp.ton_toi_thieu THEN 'LOW_STOCK' WHEN sp.ton_toi_da IS NOT NULL AND sp.ton_toi_da > 0 AND t.so_luong > sp.ton_toi_da THEN 'OVER_STOCK' ELSE 'NORMAL' END) = :stockStatus)) "
                         +
                         "AND (:warehouseStatus IS NULL OR k.trang_thai::text = :warehouseStatus) " +
                         "AND (:productStatus IS NULL OR sp.trang_thai::text = :productStatus) " +
@@ -79,7 +95,7 @@ public interface InventoryLevelRepository extends JpaRepository<InventoryLevel, 
                                         "OR sp.ma_vach::text ILIKE :keyword " +
                                         "OR k.ma_kho::text ILIKE :keyword " +
                                         "OR k.ten_kho::text ILIKE :keyword)) " +
-                                        "AND (:stockStatus IS NULL OR (CASE WHEN t.so_luong = 0 THEN 'OUT_OF_STOCK' WHEN t.so_luong <= sp.ton_toi_thieu THEN 'LOW_STOCK' WHEN sp.ton_toi_da IS NOT NULL AND t.so_luong >= sp.ton_toi_da THEN 'OVER_STOCK' ELSE 'NORMAL' END) = :stockStatus) "
+                                        "AND (:stockStatus IS NULL OR (:stockStatus = 'LOW_STOCK' AND (CASE WHEN t.so_luong <= 0 THEN 'OUT_OF_STOCK' WHEN sp.ton_toi_thieu IS NOT NULL AND sp.ton_toi_thieu > 0 AND t.so_luong <= sp.ton_toi_thieu THEN 'LOW_STOCK' WHEN sp.ton_toi_da IS NOT NULL AND sp.ton_toi_da > 0 AND t.so_luong > sp.ton_toi_da THEN 'OVER_STOCK' ELSE 'NORMAL' END) IN ('LOW_STOCK', 'OUT_OF_STOCK')) OR (:stockStatus != 'LOW_STOCK' AND (CASE WHEN t.so_luong <= 0 THEN 'OUT_OF_STOCK' WHEN sp.ton_toi_thieu IS NOT NULL AND sp.ton_toi_thieu > 0 AND t.so_luong <= sp.ton_toi_thieu THEN 'LOW_STOCK' WHEN sp.ton_toi_da IS NOT NULL AND sp.ton_toi_da > 0 AND t.so_luong > sp.ton_toi_da THEN 'OVER_STOCK' ELSE 'NORMAL' END) = :stockStatus)) "
                                         +
                                         "AND (:warehouseStatus IS NULL OR k.trang_thai::text = :warehouseStatus) " +
                                         "AND (:productStatus IS NULL OR sp.trang_thai::text = :productStatus)", nativeQuery = true)

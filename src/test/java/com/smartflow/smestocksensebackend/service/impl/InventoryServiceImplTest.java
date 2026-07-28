@@ -23,6 +23,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
@@ -54,6 +55,9 @@ class InventoryServiceImplTest {
 
         @Mock
         private InventoryTransactionService inventoryTransactionService;
+
+        @Mock
+        private ApplicationEventPublisher eventPublisher;
 
         @InjectMocks
         private InventoryServiceImpl inventoryService;

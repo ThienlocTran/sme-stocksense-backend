@@ -1,6 +1,10 @@
 spring:
   application:
     name: sme-stocksense-backend
+  profiles:
+    active: neon
+  config:
+    import: optional:classpath:.env[.properties]
 
 server:
   port: 8080

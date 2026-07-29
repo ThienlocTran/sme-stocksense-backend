@@ -33,4 +33,8 @@ public interface ImportReceiptRepository extends JpaRepository<ImportReceipt, Lo
 
     @EntityGraph(attributePaths = {"warehouse", "supplier", "createdBy"})
     Page<ImportReceipt> findByStatusIn(Collection<ImportReceiptStatus> statuses, Pageable pageable);
+
+    long countByStatusIn(java.util.List<com.smartflow.smestocksensebackend.entity.ImportReceiptStatus> statuses);
+
+    long countByStatusInAndCreatedById(java.util.List<com.smartflow.smestocksensebackend.entity.ImportReceiptStatus> statuses, Long createdById);
 }

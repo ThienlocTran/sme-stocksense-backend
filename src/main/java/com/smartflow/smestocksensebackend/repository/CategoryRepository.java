@@ -8,11 +8,15 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface CategoryRepository extends JpaRepository<Category, Long>, JpaSpecificationExecutor<Category> {
 
     @Query("select count(category) > 0 from Category category where lower(trim(category.code)) = lower(trim(:code))")
     boolean existsByNormalizedCode(@Param("code") String code);
+
+    @Query("select category from Category category where lower(trim(category.code)) = lower(trim(:code))")
+    Optional<Category> findByNormalizedCode(@Param("code") String code);
 
     @Query("select count(category) > 0 from Category category where lower(trim(category.name)) = lower(trim(:name))")
     boolean existsByNormalizedName(@Param("name") String name);

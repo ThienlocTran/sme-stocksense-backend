@@ -291,7 +291,10 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
         ImportReceipt receipt = importReceiptRepository.findById(receiptId)
                 .orElseThrow(() -> new NotFoundException("Phieu nhap khong ton tai."));
         ensureCanSubmitForApproval(actor, receipt);
-        if (!ImportReceiptStatePolicy.canTransition(receipt.getStatus(), ImportReceiptStatus.CHO_DUYET_CAP_1)) {
+        if (!ImportReceiptStatePolicy.isEditable(receipt.getStatus())) {
+            throw new ConflictException("Chi duoc gui duyet phieu nhap o trang thai NHAP hoac TU_CHOI.");
+        }
+        if (!ImportReceiptStatePolicy.canTransition(receipt.getStatus(), ImportReceiptStatus.CHO_DUYET_CAP_2)) {
             throw new ConflictException("Chi duoc gui duyet phieu nhap o trang thai NHAP hoac TU_CHOI.");
         }
 
@@ -314,10 +317,13 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
 
         try {
             receipt.setTotalAmount(totalAmount);
-            receipt.setStatus(ImportReceiptStatus.CHO_DUYET_CAP_1);
+            LocalDateTime submittedAt = LocalDateTime.now();
+            receipt.setStatus(ImportReceiptStatus.CHO_DUYET_CAP_2);
             receipt.setRejectionReason(null);
             receipt.setSubmittedBy(actor);
-            receipt.setSubmittedAt(LocalDateTime.now());
+            receipt.setSubmittedAt(submittedAt);
+            receipt.setLevel1ApprovedBy(actor);
+            receipt.setLevel1ApprovedAt(submittedAt);
             ImportReceipt savedReceipt = importReceiptRepository.saveAndFlush(receipt);
             saveHistory(savedReceipt, actor, ImportReceiptAction.GUI_DUYET, null);
             return ImportReceiptDraftResponse.from(savedReceipt, details);
@@ -474,10 +480,15 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
         LocalDateTime now = LocalDateTime.now();
 
         ImportReceiptStatus nextStatus;
-        if (current == ImportReceiptStatus.CHO_DUYET_CAP_1 || current == ImportReceiptStatus.CHO_DUYET_CAP_2) {
+        ImportReceiptAction action;
+        
+        if (current == ImportReceiptStatus.CHO_DUYET_CAP_1
+                || current == ImportReceiptStatus.CHO_DUYET_CAP_2) {
+            // Cấp 1 do người tạo xác nhận khi gửi; quản lý/admin duyệt là cấp 2 và kết thúc duyệt.
             nextStatus = ImportReceiptStatus.CHO_HANG_VE;
             receipt.setLevel2ApprovedBy(actor);
             receipt.setLevel2ApprovedAt(now);
+            action = ImportReceiptAction.DUYET_CAP_2;
         } else {
             throw new ConflictException("Chi duoc duyet phieu nhap o trang thai cho duyet (CHO_DUYET_CAP_1 hoac CHO_DUYET_CAP_2).");
         }
@@ -490,7 +501,7 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
         try {
             receipt.setStatus(nextStatus);
             ImportReceipt savedReceipt = importReceiptRepository.saveAndFlush(receipt);
-            saveHistory(savedReceipt, actor, ImportReceiptAction.DUYET_CAP_2, null);
+            saveHistory(savedReceipt, actor, action, null);
             List<ImportReceiptDetail> details = importReceiptDetailRepository.findByDocumentIdOrderByIdAsc(receiptId);
             return ImportReceiptDraftResponse.from(savedReceipt, details);
         } catch (OptimisticLockingFailureException exception) {

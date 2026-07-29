@@ -5,6 +5,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.stereotype.Repository;
 
+import java.util.Optional;
+
 /**
  * Interface Repository quản lý các giao tiếp CSDL liên quan đến thực thể Warehouse.
  * Kế thừa JpaRepository để hỗ trợ các tính năng CRUD mặc định.
@@ -21,4 +23,8 @@ public interface WarehouseRepository extends JpaRepository<Warehouse, Long>, Jpa
      * @return true nếu đã tồn tại mã kho này, ngược lại là false
      */
     boolean existsByCodeIgnoreCase(String code);
+
+    Optional<Warehouse> findByCodeIgnoreCase(String code);
+
+    long countByStatus(com.smartflow.smestocksensebackend.entity.WarehouseStatus status);
 }

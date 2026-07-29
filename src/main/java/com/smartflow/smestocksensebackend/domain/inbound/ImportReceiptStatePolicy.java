@@ -22,14 +22,17 @@ public final class ImportReceiptStatePolicy {
     static {
         TRANSITIONS.put(ImportReceiptStatus.NHAP, EnumSet.of(
                 ImportReceiptStatus.CHO_DUYET_CAP_1,
+                ImportReceiptStatus.CHO_DUYET_CAP_2,
                 ImportReceiptStatus.HUY
         ));
         TRANSITIONS.put(ImportReceiptStatus.TU_CHOI, EnumSet.of(
                 ImportReceiptStatus.CHO_DUYET_CAP_1,
+                ImportReceiptStatus.CHO_DUYET_CAP_2,
                 ImportReceiptStatus.NHAP,
                 ImportReceiptStatus.HUY
         ));
         TRANSITIONS.put(ImportReceiptStatus.CHO_DUYET_CAP_1, EnumSet.of(
+                ImportReceiptStatus.CHO_DUYET_CAP_2,
                 ImportReceiptStatus.CHO_HANG_VE,
                 ImportReceiptStatus.TU_CHOI
         ));

@@ -1,6 +1,17 @@
 spring:
   application:
     name: sme-stocksense-backend
+  profiles:
+    active: neon
+  config:
+    import: optional:classpath:.env[.properties]
 
 server:
   port: 8080
+  servlet:
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
+      force-request: true
+      force-response: true

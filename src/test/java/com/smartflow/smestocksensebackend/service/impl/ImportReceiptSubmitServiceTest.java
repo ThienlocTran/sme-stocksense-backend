@@ -112,17 +112,19 @@ class ImportReceiptSubmitServiceTest {
     }
 
     @Test
-    void submitForApproval_ownerWithValidDraftShouldMoveToWaitingLevel1() {
+    void submitForApproval_ownerWithValidDraftShouldMoveToWaitingLevel2() {
         stubSuccessfulSubmit(owner);
 
         ImportReceiptDraftResponse response = importReceiptService.submitForApproval(123L);
 
-        assertEquals("CHO_DUYET_CAP_1", response.status());
-        assertEquals(ImportReceiptStatus.CHO_DUYET_CAP_1, receipt.getStatus());
+        assertEquals("CHO_DUYET_CAP_2", response.status());
+        assertEquals(ImportReceiptStatus.CHO_DUYET_CAP_2, receipt.getStatus());
         assertEquals(owner, receipt.getSubmittedBy());
         assertNotNull(receipt.getSubmittedAt());
         assertEquals(owner.getId(), response.submittedById());
         assertNotNull(response.submittedAt());
+        assertEquals(owner, receipt.getLevel1ApprovedBy());
+        assertNotNull(receipt.getLevel1ApprovedAt());
         assertEquals(new BigDecimal("1250000.00"), receipt.getTotalAmount());
         assertEquals(new BigDecimal("1250000.00"), detail.getExpectedLineTotal());
     }
@@ -136,19 +138,19 @@ class ImportReceiptSubmitServiceTest {
         importReceiptService.submitForApproval(123L);
 
         assertEquals(admin, receipt.getSubmittedBy());
-        assertEquals(ImportReceiptStatus.CHO_DUYET_CAP_1, receipt.getStatus());
+        assertEquals(ImportReceiptStatus.CHO_DUYET_CAP_2, receipt.getStatus());
     }
 
     @Test
-    void submitForApproval_rejectedReceiptShouldMoveToWaitingLevel1AndClearRejectionReason() {
+    void submitForApproval_rejectedReceiptShouldMoveToWaitingLevel2AndClearRejectionReason() {
         receipt.setStatus(ImportReceiptStatus.TU_CHOI);
         receipt.setRejectionReason("Sai don gia nhap.");
         stubSuccessfulSubmit(owner);
 
         ImportReceiptDraftResponse response = importReceiptService.submitForApproval(123L);
 
-        assertEquals("CHO_DUYET_CAP_1", response.status());
-        assertEquals(ImportReceiptStatus.CHO_DUYET_CAP_1, receipt.getStatus());
+        assertEquals("CHO_DUYET_CAP_2", response.status());
+        assertEquals(ImportReceiptStatus.CHO_DUYET_CAP_2, receipt.getStatus());
         assertNull(receipt.getRejectionReason());
     }
 
@@ -264,7 +266,7 @@ class ImportReceiptSubmitServiceTest {
     }
 
     @Test
-    void submitForApproval_shouldKeepHeaderAndNotWriteApprovalFields() {
+    void submitForApproval_shouldKeepHeaderAndRecordCreatorAsLevel1Approver() {
         stubSuccessfulSubmit(owner);
 
         importReceiptService.submitForApproval(123L);
@@ -274,8 +276,8 @@ class ImportReceiptSubmitServiceTest {
         assertEquals(warehouse, receipt.getWarehouse());
         assertEquals(supplier, receipt.getSupplier());
         assertEquals("Can duyet", receipt.getNote());
-        assertNull(receipt.getLevel1ApprovedBy());
-        assertNull(receipt.getLevel1ApprovedAt());
+        assertEquals(owner, receipt.getLevel1ApprovedBy());
+        assertNotNull(receipt.getLevel1ApprovedAt());
         assertNull(receipt.getLevel2ApprovedBy());
         assertNull(receipt.getLevel2ApprovedAt());
     }

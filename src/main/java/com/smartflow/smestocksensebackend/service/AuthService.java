@@ -68,7 +68,8 @@ public class AuthService {
         return new LoginResponse(
                 accessToken, "Bearer", jwtService.getExpirationSeconds(),
                 employee.getId(), employee.getFullName(), employee.getEmail(),
-                employee.getRole().getCode().name(), employee.getStatus().name()
+                employee.getRole().getCode().name(), employee.getStatus().name(),
+                employee.getAvatarUrl()
         );
     }
 

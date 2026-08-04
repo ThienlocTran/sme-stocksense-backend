@@ -6,6 +6,12 @@ spring:
   config:
     import: optional:classpath:.env[.properties]
 
+cloudinary:
+  cloud-name: ${CLOUDINARY_CLOUD_NAME:}
+  api-key: ${CLOUDINARY_API_KEY:}
+  api-secret: ${CLOUDINARY_API_SECRET:}
+  env: ${CLOUDINARY_ENV:dev}
+
 server:
   port: 8080
   servlet:

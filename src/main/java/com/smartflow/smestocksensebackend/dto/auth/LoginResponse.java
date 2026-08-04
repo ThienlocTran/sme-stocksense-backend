@@ -8,6 +8,7 @@ public record LoginResponse(
         String fullName,
         String email,
         String role,
-        String status
+        String status,
+        String avatarUrl
 ) {
 }

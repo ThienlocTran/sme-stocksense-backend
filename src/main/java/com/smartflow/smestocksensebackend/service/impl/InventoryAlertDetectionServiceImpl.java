@@ -45,7 +45,7 @@ public class InventoryAlertDetectionServiceImpl implements InventoryAlertDetecti
 
     private static final String STATUS_HOAT_DONG = "HOAT_DONG";
     private static final String STOCK_STATUS_LOW_STOCK = "LOW_STOCK";
-    private static final String STOCK_STATUS_OUT_OF_STOCK = "OUT_OF_STOCK";
+
 
     private static final List<InventoryAlertStatus> ACTIVE_STATUSES = List.of(
             InventoryAlertStatus.OPEN,

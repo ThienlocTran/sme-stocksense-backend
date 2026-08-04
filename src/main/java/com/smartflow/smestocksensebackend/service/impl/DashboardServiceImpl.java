@@ -1,7 +1,7 @@
 package com.smartflow.smestocksensebackend.service.impl;
 
 import com.smartflow.smestocksensebackend.entity.Employee;
-import com.smartflow.smestocksensebackend.entity.Role;
+
 import com.smartflow.smestocksensebackend.dto.response.DashboardOverviewResponse;
 import com.smartflow.smestocksensebackend.dto.response.OverviewMetricsDTO;
 import com.smartflow.smestocksensebackend.dto.response.PendingTasksDTO;

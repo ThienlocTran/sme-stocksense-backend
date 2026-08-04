@@ -45,7 +45,7 @@ import com.smartflow.smestocksensebackend.repository.ImportReceiptRepository;
 import com.smartflow.smestocksensebackend.repository.PartnerRepository;
 import com.smartflow.smestocksensebackend.repository.WarehouseRepository;
 import com.smartflow.smestocksensebackend.repository.DiscrepancyReportRepository;
-import com.smartflow.smestocksensebackend.repository.DiscrepancyReportDetailRepository;
+
 import com.smartflow.smestocksensebackend.entity.DiscrepancyReport;
 import com.smartflow.smestocksensebackend.entity.DiscrepancyReportDetail;
 import com.smartflow.smestocksensebackend.service.ImportReceiptCodeGenerator;
@@ -112,7 +112,7 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
     private final ImportReceiptItemValidator itemValidator;
     private final ImportReceiptAmountCalculator amountCalculator;
     private final DiscrepancyReportRepository discrepancyReportRepository;
-    private final DiscrepancyReportDetailRepository discrepancyReportDetailRepository;
+
     private final InventoryService inventoryService;
     private final ImportReceiptHistoryRepository importReceiptHistoryRepository;
 

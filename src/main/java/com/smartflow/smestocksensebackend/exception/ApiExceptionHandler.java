@@ -58,6 +58,12 @@ public class ApiExceptionHandler {
         return new ApiErrorResponse(exception.getMessage());
     }
 
+    @ExceptionHandler(UnsupportedMediaTypeException.class)
+    @ResponseStatus(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
+    public ApiErrorResponse handleUnsupportedMediaType(UnsupportedMediaTypeException exception) {
+        return new ApiErrorResponse(exception.getMessage());
+    }
+
     @ExceptionHandler(ConflictException.class)
     @ResponseStatus(HttpStatus.CONFLICT)
     public ApiErrorResponse handleConflict(ConflictException exception) {

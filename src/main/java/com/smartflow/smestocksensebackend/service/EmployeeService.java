@@ -6,13 +6,18 @@ import com.smartflow.smestocksensebackend.dto.employee.EmployeePageResponse;
 import com.smartflow.smestocksensebackend.dto.employee.ResetPasswordRequest;
 import com.smartflow.smestocksensebackend.dto.employee.ResetPasswordResponse;
 import com.smartflow.smestocksensebackend.dto.employee.UpdateEmployeeRequest;
+import com.smartflow.smestocksensebackend.dto.employee.ProfileResponse;
+import com.smartflow.smestocksensebackend.dto.employee.UpdateProfileRequest;
 import com.smartflow.smestocksensebackend.entity.Employee;
 import com.smartflow.smestocksensebackend.entity.EmployeeStatus;
 import com.smartflow.smestocksensebackend.entity.Role;
 import com.smartflow.smestocksensebackend.entity.RoleCode;
+import com.smartflow.smestocksensebackend.exception.AccountInactiveException;
 import com.smartflow.smestocksensebackend.exception.BadRequestException;
 import com.smartflow.smestocksensebackend.exception.FieldValidationException;
+import com.smartflow.smestocksensebackend.exception.InvalidCredentialsException;
 import com.smartflow.smestocksensebackend.exception.NotFoundException;
+import com.smartflow.smestocksensebackend.exception.UnsupportedMediaTypeException;
 import com.smartflow.smestocksensebackend.repository.EmployeeRepository;
 import com.smartflow.smestocksensebackend.repository.RoleRepository;
 import jakarta.persistence.criteria.Predicate;
@@ -40,8 +45,8 @@ public class EmployeeService {
     private static final int MAX_PAGE_SIZE = 100;
     private static final Pattern EMAIL_PATTERN = Pattern.compile(
             "^[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}$",
-            Pattern.CASE_INSENSITIVE
-    );
+            Pattern.CASE_INSENSITIVE);
+    private static final Pattern PHONE_PATTERN = Pattern.compile("^(\\+84|0)[3|5|7|8|9][0-9]{8}$");
     private static final String EMAIL_UNIQUE_CONSTRAINT = "nhan_vien_email_key";
     private static final String DUPLICATE_EMAIL_MESSAGE = "Email đã tồn tại.";
     private static final String DUPLICATE_PHONE_MESSAGE = "Số điện thoại đã tồn tại.";
@@ -49,6 +54,114 @@ public class EmployeeService {
     private final EmployeeRepository employeeRepository;
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
+    private final CloudinaryService cloudinaryService;
+
+    @Transactional(readOnly = true)
+    public ProfileResponse getMyProfile() {
+        Long currentId = getCurrentEmployeeId();
+        if (currentId == null) throw new InvalidCredentialsException();
+        Employee employee = findEmployeeById(currentId);
+        if (employee.getStatus() != EmployeeStatus.HOAT_DONG) throw new AccountInactiveException();
+        return mapToProfileResponse(employee);
+    }
+
+    @Transactional
+    public ProfileResponse updateMyProfile(UpdateProfileRequest request) {
+        Long currentId = getCurrentEmployeeId();
+        if (currentId == null) throw new InvalidCredentialsException();
+        Employee employee = findEmployeeById(currentId);
+        if (employee.getStatus() != EmployeeStatus.HOAT_DONG) throw new AccountInactiveException();
+
+        String phone = normalizePhone(request.phone());
+        if (phone != null) {
+            if (!PHONE_PATTERN.matcher(phone).matches()) {
+                throw new FieldValidationException(Map.of("phone", "Số điện thoại không hợp lệ"));
+            }
+            if (employeeRepository.existsByPhoneAndIdNot(phone, currentId)) {
+                throw duplicatePhoneException();
+            }
+        }
+
+        employee.setFullName(request.fullName().trim());
+        employee.setPhone(phone);
+        employee.setGender(request.gender());
+        employee.setDateOfBirth(request.dateOfBirth());
+        
+        return mapToProfileResponse(employeeRepository.saveAndFlush(employee));
+    }
+
+    public ProfileResponse uploadMyAvatar(org.springframework.web.multipart.MultipartFile file) {
+        Long currentId = getCurrentEmployeeId();
+        if (currentId == null) throw new InvalidCredentialsException();
+        Employee employee = findEmployeeById(currentId);
+        if (employee.getStatus() != EmployeeStatus.HOAT_DONG) throw new AccountInactiveException();
+
+        if (file.getSize() > 2 * 1024 * 1024) throw new BadRequestException("Kích thước file không được vượt quá 2MB.");
+        
+        try {
+            java.awt.image.BufferedImage image = javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(file.getBytes()));
+            if (image == null) {
+                throw new UnsupportedMediaTypeException("File không phải là định dạng ảnh hợp lệ.");
+            }
+            if (image.getWidth() > 4000 || image.getHeight() > 4000) {
+                throw new BadRequestException("Kích thước ảnh (pixel) quá lớn. Tối đa 4000x4000.");
+            }
+        } catch (BadRequestException | UnsupportedMediaTypeException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new UnsupportedMediaTypeException("File không phải là định dạng ảnh hợp lệ.");
+        }
+
+        Map<String, Object> result;
+        try {
+            result = cloudinaryService.uploadAvatar(file, employee.getId());
+        } catch (java.io.IOException e) {
+            throw new BadRequestException("Upload ảnh thất bại: " + e.getMessage());
+        }
+
+        String secureUrl = result.get("secure_url").toString();
+        String newPublicId = result.get("public_id").toString();
+        String oldPublicId = employee.getAvatarPublicId();
+
+        employee.setAvatarUrl(secureUrl);
+        employee.setAvatarPublicId(newPublicId);
+
+        try {
+            employeeRepository.saveAndFlush(employee);
+        } catch (Exception e) {
+            cloudinaryService.deleteAvatarByPublicId(newPublicId);
+            throw new BadRequestException("Lỗi lưu trữ DB, đã xóa ảnh vừa upload để rollback.");
+        }
+
+        if (oldPublicId != null) {
+            cloudinaryService.deleteAvatarByPublicId(oldPublicId);
+        }
+
+        return mapToProfileResponse(employee);
+    }
+
+    private String normalizePhone(String phone) {
+        if (phone == null || phone.isBlank()) return null;
+        String normalized = phone.replaceAll("\\s+", "");
+        if (normalized.startsWith("+84")) {
+            normalized = "0" + normalized.substring(3);
+        }
+        return normalized;
+    }
+
+    private ProfileResponse mapToProfileResponse(Employee employee) {
+        return new ProfileResponse(
+                employee.getId(),
+                employee.getFullName(),
+                employee.getEmail(),
+                employee.getPhone(),
+                employee.getRole() != null ? employee.getRole().getCode().name() : null,
+                employee.getStatus() != null ? employee.getStatus().name() : null,
+                employee.getAvatarUrl(),
+                employee.getGender(),
+                employee.getDateOfBirth()
+        );
+    }
 
     @Transactional
     public ResetPasswordResponse resetEmployeePassword(Long id, ResetPasswordRequest request) {
@@ -161,8 +274,7 @@ public class EmployeeService {
             int size,
             String keyword,
             String status,
-            String roleCode
-    ) {
+            String roleCode) {
         validatePageRequest(page, size);
 
         EmployeeStatus parsedStatus = parseEnum(EmployeeStatus.class, status, "status");
@@ -172,8 +284,7 @@ public class EmployeeService {
         PageRequest pageRequest = PageRequest.of(
                 page,
                 size,
-                Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id"))
-        );
+                Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id")));
 
         return EmployeePageResponse.from(employeeRepository
                 .findAll(buildSpecification(keywordLike, parsedStatus, parsedRoleCode), pageRequest)
@@ -183,16 +294,14 @@ public class EmployeeService {
     private Specification<Employee> buildSpecification(
             String keywordLike,
             EmployeeStatus status,
-            RoleCode roleCode
-    ) {
+            RoleCode roleCode) {
         return (root, query, criteriaBuilder) -> {
             List<Predicate> predicates = new ArrayList<>();
 
             if (keywordLike != null) {
                 predicates.add(criteriaBuilder.or(
                         criteriaBuilder.like(criteriaBuilder.lower(root.get("fullName")), keywordLike),
-                        criteriaBuilder.like(criteriaBuilder.lower(root.get("email")), keywordLike)
-                ));
+                        criteriaBuilder.like(criteriaBuilder.lower(root.get("email")), keywordLike)));
             }
 
             if (status != null) {

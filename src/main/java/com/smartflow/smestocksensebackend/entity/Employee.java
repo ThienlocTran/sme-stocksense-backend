@@ -20,6 +20,7 @@ import org.hibernate.annotations.UpdateTimestamp;
 import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
+import java.time.LocalDate;
 
 @Getter
 @Setter
@@ -61,4 +62,18 @@ public class Employee {
     @UpdateTimestamp
     @Column(name = "ngay_cap_nhat")
     private LocalDateTime updatedAt;
+
+    @Column(name = "avatar_url", length = 500)
+    private String avatarUrl;
+
+    @Column(name = "avatar_public_id", length = 255)
+    private String avatarPublicId;
+
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
+    @Column(name = "gioi_tinh", columnDefinition = "gioi_tinh")
+    private Gender gender;
+
+    @Column(name = "ngay_sinh")
+    private LocalDate dateOfBirth;
 }

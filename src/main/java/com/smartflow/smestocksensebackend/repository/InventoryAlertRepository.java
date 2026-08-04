@@ -21,7 +21,7 @@ public interface InventoryAlertRepository
 
     @Override
     @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"product", "warehouse"})
-    org.springframework.data.domain.Page<InventoryAlert> findAll(@org.springframework.lang.Nullable org.springframework.data.jpa.domain.Specification<InventoryAlert> spec, org.springframework.data.domain.Pageable pageable);
+    org.springframework.data.domain.Page<InventoryAlert> findAll(org.springframework.data.jpa.domain.Specification<InventoryAlert> spec, org.springframework.data.domain.Pageable pageable);
 
     /**
      * Kiểm tra nhanh sự tồn tại của phiếu cảnh báo theo danh sách trạng thái (Phục

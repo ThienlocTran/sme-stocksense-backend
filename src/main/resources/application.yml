@@ -4,7 +4,8 @@ spring:
   profiles:
     active: neon
   config:
-    import: optional:classpath:.env[.properties]
+    # Đã sửa classpath: thành file:
+    import: optional:file:.env[.properties]
 
 server:
   port: 8080

@@ -11,7 +11,7 @@ out/
 *.log
 logs/
 
-# Environment / secrets
+# Bỏ qua các file biến môi trường chứa mật khẩu
 .env
 .env.*
 !.env.example

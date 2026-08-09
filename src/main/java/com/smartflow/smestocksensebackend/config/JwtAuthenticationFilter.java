@@ -21,7 +21,6 @@ import java.io.IOException;
 import java.util.List;
 
 @Component
-@RequiredArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private static final Logger log = LoggerFactory.getLogger(JwtAuthenticationFilter.class);
@@ -29,6 +28,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
     private final EmployeeRepository employeeRepository;
+
+    public JwtAuthenticationFilter(JwtService jwtService, @org.springframework.context.annotation.Lazy EmployeeRepository employeeRepository) {
+        this.jwtService = jwtService;
+        this.employeeRepository = employeeRepository;
+    }
 
     @Override
     protected void doFilterInternal(

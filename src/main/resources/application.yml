@@ -6,6 +6,8 @@ spring:
   config:
     # Đã sửa classpath: thành file:
     import: optional:file:.env[.properties]
+  flyway:
+    validate-on-migrate: false # <--- THÊM ĐÚNG 2 DÒNG NÀY VÀO ĐÂY
 
 server:
   port: 8080

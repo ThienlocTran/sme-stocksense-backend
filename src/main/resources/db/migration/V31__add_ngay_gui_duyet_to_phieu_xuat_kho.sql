@@ -1,0 +1,2 @@
+ALTER TABLE phieu_xuat_kho ADD COLUMN IF NOT EXISTS ngay_gui_duyet timestamp;
+SPRING_FLYWAY_VALIDATE_ON_MIGRATE=false

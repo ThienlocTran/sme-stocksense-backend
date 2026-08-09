@@ -1,0 +1,215 @@
+{
+	"info": {
+		"_postman_id": "t204-inventory-alert-test",
+		"name": "T204: Inventory Count → Alert → Dashboard Test",
+		"description": "Test luồng xuyên suốt:\n1. Tạo phiếu kiểm kê giảm tồn kho\n2. Kiểm tra tồn kho giảm xuống\n3. Kiểm tra cảnh báo LOW_STOCK tự động\n4. Kiểm tra Dashboard count tăng lên",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{access_token}}",
+				"type": "string"
+			}
+		]
+	},
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:8080",
+			"type": "string"
+		},
+		{
+			"key": "product_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "warehouse_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "import_receipt_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "initial_low_stock_count",
+			"value": "0",
+			"type": "string"
+		}
+	],
+	"item": [
+		{
+			"name": "0. Setup - Login",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"// Lưu access token vào biến",
+							"if (pm.response.code === 200) {",
+							"    var jsonData = pm.response.json();",
+							"    pm.collectionVariables.set('access_token', jsonData.token);",
+							"    console.log('✅ Đăng nhập thành công');",
+							"}"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"email\": \"admin@smartflow.com\",\n    \"password\": \"admin123\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{base_url}}/api/auth/login",
+					"host": ["{{base_url}}"],
+					"path": ["api", "auth", "login"]
+				},
+				"description": "Đăng nhập để lấy access token"
+			},
+			"response": []
+		}
+	]
+}
+,
+		{
+			"name": "1. Kiểm tra tồn kho ban đầu (TRƯỚC kiểm kê)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status code is 200', function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"// Lưu số lượng tồn kho ban đầu",
+							"if (pm.response.code === 200) {",
+							"    var jsonData = pm.response.json();",
+							"    if (jsonData.content && jsonData.content.length > 0) {",
+							"        var initialQuantity = jsonData.content[0].currentQuantity;",
+							"        var initialStatus = jsonData.content[0].status;",
+							"        console.log('📊 TỒN KHO BAN ĐẦU: ' + initialQuantity);",
+							"        console.log('📊 TRẠNG THÁI: ' + initialStatus);",
+							"        pm.collectionVariables.set('initial_quantity', initialQuantity);",
+							"    }",
+							"}"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{base_url}}/api/inventory?productId={{product_id}}&warehouseId={{warehouse_id}}",
+					"host": ["{{base_url}}"],
+					"path": ["api", "inventory"],
+					"query": [
+						{"key": "productId", "value": "{{product_id}}"},
+						{"key": "warehouseId", "value": "{{warehouse_id}}"}
+					]
+				},
+				"description": "BƯỚC 1: Kiểm tra số lượng tồn kho ban đầu của sản phẩm A"
+			},
+			"response": []
+		},
+		{
+			"name": "2. Kiểm tra số lượng cảnh báo LOW_STOCK ban đầu",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status code is 200', function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"// Lưu số lượng cảnh báo ban đầu để so sánh sau",
+							"if (pm.response.code === 200) {",
+							"    var jsonData = pm.response.json();",
+							"    var initialCount = jsonData.totalElements;",
+							"    pm.collectionVariables.set('initial_low_stock_count', initialCount);",
+							"    console.log('⚠️ SỐ LƯỢNG CẢNH BÁO LOW_STOCK BAN ĐẦU: ' + initialCount);",
+							"}"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{base_url}}/api/inventory/low-stock?warehouseId={{warehouse_id}}&page=0&size=100",
+					"host": ["{{base_url}}"],
+					"path": ["api", "inventory", "low-stock"],
+					"query": [
+						{"key": "warehouseId", "value": "{{warehouse_id}}"},
+						{"key": "page", "value": "0"},
+						{"key": "size", "value": "100"}
+					]
+				},
+				"description": "BƯỚC 2: Lấy số lượng cảnh báo LOW_STOCK ban đầu (Dashboard count)"
+			},
+			"response": []
+		},
+		{
+			"name": "3. Kiểm hàng - Ghi nhận số lượng thực tế (giảm)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status code is 200', function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test('Đánh dấu chênh lệch', function () {",
+							"    var jsonData = pm.response.json();",
+							"    pm.expect(jsonData.items[0].rowStatus).to.eql('CHENH_LECH');",
+							"    console.log('✅ ĐÃ ĐÁNH DẤU CHÊNH LỆCH');",
+							"    console.log('📦 Số lượng thực nhận: ' + jsonData.items[0].actualReceivedQuantity);",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "PUT",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"items\": [\n        {\n            \"productId\": {{product_id}},\n            \"actualQuantity\": 8,\n            \"condition\": \"TOT\"\n        }\n    ]\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{base_url}}/api/import-receipts/{{import_receipt_id}}/inspect",
+					"host": ["{{base_url}}"],
+					"path": ["api", "import-receipts", "{{import_receipt_id}}", "inspect"]
+				},
+				"description": "BƯỚC 3: Kiểm hàng - Phát hiện chỉ nhận được 8 cái (thay vì 20)\n⚠️ Chênh lệch: -12 cái"
+			},
+			"response": []
+		}
+	]
+}

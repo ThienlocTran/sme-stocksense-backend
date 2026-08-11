@@ -59,9 +59,6 @@ class ImportReceiptCompleteServiceTest {
     private DiscrepancyReportRepository discrepancyReportRepository;
 
     @Mock
-    private DiscrepancyReportDetailRepository discrepancyReportDetailRepository;
-
-    @Mock
     private InventoryService inventoryService;
 
     private ImportReceiptServiceImpl importReceiptService;
@@ -86,7 +83,6 @@ class ImportReceiptCompleteServiceTest {
                 itemValidator,
                 amountCalculator,
                 discrepancyReportRepository,
-                discrepancyReportDetailRepository,
                 inventoryService,
                 null
         );

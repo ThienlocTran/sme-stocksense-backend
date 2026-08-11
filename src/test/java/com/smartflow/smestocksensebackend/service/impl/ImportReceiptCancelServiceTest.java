@@ -87,7 +87,6 @@ class ImportReceiptCancelServiceTest {
                 amountCalculator,
                 null,
                 null,
-                null,
                 null
         );
         owner = employee(5L, RoleCode.EMPLOYEE);

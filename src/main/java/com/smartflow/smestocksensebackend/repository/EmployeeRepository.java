@@ -12,6 +12,9 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long>, JpaSp
     @EntityGraph(attributePaths = "role")
     Optional<Employee> findByEmailIgnoreCase(String email);
 
+    @EntityGraph(attributePaths = "role")
+    Optional<Employee> findById(Long id);
+
     boolean existsByEmailIgnoreCase(String email);
 
     boolean existsByEmailIgnoreCaseAndIdNot(String email, Long id);

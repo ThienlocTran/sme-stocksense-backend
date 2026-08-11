@@ -11,13 +11,8 @@ class ExcelImportTemplateContractTest {
     @Test
     void workbookSheets_shouldMatchOfficialScope() {
         assertEquals(List.of(
-                "00_HuongDan",
                 "01_SanPham",
-                "02_TonDauKy",
-                "03_DanhMuc_ThamChieu",
-                "04_Kho_ThamChieu",
-                "05_GiaTri_HopLe",
-                "06_QuyTac_KiemTra"
+                "02_TonDauKy"
         ), ExcelImportTemplateConstants.OFFICIAL_WORKBOOK_SHEETS);
     }
 

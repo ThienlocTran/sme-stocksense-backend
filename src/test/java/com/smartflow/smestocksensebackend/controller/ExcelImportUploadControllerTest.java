@@ -89,7 +89,9 @@ class ExcelImportUploadControllerTest {
                 .andExpect(jsonPath("$.trangThai").value(ExcelImportStatus.SAN_SANG_IMPORT.name()))
                 .andExpect(jsonPath("$.tongSoDong").value(2))
                 .andExpect(jsonPath("$.soDongHopLe").value(2))
-                .andExpect(jsonPath("$.soDongLoi").value(0));
+                .andExpect(jsonPath("$.soDongLoi").value(0))
+                .andExpect(jsonPath("$.valid").value(true))
+                .andExpect(jsonPath("$.canConfirm").value(true));
     }
 
     @Test

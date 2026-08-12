@@ -1,6 +1,7 @@
 package com.smartflow.smestocksensebackend.excelimport;
 
 import com.smartflow.smestocksensebackend.dto.excelimport.ExcelImportUploadResponse;
+import com.smartflow.smestocksensebackend.dto.excelimport.ExcelImportValidationResponse;
 import com.smartflow.smestocksensebackend.entity.Employee;
 import com.smartflow.smestocksensebackend.entity.ExcelImport;
 import com.smartflow.smestocksensebackend.entity.ExcelImportStatus;
@@ -25,6 +26,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -37,6 +39,9 @@ class ExcelImportUploadServiceTest {
 
     @Mock
     private WarehouseRepository warehouseRepository;
+
+    @Mock
+    private ExcelImportValidationService excelImportValidationService;
 
     @InjectMocks
     private ExcelImportUploadService excelImportUploadService;
@@ -54,6 +59,9 @@ class ExcelImportUploadServiceTest {
             saved.setId(99L);
             return saved;
         });
+        when(excelImportValidationService.validateAndPersistErrors(eq(99L), any(),
+                eq(ExcelImportMode.PRODUCT_ONLY.name()), eq(null)))
+                .thenReturn(new ExcelImportValidationResponse(true, ExcelImportMode.PRODUCT_ONLY.name(), 2, 2, 0, List.of()));
 
         ExcelImportUploadResponse response = excelImportUploadService.upload(
                 xlsxFile("products.xlsx", new byte[]{1, 2, 3}),
@@ -69,19 +77,25 @@ class ExcelImportUploadServiceTest {
         assertThat(saved.getFilePath()).startsWith("metadata-only/");
         assertThat(saved.getImportType()).isEqualTo(ExcelImportMode.PRODUCT_ONLY.name());
         assertThat(saved.getWarehouse()).isNull();
-        assertThat(saved.getStatus()).isEqualTo(ExcelImportStatus.CHO_XU_LY);
-        assertThat(saved.getTotalRows()).isZero();
-        assertThat(saved.getValidRows()).isZero();
+        assertThat(saved.getStatus()).isEqualTo(ExcelImportStatus.SAN_SANG_IMPORT);
+        assertThat(saved.getTotalRows()).isEqualTo(2);
+        assertThat(saved.getValidRows()).isEqualTo(2);
         assertThat(saved.getErrorRows()).isZero();
         assertThat(saved.getCreatedBy()).isSameAs(uploader);
         assertThat(response.id()).isEqualTo(99L);
-        assertThat(response.trangThai()).isEqualTo(ExcelImportStatus.CHO_XU_LY.name());
+        assertThat(response.trangThai()).isEqualTo(ExcelImportStatus.SAN_SANG_IMPORT.name());
     }
 
     @Test
     void upload_openingStockWithoutWarehouseShouldCreatePendingMetadata() {
         authenticateUploader();
-        when(excelImportRepository.save(any(ExcelImport.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(excelImportRepository.save(any(ExcelImport.class))).thenAnswer(invocation -> {
+            ExcelImport saved = invocation.getArgument(0);
+            saved.setId(100L);
+            return saved;
+        });
+        when(excelImportValidationService.validateAndPersistErrors(any(), any(), any(), any()))
+                .thenReturn(new ExcelImportValidationResponse(true, ExcelImportMode.PRODUCT_WITH_OPENING_STOCK.name(), 1, 1, 0, List.of()));
 
         excelImportUploadService.upload(
                 xlsxFile("opening-stock.xlsx", new byte[]{1, 2, 3}),
@@ -103,7 +117,13 @@ class ExcelImportUploadServiceTest {
         warehouse.setId(10L);
 
         when(warehouseRepository.findById(10L)).thenReturn(Optional.of(warehouse));
-        when(excelImportRepository.save(any(ExcelImport.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(excelImportRepository.save(any(ExcelImport.class))).thenAnswer(invocation -> {
+            ExcelImport saved = invocation.getArgument(0);
+            saved.setId(101L);
+            return saved;
+        });
+        when(excelImportValidationService.validateAndPersistErrors(any(), any(), any(), any()))
+                .thenReturn(new ExcelImportValidationResponse(true, ExcelImportMode.PRODUCT_ONLY.name(), 1, 1, 0, List.of()));
 
         excelImportUploadService.upload(
                 xlsxFile("products.xlsx", new byte[]{1, 2, 3}),
@@ -135,6 +155,19 @@ class ExcelImportUploadServiceTest {
         ))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessage("file must not be empty.");
+
+        verify(excelImportRepository, never()).save(any());
+    }
+
+    @Test
+    void upload_tooLargeFileShouldReturnBadRequest() {
+        assertThatThrownBy(() -> excelImportUploadService.upload(
+                xlsxFile("products.xlsx", new byte[(10 * 1024 * 1024) + 1]),
+                ExcelImportMode.PRODUCT_ONLY.name(),
+                10L
+        ))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessage("file size must not exceed 10MB.");
 
         verify(excelImportRepository, never()).save(any());
     }

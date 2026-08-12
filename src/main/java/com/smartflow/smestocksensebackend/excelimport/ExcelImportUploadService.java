@@ -27,10 +27,12 @@ public class ExcelImportUploadService {
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             "application/octet-stream"
     );
+    private static final long MAX_FILE_SIZE_BYTES = 10L * 1024 * 1024;
     private static final String METADATA_ONLY_PATH_PREFIX = "metadata-only/";
 
     private final ExcelImportRepository excelImportRepository;
     private final WarehouseRepository warehouseRepository;
+    private final ExcelImportValidationService excelImportValidationService;
 
     public ExcelImportUploadResponse upload(MultipartFile file, String loaiImport, Long khoId) {
         String fileName = file == null || file.isEmpty() ? null : safeOriginalFileName(file);
@@ -49,7 +51,13 @@ public class ExcelImportUploadService {
         excelImport.setErrorRows(0);
         excelImport.setCreatedBy(currentEmployee());
 
-        return ExcelImportUploadResponse.from(excelImportRepository.save(excelImport));
+        ExcelImport saved = excelImportRepository.save(excelImport);
+        var validation = excelImportValidationService.validateAndPersistErrors(saved.getId(), file, importMode.name(), khoId);
+        saved.setTotalRows(validation.tongSoDong());
+        saved.setValidRows(validation.soDongHopLe());
+        saved.setErrorRows(validation.soDongLoi());
+        saved.setStatus(validation.valid() ? ExcelImportStatus.SAN_SANG_IMPORT : ExcelImportStatus.CO_LOI);
+        return ExcelImportUploadResponse.from(saved);
     }
 
     private Employee currentEmployee() {
@@ -66,6 +74,9 @@ public class ExcelImportUploadService {
         }
         if (file.isEmpty()) {
             throw new BadRequestException("file must not be empty.");
+        }
+        if (file.getSize() > MAX_FILE_SIZE_BYTES) {
+            throw new BadRequestException("file size must not exceed 10MB.");
         }
 
         if (!fileName.toLowerCase(Locale.ROOT).endsWith(".xlsx")) {

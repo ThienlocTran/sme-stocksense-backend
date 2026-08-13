@@ -4,7 +4,10 @@ spring:
   profiles:
     active: neon
   config:
-    import: optional:classpath:.env[.properties]
+    import:
+      - optional:file:sme-stocksense-backend/.env[.properties]
+      - optional:file:.env[.properties]
+      - optional:classpath:.env[.properties]
 
 cloudinary:
   cloud-name: ${CLOUDINARY_CLOUD_NAME:}

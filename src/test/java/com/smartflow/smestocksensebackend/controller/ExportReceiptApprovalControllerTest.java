@@ -2,6 +2,7 @@ package com.smartflow.smestocksensebackend.controller;
 
 import com.smartflow.smestocksensebackend.config.JwtAuthenticationFilter;
 import com.smartflow.smestocksensebackend.config.SecurityConfig;
+import com.smartflow.smestocksensebackend.dto.inbound.CancelReceiptRequest;
 import com.smartflow.smestocksensebackend.dto.inbound.RejectExportReceiptRequest;
 import com.smartflow.smestocksensebackend.dto.outbound.ExportReceiptDetailResponse;
 import com.smartflow.smestocksensebackend.exception.ApiExceptionHandler;
@@ -25,6 +26,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -160,6 +162,28 @@ class ExportReceiptApprovalControllerTest {
                 mockMvc.perform(put("/api/export-receipts/404/approve")
                                 .with(user("manager@example.com").roles("MANAGER")))
                                 .andExpect(status().isNotFound());
+        }
+
+        @Test
+        void cancel_managerShouldReturn200() throws Exception {
+                when(exportReceiptService.cancel(eq(100L), any(CancelReceiptRequest.class)))
+                                .thenReturn(detailResponse("HUY"));
+
+                mockMvc.perform(post("/api/export-receipts/100/cancel")
+                                .with(user("manager@example.com").roles("MANAGER"))
+                                .contentType("application/json")
+                                .content("{\"reason\":\"Khach huy\"}"))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.status").value("HUY"));
+        }
+
+        @Test
+        void cancel_employeeShouldReturn403() throws Exception {
+                mockMvc.perform(post("/api/export-receipts/100/cancel")
+                                .with(user("employee@example.com").roles("EMPLOYEE"))
+                                .contentType("application/json")
+                                .content("{\"reason\":\"Khach huy\"}"))
+                                .andExpect(status().isForbidden());
         }
 
         private ExportReceiptDetailResponse detailResponse(String status) {

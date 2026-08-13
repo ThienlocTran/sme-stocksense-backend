@@ -1,6 +1,7 @@
 package com.smartflow.smestocksensebackend.service.impl;
 
 import com.smartflow.smestocksensebackend.domain.outbound.ExportReceiptStatePolicy;
+import com.smartflow.smestocksensebackend.dto.inbound.CancelReceiptRequest;
 import com.smartflow.smestocksensebackend.dto.inbound.RejectExportReceiptRequest;
 import com.smartflow.smestocksensebackend.dto.outbound.ExportReceiptDetailItemResponse;
 import com.smartflow.smestocksensebackend.dto.outbound.ExportReceiptDetailResponse;
@@ -372,6 +373,37 @@ public class ExportReceiptServiceImpl implements ExportReceiptService {
         receipt.setStatus(ExportReceiptStatus.HUY);
         ExportReceipt savedReceipt = exportReceiptRepository.saveAndFlush(receipt);
         saveHistory(savedReceipt, actor, ExportReceiptAction.HUY, null);
+    }
+
+    @Override
+    @Transactional
+    public ExportReceiptDetailResponse cancel(Long id, CancelReceiptRequest request) {
+        Employee actor = currentEmployee();
+        if (actor.getStatus() != EmployeeStatus.HOAT_DONG) {
+            throw new AccountInactiveException();
+        }
+
+        ExportReceipt receipt = exportReceiptRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException("Phiếu xuất không tồn tại."));
+        if (ExportReceiptStatePolicy.isEditable(receipt.getStatus())) {
+            cancelDraft(id);
+            return buildDetailResponse(receipt);
+        }
+        if (receipt.getStatus() != ExportReceiptStatus.CHO_XUAT) {
+            throw new ConflictException("Chi duoc huy phieu xuat o trang thai NHAP, TU_CHOI hoac CHO_XUAT.");
+        }
+        ensureCanApprove(actor);
+        String reason = request != null && request.reason() != null ? request.reason().trim() : null;
+        if (reason == null || reason.isBlank()) {
+            throw new BadRequestException("Ly do huy khong duoc de trong.");
+        }
+
+        receipt.setStatus(ExportReceiptStatus.HUY);
+        receipt.setCancelledBy(actor);
+        receipt.setCancelledAt(LocalDateTime.now());
+        ExportReceipt savedReceipt = exportReceiptRepository.saveAndFlush(receipt);
+        saveHistory(savedReceipt, actor, ExportReceiptAction.HUY, reason);
+        return buildDetailResponse(savedReceipt);
     }
 
     @Override

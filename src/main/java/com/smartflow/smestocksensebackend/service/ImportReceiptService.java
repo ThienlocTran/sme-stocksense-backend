@@ -2,6 +2,7 @@ package com.smartflow.smestocksensebackend.service;
 
 import com.smartflow.smestocksensebackend.dto.inbound.CreateImportReceiptRequest;
 import com.smartflow.smestocksensebackend.dto.inbound.AddImportReceiptItemRequest;
+import com.smartflow.smestocksensebackend.dto.inbound.CancelReceiptRequest;
 import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptDraftResponse;
 import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptItemResponse;
 import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptPageResponse;
@@ -59,6 +60,8 @@ public interface ImportReceiptService {
      * @return Phiếu nhập kho sau khi chuyển sang trạng thái CANCELLED
      */
     ImportReceiptDraftResponse cancelDraft(Long receiptId);
+
+    ImportReceiptDraftResponse cancel(Long receiptId, CancelReceiptRequest request);
 
     /**
      * Gửi duyệt phiếu nhập kho nháp (T83).

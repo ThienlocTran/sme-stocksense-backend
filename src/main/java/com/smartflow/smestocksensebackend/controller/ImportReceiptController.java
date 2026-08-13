@@ -1,6 +1,7 @@
 package com.smartflow.smestocksensebackend.controller;
 
 import com.smartflow.smestocksensebackend.dto.inbound.AddImportReceiptItemRequest;
+import com.smartflow.smestocksensebackend.dto.inbound.CancelReceiptRequest;
 import com.smartflow.smestocksensebackend.dto.inbound.CreateImportReceiptRequest;
 import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptArrivalRequest;
 import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptDraftResponse;
@@ -168,6 +169,14 @@ public class ImportReceiptController {
     @PutMapping("/{receiptId}/cancel")
     public ImportReceiptDraftResponse cancelDraft(@PathVariable Long receiptId) {
         return importReceiptService.cancelDraft(receiptId);
+    }
+
+    @PostMapping("/{receiptId}/cancel")
+    public ImportReceiptDraftResponse cancel(
+            @PathVariable Long receiptId,
+            @Valid @RequestBody(required = false) CancelReceiptRequest request
+    ) {
+        return importReceiptService.cancel(receiptId, request);
     }
 
     @PutMapping("/{receiptId}/submit")

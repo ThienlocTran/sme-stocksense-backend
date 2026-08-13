@@ -1,6 +1,7 @@
 package com.smartflow.smestocksensebackend.service.impl;
 
 import com.smartflow.smestocksensebackend.dto.inbound.AddImportReceiptItemRequest;
+import com.smartflow.smestocksensebackend.dto.inbound.CancelReceiptRequest;
 import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptArrivalRequest;
 import com.smartflow.smestocksensebackend.domain.inbound.ImportReceiptAmountCalculator;
 import com.smartflow.smestocksensebackend.domain.inbound.ImportReceiptItemValidator;
@@ -1084,6 +1085,42 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
             throw new ConflictException("Bien ban chenh lech cho phieu nhap nay da ton tai.");
         }
         return DiscrepancyReportResponse.from(savedReport);
+    }
+
+    @Override
+    @Transactional
+    public ImportReceiptDraftResponse cancel(Long receiptId, CancelReceiptRequest request) {
+        Employee actor = currentEmployee();
+        if (actor.getStatus() != EmployeeStatus.HOAT_DONG) {
+            throw new AccountInactiveException();
+        }
+
+        ImportReceipt receipt = importReceiptRepository.findById(receiptId)
+                .orElseThrow(() -> new NotFoundException("Phieu nhap khong ton tai."));
+        if (receipt.getStatus() == ImportReceiptStatus.NHAP) {
+            return cancelDraft(receiptId);
+        }
+        if (receipt.getStatus() != ImportReceiptStatus.CHO_HANG_VE
+                && receipt.getStatus() != ImportReceiptStatus.CHO_KIEM_HANG) {
+            throw new ConflictException("Chi duoc huy phieu nhap o trang thai NHAP, CHO_HANG_VE hoac CHO_KIEM_HANG.");
+        }
+        ensureCanApprove(actor);
+        String reason = request != null ? normalizeOptional(request.reason()) : null;
+        if (reason == null) {
+            throw new BadRequestException("Ly do huy khong duoc de trong.");
+        }
+
+        try {
+            receipt.setStatus(ImportReceiptStatus.HUY);
+            receipt.setCancelledBy(actor);
+            receipt.setCancelledAt(LocalDateTime.now());
+            ImportReceipt savedReceipt = importReceiptRepository.saveAndFlush(receipt);
+            saveHistory(savedReceipt, actor, ImportReceiptAction.HUY, reason);
+            List<ImportReceiptDetail> details = importReceiptDetailRepository.findByDocumentId(receiptId);
+            return ImportReceiptDraftResponse.from(savedReceipt, details);
+        } catch (OptimisticLockingFailureException exception) {
+            throw new ConflictException("Phieu nhap da duoc cap nhat boi request khac.");
+        }
     }
 
     @Override

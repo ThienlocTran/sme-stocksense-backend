@@ -21,6 +21,8 @@
 - If unclear, stop and report uncertainty.
 - Patch minimally.
 - Keep existing style.
+- Do not add mock, fake, dummy, sample, or hardcoded data to production code.
+- Keep code comments short and useful; do not add long explanatory comments.
 - Do not touch unrelated modules.
 - Preserve Vietnamese UTF-8.
 - Never generate mojibake/corrupted Vietnamese strings or the Unicode replacement character.

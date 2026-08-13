@@ -3,6 +3,8 @@ package com.smartflow.smestocksensebackend.entity;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -62,12 +64,33 @@ public class DiscrepancyReport {
     @Column(name = "ngay_lap", nullable = false)
     private LocalDateTime reportDate = LocalDateTime.now();
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "trang_thai", nullable = false, length = 20)
+    private DiscrepancyReportStatus status = DiscrepancyReportStatus.CHO_DUYET;
+
     /**
      * Nhân viên lập biên bản chênh lệch (người thực hiện kiểm đếm và phát hiện chênh lệch).
      */
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "nguoi_lap_id", nullable = false)
     private Employee createdBy;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "nguoi_duyet_id")
+    private Employee approvedBy;
+
+    @Column(name = "ngay_duyet")
+    private LocalDateTime approvedAt;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "nguoi_tu_choi_id")
+    private Employee rejectedBy;
+
+    @Column(name = "ngay_tu_choi")
+    private LocalDateTime rejectedAt;
+
+    @Column(name = "ly_do_tu_choi", length = 500)
+    private String rejectReason;
 
     /**
      * Ghi chú chung về biên bản chênh lệch.

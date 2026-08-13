@@ -46,6 +46,7 @@ public class ExcelImportValidationService {
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             "application/octet-stream"
     );
+    private static final long MAX_FILE_SIZE_BYTES = 10L * 1024 * 1024;
 
     private final CategoryRepository categoryRepository;
     private final ProductRepository productRepository;
@@ -157,6 +158,9 @@ public class ExcelImportValidationService {
         }
         if (file.isEmpty()) {
             throw new BadRequestException("file must not be empty.");
+        }
+        if (file.getSize() > MAX_FILE_SIZE_BYTES) {
+            throw new BadRequestException("file size must not exceed 10MB.");
         }
         String fileName = safeOriginalFileName(file);
         if (!fileName.toLowerCase(Locale.ROOT).endsWith(".xlsx")) {

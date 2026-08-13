@@ -2,6 +2,7 @@ package com.smartflow.smestocksensebackend.service;
 
 import com.smartflow.smestocksensebackend.dto.inbound.CreateImportReceiptRequest;
 import com.smartflow.smestocksensebackend.dto.inbound.AddImportReceiptItemRequest;
+import com.smartflow.smestocksensebackend.dto.inbound.CancelReceiptRequest;
 import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptDraftResponse;
 import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptItemResponse;
 import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptPageResponse;
@@ -60,6 +61,8 @@ public interface ImportReceiptService {
      */
     ImportReceiptDraftResponse cancelDraft(Long receiptId);
 
+    ImportReceiptDraftResponse cancel(Long receiptId, CancelReceiptRequest request);
+
     /**
      * Gửi duyệt phiếu nhập kho nháp (T83).
      *
@@ -107,6 +110,10 @@ public interface ImportReceiptService {
      * @return Biên bản chênh lệch đã lập thành công
      */
     DiscrepancyReportResponse createDiscrepancyReport(Long receiptId, CreateDiscrepancyReportRequest request);
+
+    DiscrepancyReportResponse approveDiscrepancyReport(Long receiptId, Long reportId);
+
+    DiscrepancyReportResponse rejectDiscrepancyReport(Long receiptId, Long reportId, RejectImportReceiptRequest request);
 
     /**
      * Hoàn tất phiếu nhập kho (T104).

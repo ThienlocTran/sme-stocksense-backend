@@ -213,7 +213,7 @@ class ExcelImportApplyServiceTest {
 
         applyService.apply(99L, file);
 
-        assertThat(level.getQuantity()).isEqualTo(12);
+        assertThat(level.getQuantity()).isEqualTo(17);
         assertThat(excelImport.getStatus()).isEqualTo(ExcelImportStatus.DA_IMPORT);
         assertThat(excelImport.getCompletedAt()).isNotNull();
         verify(productRepository).saveAndFlush(product);
@@ -225,9 +225,9 @@ class ExcelImportApplyServiceTest {
         assertThat(transaction.getProduct()).isSameAs(product);
         assertThat(transaction.getWarehouse()).isSameAs(warehouse);
         assertThat(transaction.getTransactionType()).isEqualTo(InventoryTransactionType.NHAP_DAU_KY);
-        assertThat(transaction.getQuantity()).isEqualTo(7);
+        assertThat(transaction.getQuantity()).isEqualTo(12);
         assertThat(transaction.getQuantityBefore()).isEqualTo(5);
-        assertThat(transaction.getQuantityAfter()).isEqualTo(12);
+        assertThat(transaction.getQuantityAfter()).isEqualTo(17);
         assertThat(transaction.getImportBatchId()).isEqualTo(99L);
         assertThat(transaction.getCreatedBy()).isSameAs(excelImport.getCreatedBy());
     }
@@ -245,12 +245,12 @@ class ExcelImportApplyServiceTest {
 
         applyService.apply(99L, file);
 
-        assertThat(level.getQuantity()).isEqualTo(2);
+        assertThat(level.getQuantity()).isEqualTo(7);
         ArgumentCaptor<InventoryTransaction> captor = ArgumentCaptor.forClass(InventoryTransaction.class);
         verify(inventoryTransactionRepository).saveAndFlush(captor.capture());
-        assertThat(captor.getValue().getQuantity()).isEqualTo(3);
+        assertThat(captor.getValue().getQuantity()).isEqualTo(2);
         assertThat(captor.getValue().getQuantityBefore()).isEqualTo(5);
-        assertThat(captor.getValue().getQuantityAfter()).isEqualTo(2);
+        assertThat(captor.getValue().getQuantityAfter()).isEqualTo(7);
     }
 
     @Test
@@ -266,8 +266,12 @@ class ExcelImportApplyServiceTest {
 
         applyService.apply(99L, file);
 
-        assertThat(level.getQuantity()).isEqualTo(5);
-        verify(inventoryTransactionRepository, never()).saveAndFlush(any(InventoryTransaction.class));
+        assertThat(level.getQuantity()).isEqualTo(10);
+        ArgumentCaptor<InventoryTransaction> captor = ArgumentCaptor.forClass(InventoryTransaction.class);
+        verify(inventoryTransactionRepository).saveAndFlush(captor.capture());
+        assertThat(captor.getValue().getQuantity()).isEqualTo(5);
+        assertThat(captor.getValue().getQuantityBefore()).isEqualTo(5);
+        assertThat(captor.getValue().getQuantityAfter()).isEqualTo(10);
     }
 
     @Test

@@ -2,7 +2,9 @@ package com.smartflow.smestocksensebackend.service.impl;
 
 import com.smartflow.smestocksensebackend.domain.inbound.ImportReceiptAmountCalculator;
 import com.smartflow.smestocksensebackend.domain.inbound.ImportReceiptItemValidator;
+import com.smartflow.smestocksensebackend.dto.inbound.CancelReceiptRequest;
 import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptDraftResponse;
+import com.smartflow.smestocksensebackend.exception.BadRequestException;
 import com.smartflow.smestocksensebackend.entity.Employee;
 import com.smartflow.smestocksensebackend.entity.EmployeeStatus;
 import com.smartflow.smestocksensebackend.entity.ImportReceipt;
@@ -85,7 +87,6 @@ class ImportReceiptCancelServiceTest {
                 codeGenerator,
                 itemValidator,
                 amountCalculator,
-                null,
                 null,
                 null,
                 null
@@ -243,6 +244,81 @@ class ImportReceiptCancelServiceTest {
         when(importReceiptRepository.saveAndFlush(receipt)).thenThrow(new OptimisticLockingFailureException("version"));
 
         assertThrows(ConflictException.class, () -> importReceiptService.cancelDraft(123L));
+    }
+
+    @Test
+    void cancelMidState_adminWithWaitingGoodsShouldCancelWithReason() {
+        Employee admin = employee(1L, RoleCode.ADMIN);
+        authenticate(admin);
+        receipt.setStatus(ImportReceiptStatus.CHO_HANG_VE);
+        when(importReceiptRepository.findById(123L)).thenReturn(Optional.of(receipt));
+        when(importReceiptRepository.saveAndFlush(receipt)).thenReturn(receipt);
+        when(importReceiptDetailRepository.findByDocumentId(123L)).thenReturn(details);
+
+        ImportReceiptDraftResponse response = importReceiptService.cancel(123L, new CancelReceiptRequest("NCC khong giao"));
+
+        assertEquals("HUY", response.status());
+        assertEquals(admin, receipt.getCancelledBy());
+        assertNotNull(receipt.getCancelledAt());
+    }
+
+    @Test
+    void cancelMidState_managerWithCheckingGoodsShouldCancelWithReason() {
+        Employee manager = employee(7L, RoleCode.MANAGER);
+        authenticate(manager);
+        receipt.setStatus(ImportReceiptStatus.CHO_KIEM_HANG);
+        when(importReceiptRepository.findById(123L)).thenReturn(Optional.of(receipt));
+        when(importReceiptRepository.saveAndFlush(receipt)).thenReturn(receipt);
+        when(importReceiptDetailRepository.findByDocumentId(123L)).thenReturn(details);
+
+        ImportReceiptDraftResponse response = importReceiptService.cancel(123L, new CancelReceiptRequest("Khong the tiep tuc nhap"));
+
+        assertEquals("HUY", response.status());
+        assertEquals(manager, receipt.getCancelledBy());
+    }
+
+    @Test
+    void cancelMidState_employeeShouldThrowMissingRole() {
+        receipt.setStatus(ImportReceiptStatus.CHO_HANG_VE);
+        when(importReceiptRepository.findById(123L)).thenReturn(Optional.of(receipt));
+
+        assertThrows(MissingRoleException.class, () -> importReceiptService.cancel(123L, new CancelReceiptRequest("Ly do")));
+        verify(importReceiptRepository, never()).saveAndFlush(any(ImportReceipt.class));
+    }
+
+    @Test
+    void cancelMidState_withoutReasonShouldThrowBadRequest() {
+        authenticate(employee(1L, RoleCode.ADMIN));
+        receipt.setStatus(ImportReceiptStatus.CHO_HANG_VE);
+        when(importReceiptRepository.findById(123L)).thenReturn(Optional.of(receipt));
+
+        assertThrows(BadRequestException.class, () -> importReceiptService.cancel(123L, new CancelReceiptRequest(" ")));
+        verify(importReceiptRepository, never()).saveAndFlush(any(ImportReceipt.class));
+    }
+
+    @Test
+    void cancelMidState_completedReceiptShouldThrowConflict() {
+        authenticate(employee(1L, RoleCode.ADMIN));
+        receipt.setStatus(ImportReceiptStatus.HOAN_THANH);
+        when(importReceiptRepository.findById(123L)).thenReturn(Optional.of(receipt));
+
+        assertThrows(ConflictException.class, () -> importReceiptService.cancel(123L, new CancelReceiptRequest("Ly do")));
+        verify(importReceiptRepository, never()).saveAndFlush(any(ImportReceipt.class));
+    }
+
+    @Test
+    void cancelMidState_shouldNotMutateDetailsOrTotals() {
+        authenticate(employee(1L, RoleCode.ADMIN));
+        receipt.setStatus(ImportReceiptStatus.CHO_HANG_VE);
+        when(importReceiptRepository.findById(123L)).thenReturn(Optional.of(receipt));
+        when(importReceiptRepository.saveAndFlush(receipt)).thenReturn(receipt);
+        when(importReceiptDetailRepository.findByDocumentId(123L)).thenReturn(details);
+
+        importReceiptService.cancel(123L, new CancelReceiptRequest("NCC huy"));
+
+        verify(importReceiptDetailRepository, never()).deleteByDocumentId(123L);
+        verify(importReceiptDetailRepository, never()).saveAllAndFlush(anyList());
+        verify(importReceiptDetailRepository, never()).sumLineTotalByReceiptId(123L);
     }
 
     private void stubSuccessfulCancel() {

@@ -4,6 +4,7 @@ import com.smartflow.smestocksensebackend.dto.inventorycount.*;
 import com.smartflow.smestocksensebackend.entity.*;
 import com.smartflow.smestocksensebackend.exception.*;
 import com.smartflow.smestocksensebackend.repository.*;
+import com.smartflow.smestocksensebackend.service.InventoryTransactionService;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.*;
@@ -19,6 +20,7 @@ import static org.mockito.Mockito.*;
 class InventoryCountServiceImplTest {
     @Mock InventoryCountRepository countRepository; @Mock InventoryCountDetailRepository detailRepository;
     @Mock InventoryLevelRepository inventoryRepository; @Mock WarehouseRepository warehouseRepository; @Mock ProductRepository productRepository;
+    @Mock InventoryTransactionService inventoryTransactionService;
     @InjectMocks InventoryCountServiceImpl service;
     Employee actor; Warehouse warehouse; Product product; InventoryCount count; InventoryCountDetail detail;
 
@@ -55,15 +57,38 @@ class InventoryCountServiceImplTest {
         verify(countRepository,never()).saveAndFlush(count);
     }
 
-    @Test void finalize_shouldCloseWithoutChangingInventory(){
+    @Test void finalize_withoutDifferenceShouldCloseWithoutChangingInventory(){
         detail.setActualQuantity(10); detail.setDifferenceQuantity(0);
         when(countRepository.findById(4L)).thenReturn(Optional.of(count)); when(detailRepository.findByInventoryCountIdOrderByIdAsc(4L)).thenReturn(List.of(detail)); when(countRepository.saveAndFlush(count)).thenReturn(count);
         InventoryCountResponse response=service.finalizeCount(4L,new InventoryCountRequests.Finalize(0L));
-        assertEquals("DA_CHOT",response.status()); verify(inventoryRepository,never()).save(any());
+        assertEquals("DA_CHOT",response.status()); verify(inventoryRepository,never()).save(any()); verify(inventoryTransactionService,never()).recordTransaction(any(),any(),any(),any(),any(),any(),any(),any());
+    }
+
+    @Test void finalize_withDifferenceShouldUpdateInventoryAndWriteTransaction(){
+        detail.setActualQuantity(7); detail.setDifferenceQuantity(-3);
+        InventoryLevel stock=new InventoryLevel(); stock.setWarehouse(warehouse); stock.setProduct(product); stock.setQuantity(10);
+        when(countRepository.findById(4L)).thenReturn(Optional.of(count)); when(detailRepository.findByInventoryCountIdOrderByIdAsc(4L)).thenReturn(List.of(detail)); when(inventoryRepository.findByProductIdAndWarehouseIdForUpdate(3L,2L)).thenReturn(Optional.of(stock)); when(countRepository.saveAndFlush(count)).thenReturn(count);
+        InventoryCountResponse response=service.finalizeCount(4L,new InventoryCountRequests.Finalize(0L));
+        assertEquals("DA_CHOT",response.status()); assertEquals(7,stock.getQuantity());
+        verify(inventoryRepository).saveAndFlush(stock);
+        verify(inventoryTransactionService).recordTransaction(eq(3L),eq(2L),eq(InventoryTransactionType.DIEU_CHINH_GIAM),eq(3),eq(10),eq(7),isNull(),eq("Dieu chinh kiem ke KK-1"));
     }
 
     @Test void cancelledCount_shouldNotAllowFurtherEditing(){
         count.setStatus(InventoryCountStatus.DA_HUY); when(countRepository.findById(4L)).thenReturn(Optional.of(count));
         assertThrows(ConflictException.class,()->service.recordActual(4L,5L,new InventoryCountRequests.RecordActual(1,null,0L)));
+    }
+
+    @Test void finalizedCount_shouldNotAllowFurtherEditing(){
+        count.setStatus(InventoryCountStatus.DA_CHOT); when(countRepository.findById(4L)).thenReturn(Optional.of(count));
+        assertThrows(ConflictException.class,()->service.recordActual(4L,5L,new InventoryCountRequests.RecordActual(1,null,0L)));
+    }
+
+    @Test void cancel_shouldNotChangeInventoryOrWriteTransaction(){
+        when(countRepository.findById(4L)).thenReturn(Optional.of(count)); when(detailRepository.findByInventoryCountIdOrderByIdAsc(4L)).thenReturn(List.of(detail));
+        InventoryCountResponse response=service.cancel(4L,new InventoryCountRequests.Cancel("Sai lich",0L));
+        assertEquals("DA_HUY",response.status());
+        verify(inventoryRepository,never()).save(any()); verify(inventoryRepository,never()).saveAndFlush(any());
+        verify(inventoryTransactionService,never()).recordTransaction(any(),any(),any(),any(),any(),any(),any(),any());
     }
 }

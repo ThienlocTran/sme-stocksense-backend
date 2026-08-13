@@ -1,7 +1,9 @@
 package com.smartflow.smestocksensebackend.service.impl;
 
+import com.smartflow.smestocksensebackend.dto.inbound.CancelReceiptRequest;
 import com.smartflow.smestocksensebackend.dto.inbound.RejectExportReceiptRequest;
 import com.smartflow.smestocksensebackend.dto.outbound.ExportReceiptDetailResponse;
+import com.smartflow.smestocksensebackend.dto.request.outbound.ExportReceiptSubmitRequest;
 import com.smartflow.smestocksensebackend.entity.Employee;
 import com.smartflow.smestocksensebackend.entity.EmployeeStatus;
 import com.smartflow.smestocksensebackend.entity.ExportReceipt;
@@ -31,6 +33,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.util.List;
@@ -93,8 +96,9 @@ class ExportReceiptApprovalServiceTest {
     }
 
     private void authenticate(Employee employee) {
-        SecurityContextHolder.getContext().setAuthentication(
-                new UsernamePasswordAuthenticationToken(employee, null, List.of()));
+        SecurityContext context = SecurityContextHolder.createEmptyContext();
+        context.setAuthentication(new UsernamePasswordAuthenticationToken(employee, null, List.of()));
+        SecurityContextHolder.setContext(context);
     }
 
     private Employee employeeWith(RoleCode roleCode) {
@@ -114,12 +118,44 @@ class ExportReceiptApprovalServiceTest {
         receipt.setCode("XUAT-001");
         receipt.setStatus(status);
         receipt.setWarehouse(warehouse);
+        Employee creator = employeeWith(RoleCode.EMPLOYEE);
+        creator.setId(5L);
+        receipt.setCreatedBy(creator);
         return receipt;
     }
 
     @Test
+    void submitForApproval_draftReceiptShouldMoveToPendingApproval() {
+        ExportReceipt receipt = receiptWithStatus(ExportReceiptStatus.NHAP);
+        receipt.setCreatedBy(manager);
+        receipt.setVersion(0L);
+        Product product = new Product();
+        product.setId(10L);
+        product.setName("San pham A");
+        ExportReceiptDetail detail = new ExportReceiptDetail();
+        detail.setProduct(product);
+        detail.setQuantity(2);
+        InventoryLevel inventoryLevel = new InventoryLevel();
+        inventoryLevel.setQuantity(5);
+        ExportReceiptSubmitRequest request = new ExportReceiptSubmitRequest();
+        request.setVersion(0L);
+        when(exportReceiptRepository.findById(100L)).thenReturn(Optional.of(receipt));
+        when(exportReceiptDetailRepository.findByExportReceiptIdOrderByIdAsc(100L)).thenReturn(List.of(detail));
+        when(inventoryLevelRepository.findByProductIdAndWarehouseId(10L, 1L)).thenReturn(Optional.of(inventoryLevel));
+        when(exportReceiptRepository.saveAndFlush(receipt)).thenReturn(receipt);
+
+        exportReceiptService.submitForApproval(100L, request);
+
+        assertEquals(ExportReceiptStatus.CHO_DUYET, receipt.getStatus());
+        assertEquals(manager, receipt.getSubmittedBy());
+        assertNotNull(receipt.getSubmittedAt());
+        assertNull(receipt.getLevel1ApprovedBy());
+        assertNull(receipt.getLevel1ApprovedAt());
+    }
+
+    @Test
     void reject_pendingReceiptShouldMoveToRejectedAndStoreMetadata() {
-        ExportReceipt receipt = receiptWithStatus(ExportReceiptStatus.CHO_DUYET_CAP_1);
+        ExportReceipt receipt = receiptWithStatus(ExportReceiptStatus.CHO_DUYET);
         when(exportReceiptRepository.findById(100L)).thenReturn(Optional.of(receipt));
         when(exportReceiptRepository.saveAndFlush(any(ExportReceipt.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -179,25 +215,33 @@ class ExportReceiptApprovalServiceTest {
     }
 
     @Test
-    void approve_legacyLevel1ShouldCompleteAsLevel2Approval() {
-        ExportReceipt receipt = receiptWithStatus(ExportReceiptStatus.CHO_DUYET_CAP_1);
+    void approve_pendingReceiptShouldMoveToApprovedWithoutDeductingInventory() {
+        ExportReceipt receipt = receiptWithStatus(ExportReceiptStatus.CHO_DUYET);
+        Product product = new Product();
+        product.setId(10L);
+        ExportReceiptDetail detail = new ExportReceiptDetail();
+        detail.setProduct(product);
+        detail.setQuantity(5);
+        InventoryLevel inventoryLevel = new InventoryLevel();
+        inventoryLevel.setQuantity(8);
         when(exportReceiptRepository.findById(100L)).thenReturn(Optional.of(receipt));
         when(exportReceiptRepository.saveAndFlush(any(ExportReceipt.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
-        when(exportReceiptDetailRepository.findByExportReceiptIdOrderByIdAsc(100L)).thenReturn(List.of());
+        when(exportReceiptDetailRepository.findByExportReceiptIdOrderByIdAsc(100L)).thenReturn(List.of(detail));
+        when(inventoryLevelRepository.findByProductIdAndWarehouseId(10L, 1L)).thenReturn(Optional.of(inventoryLevel));
 
         ExportReceiptDetailResponse response = exportReceiptService.approve(100L);
 
-        assertEquals("HOAN_THANH", response.status());
-        assertEquals(ExportReceiptStatus.HOAN_THANH, receipt.getStatus());
+        assertEquals("DA_DUYET", response.status());
+        assertEquals(ExportReceiptStatus.DA_DUYET, receipt.getStatus());
         assertEquals(manager, receipt.getApprovedBy());
         assertNotNull(receipt.getApprovedAt());
-        verify(inventoryLevelRepository, never()).findByProductIdAndWarehouseId(any(), any());
+        verify(inventoryLevelRepository, never()).findByProductIdAndWarehouseIdForUpdate(any(), any());
     }
 
     @Test
-    void approve_legacyLevel1WithDetailsShouldLockAndDeductInventory() {
-        ExportReceipt receipt = receiptWithStatus(ExportReceiptStatus.CHO_DUYET_CAP_1);
+    void approve_withDetailsShouldNotDeductInventory() {
+        ExportReceipt receipt = receiptWithStatus(ExportReceiptStatus.CHO_DUYET);
         Product product = new Product();
         product.setId(10L);
         ExportReceiptDetail detail = new ExportReceiptDetail();
@@ -212,18 +256,36 @@ class ExportReceiptApprovalServiceTest {
         when(exportReceiptRepository.saveAndFlush(any(ExportReceipt.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
         when(exportReceiptDetailRepository.findByExportReceiptIdOrderByIdAsc(100L)).thenReturn(List.of(detail));
-        when(inventoryLevelRepository.findByProductIdAndWarehouseIdForUpdate(10L, 1L))
-                .thenReturn(Optional.of(inventoryLevel));
-
+        when(inventoryLevelRepository.findByProductIdAndWarehouseId(10L, 1L)).thenReturn(Optional.of(inventoryLevel));
         exportReceiptService.approve(100L);
 
-        verify(inventoryLevelRepository).findByProductIdAndWarehouseIdForUpdate(10L, 1L);
-        assertEquals(3, inventoryLevel.getQuantity());
+        verify(inventoryLevelRepository, never()).findByProductIdAndWarehouseIdForUpdate(any(), any());
+        assertEquals(8, inventoryLevel.getQuantity());
     }
 
     @Test
-    void approve_pendingLevel2ShouldCompleteAndDeductInventory() {
-        ExportReceipt receipt = receiptWithStatus(ExportReceiptStatus.CHO_DUYET_CAP_2);
+    void approve_whenInventoryInsufficientShouldThrowConflict() {
+        ExportReceipt receipt = receiptWithStatus(ExportReceiptStatus.CHO_DUYET);
+        Product product = new Product();
+        product.setId(10L);
+        ExportReceiptDetail detail = new ExportReceiptDetail();
+        detail.setProduct(product);
+        detail.setQuantity(5);
+        InventoryLevel inventoryLevel = new InventoryLevel();
+        inventoryLevel.setQuantity(3);
+        when(exportReceiptRepository.findById(100L)).thenReturn(Optional.of(receipt));
+        when(exportReceiptDetailRepository.findByExportReceiptIdOrderByIdAsc(100L)).thenReturn(List.of(detail));
+        when(inventoryLevelRepository.findByProductIdAndWarehouseId(10L, 1L)).thenReturn(Optional.of(inventoryLevel));
+
+        assertThrows(ConflictException.class, () -> exportReceiptService.approve(100L));
+
+        assertEquals(ExportReceiptStatus.CHO_DUYET, receipt.getStatus());
+        verify(exportReceiptRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void complete_approvedReceiptShouldCompleteAndDeductInventory() {
+        ExportReceipt receipt = receiptWithStatus(ExportReceiptStatus.DA_DUYET);
         Product product = new Product();
         product.setId(10L);
         ExportReceiptDetail detail = new ExportReceiptDetail();
@@ -242,19 +304,19 @@ class ExportReceiptApprovalServiceTest {
         when(inventoryTransactionService.recordExportTransaction(any(), any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(new InventoryTransaction());
 
-        ExportReceiptDetailResponse response = exportReceiptService.approve(100L);
+        ExportReceiptDetailResponse response = exportReceiptService.complete(100L);
 
         assertEquals("HOAN_THANH", response.status());
         assertEquals(ExportReceiptStatus.HOAN_THANH, receipt.getStatus());
-        assertEquals(manager, receipt.getApprovedBy());
+        assertEquals(manager, receipt.getCompletedBy());
         assertEquals(2, inventoryLevel.getQuantity());
         verify(inventoryTransactionService).recordExportTransaction(eq(10L), eq(1L), eq(InventoryTransactionType.XUAT_KHO),
-                eq(3), eq(5), eq(2), same(receipt), eq("Duyet phieu xuat cap 2"));
+                eq(3), eq(5), eq(2), same(receipt), eq("Hoan tat phieu xuat"));
     }
 
     @Test
-    void approve_whenInventoryInsufficientShouldThrowConflict() {
-        ExportReceipt receipt = receiptWithStatus(ExportReceiptStatus.CHO_DUYET_CAP_2);
+    void complete_whenInventoryInsufficientShouldThrowConflict() {
+        ExportReceipt receipt = receiptWithStatus(ExportReceiptStatus.DA_DUYET);
         Product product = new Product();
         product.setId(10L);
         ExportReceiptDetail detail = new ExportReceiptDetail();
@@ -269,14 +331,16 @@ class ExportReceiptApprovalServiceTest {
         when(inventoryLevelRepository.findByProductIdAndWarehouseIdForUpdate(10L, 1L))
                 .thenReturn(Optional.of(inventoryLevel));
 
-        assertThrows(ConflictException.class, () -> exportReceiptService.approve(100L));
+        assertThrows(ConflictException.class, () -> exportReceiptService.complete(100L));
         verify(inventoryTransactionService, never()).recordExportTransaction(any(), any(), any(), any(), any(), any(), any(),
                 any());
     }
 
     @Test
-    void approve_whenTransactionRecordingFailsShouldNotCompleteReceipt() {
-        ExportReceipt receipt = receiptWithStatus(ExportReceiptStatus.CHO_DUYET_CAP_2);
+    void complete_whenTransactionRecordingFailsShouldNotCompleteReceipt() {
+        manager.setStatus(EmployeeStatus.HOAT_DONG);
+        authenticate(manager);
+        ExportReceipt receipt = receiptWithStatus(ExportReceiptStatus.DA_DUYET);
         Product product = new Product();
         product.setId(10L);
         ExportReceiptDetail detail = new ExportReceiptDetail();
@@ -293,9 +357,13 @@ class ExportReceiptApprovalServiceTest {
         when(inventoryTransactionService.recordExportTransaction(any(), any(), any(), any(), any(), any(), any(), any()))
                 .thenThrow(new IllegalStateException("Khong ghi duoc giao dich"));
 
-        assertThrows(IllegalStateException.class, () -> exportReceiptService.approve(100L));
+        assertThrows(IllegalStateException.class, () -> {
+            manager.setStatus(EmployeeStatus.HOAT_DONG);
+            authenticate(manager);
+            exportReceiptService.complete(100L);
+        });
 
-        assertEquals(ExportReceiptStatus.CHO_DUYET_CAP_2, receipt.getStatus());
+        assertEquals(ExportReceiptStatus.DA_DUYET, receipt.getStatus());
         verify(exportReceiptRepository, never()).saveAndFlush(any());
     }
 
@@ -324,10 +392,91 @@ class ExportReceiptApprovalServiceTest {
     }
 
     @Test
+    void approve_creatorShouldNotSelfApprove() {
+        ExportReceipt receipt = receiptWithStatus(ExportReceiptStatus.CHO_DUYET);
+        receipt.setCreatedBy(manager);
+        when(exportReceiptRepository.findById(100L)).thenReturn(Optional.of(receipt));
+
+        assertThrows(BadRequestException.class, () -> exportReceiptService.approve(100L));
+        verify(exportReceiptRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
     void approve_withInactiveAccountShouldThrowAccountInactive() {
         manager.setStatus(EmployeeStatus.TAM_KHOA);
 
         assertThrows(AccountInactiveException.class, () -> exportReceiptService.approve(100L));
         verify(exportReceiptRepository, never()).findById(any());
+    }
+
+    @Test
+    void cancelMidState_adminWithApprovedReceiptShouldCancelWithoutInventoryDeduction() {
+        Employee admin = employeeWith(RoleCode.ADMIN);
+        admin.setId(1L);
+        authenticate(admin);
+        ExportReceipt receipt = receiptWithStatus(ExportReceiptStatus.DA_DUYET);
+        Product product = new Product();
+        product.setId(10L);
+        ExportReceiptDetail detail = new ExportReceiptDetail();
+        detail.setProduct(product);
+        detail.setQuantity(3);
+        InventoryLevel inventoryLevel = new InventoryLevel();
+        inventoryLevel.setProduct(product);
+        inventoryLevel.setWarehouse(warehouse);
+        inventoryLevel.setQuantity(5);
+        when(exportReceiptRepository.findById(100L)).thenReturn(Optional.of(receipt));
+        when(exportReceiptRepository.saveAndFlush(receipt)).thenReturn(receipt);
+        when(exportReceiptDetailRepository.findByExportReceiptIdOrderByIdAsc(100L)).thenReturn(List.of(detail));
+        when(inventoryLevelRepository.findByWarehouseIdAndProductIdIn(1L, List.of(10L))).thenReturn(List.of(inventoryLevel));
+
+        ExportReceiptDetailResponse response = exportReceiptService.cancel(100L, new CancelReceiptRequest("Khach huy don"));
+
+        assertEquals("HUY", response.status());
+        assertEquals(5, inventoryLevel.getQuantity());
+        assertEquals(admin, receipt.getCancelledBy());
+        assertNotNull(receipt.getCancelledAt());
+        verify(inventoryLevelRepository, never()).findByProductIdAndWarehouseIdForUpdate(any(), any());
+        verify(inventoryTransactionService, never()).recordExportTransaction(any(), any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void cancelMidState_managerWithApprovedReceiptShouldCancel() {
+        ExportReceipt receipt = receiptWithStatus(ExportReceiptStatus.DA_DUYET);
+        when(exportReceiptRepository.findById(100L)).thenReturn(Optional.of(receipt));
+        when(exportReceiptRepository.saveAndFlush(receipt)).thenReturn(receipt);
+        when(exportReceiptDetailRepository.findByExportReceiptIdOrderByIdAsc(100L)).thenReturn(List.of());
+
+        ExportReceiptDetailResponse response = exportReceiptService.cancel(100L, new CancelReceiptRequest("Khach huy"));
+
+        assertEquals("HUY", response.status());
+        assertEquals(manager, receipt.getCancelledBy());
+    }
+
+    @Test
+    void cancelMidState_employeeShouldThrowMissingRole() {
+        authenticate(employeeWith(RoleCode.EMPLOYEE));
+        ExportReceipt receipt = receiptWithStatus(ExportReceiptStatus.DA_DUYET);
+        when(exportReceiptRepository.findById(100L)).thenReturn(Optional.of(receipt));
+
+        assertThrows(MissingRoleException.class, () -> exportReceiptService.cancel(100L, new CancelReceiptRequest("Ly do")));
+        verify(exportReceiptRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void cancelMidState_withoutReasonShouldThrowBadRequest() {
+        ExportReceipt receipt = receiptWithStatus(ExportReceiptStatus.DA_DUYET);
+        when(exportReceiptRepository.findById(100L)).thenReturn(Optional.of(receipt));
+
+        assertThrows(BadRequestException.class, () -> exportReceiptService.cancel(100L, new CancelReceiptRequest(" ")));
+        verify(exportReceiptRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void cancelMidState_completedReceiptShouldThrowConflict() {
+        ExportReceipt receipt = receiptWithStatus(ExportReceiptStatus.HOAN_THANH);
+        when(exportReceiptRepository.findById(100L)).thenReturn(Optional.of(receipt));
+
+        assertThrows(ConflictException.class, () -> exportReceiptService.cancel(100L, new CancelReceiptRequest("Ly do")));
+        verify(exportReceiptRepository, never()).saveAndFlush(any());
     }
 }

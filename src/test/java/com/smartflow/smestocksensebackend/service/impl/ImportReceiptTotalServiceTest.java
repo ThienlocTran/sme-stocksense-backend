@@ -20,7 +20,6 @@ import com.smartflow.smestocksensebackend.repository.PartnerRepository;
 import com.smartflow.smestocksensebackend.repository.ProductRepository;
 import com.smartflow.smestocksensebackend.repository.WarehouseRepository;
 import com.smartflow.smestocksensebackend.repository.DiscrepancyReportRepository;
-import com.smartflow.smestocksensebackend.repository.DiscrepancyReportDetailRepository;
 import com.smartflow.smestocksensebackend.service.ImportReceiptCodeGenerator;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -72,9 +71,6 @@ class ImportReceiptTotalServiceTest {
     @Mock
     private DiscrepancyReportRepository discrepancyReportRepository;
 
-    @Mock
-    private DiscrepancyReportDetailRepository discrepancyReportDetailRepository;
-
     private ImportReceiptServiceImpl importReceiptService;
     private Employee owner;
     private ImportReceipt receipt;
@@ -93,7 +89,6 @@ class ImportReceiptTotalServiceTest {
                 itemValidator,
                 amountCalculator,
                 discrepancyReportRepository,
-                discrepancyReportDetailRepository,
                 null,
                 null
         );

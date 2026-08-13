@@ -29,8 +29,10 @@ import com.smartflow.smestocksensebackend.repository.DiscrepancyReportDetailRepo
 import com.smartflow.smestocksensebackend.dto.inbound.CreateDiscrepancyReportRequest;
 import com.smartflow.smestocksensebackend.dto.inbound.CreateDiscrepancyReportItemRequest;
 import com.smartflow.smestocksensebackend.dto.inbound.DiscrepancyReportResponse;
+import com.smartflow.smestocksensebackend.dto.inbound.RejectImportReceiptRequest;
 import com.smartflow.smestocksensebackend.entity.DiscrepancyReport;
 import com.smartflow.smestocksensebackend.entity.DiscrepancyReportDetail;
+import com.smartflow.smestocksensebackend.entity.DiscrepancyReportStatus;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -383,6 +385,7 @@ class ImportReceiptDetailServiceTest {
         assertThat(response).isNotNull();
         assertThat(response.getId()).isEqualTo(500L);
         assertThat(response.getCode()).isEqualTo("BBCL-PNK-100");
+        assertThat(response.getStatus()).isEqualTo("CHO_DUYET");
         assertThat(response.getDetails()).hasSize(1);
         assertThat(response.getDetails().get(0).getDiscrepancyQuantity()).isEqualTo(-2);
         assertThat(response.getDetails().get(0).getReason()).isEqualTo("Thieu hang");
@@ -449,6 +452,7 @@ class ImportReceiptDetailServiceTest {
         existing.setImportReceipt(receipt);
         existing.setCode("BBCL-PNK-100");
         existing.setCreatedBy(owner);
+        existing.setStatus(com.smartflow.smestocksensebackend.entity.DiscrepancyReportStatus.CHO_DUYET);
 
         CreateDiscrepancyReportItemRequest itemReq = new CreateDiscrepancyReportItemRequest(20L, "Thieu hang", "Giao bu");
         CreateDiscrepancyReportRequest request = new CreateDiscrepancyReportRequest("Ghi chu moi", List.of(itemReq));
@@ -461,6 +465,7 @@ class ImportReceiptDetailServiceTest {
         DiscrepancyReportResponse response = importReceiptService.createDiscrepancyReport(100L, request);
 
         assertThat(response.getId()).isEqualTo(500L);
+        assertThat(response.getStatus()).isEqualTo("CHO_DUYET");
         assertThat(response.getNote()).isEqualTo("Ghi chu moi");
         assertThat(response.getDetails()).hasSize(1);
         assertThat(response.getDetails().get(0).getReason()).isEqualTo("Thieu hang");
@@ -554,6 +559,82 @@ class ImportReceiptDetailServiceTest {
                 .hasMessageContaining("Khong co quyen");
     }
 
+    @Test
+    void approveDiscrepancyReport_managerShouldApprovePendingReport() {
+        Employee manager = createEmployee(9L, RoleCode.MANAGER, EmployeeStatus.HOAT_DONG);
+        Employee creator = createEmployee(1L, RoleCode.EMPLOYEE, EmployeeStatus.HOAT_DONG);
+        authenticateAs(manager);
+        ImportReceipt receipt = createReceipt(100L, ImportReceiptStatus.CHO_KIEM_HANG, creator);
+        DiscrepancyReport report = discrepancyReport(500L, receipt, creator);
+
+        when(discrepancyReportRepository.findById(500L)).thenReturn(Optional.of(report));
+        when(discrepancyReportRepository.saveAndFlush(report)).thenReturn(report);
+
+        DiscrepancyReportResponse response = importReceiptService.approveDiscrepancyReport(100L, 500L);
+
+        assertThat(response.getStatus()).isEqualTo("DA_DUYET");
+        assertThat(report.getApprovedBy()).isEqualTo(manager);
+        assertThat(report.getApprovedAt()).isNotNull();
+    }
+
+    @Test
+    void approveDiscrepancyReport_employeeShouldThrowMissingRole() {
+        Employee employee = createEmployee(1L, RoleCode.EMPLOYEE, EmployeeStatus.HOAT_DONG);
+        authenticateAs(employee);
+
+        assertThatThrownBy(() -> importReceiptService.approveDiscrepancyReport(100L, 500L))
+                .isInstanceOf(MissingRoleException.class);
+    }
+
+    @Test
+    void approveDiscrepancyReport_creatorShouldNotSelfApprove() {
+        Employee manager = createEmployee(9L, RoleCode.MANAGER, EmployeeStatus.HOAT_DONG);
+        authenticateAs(manager);
+        ImportReceipt receipt = createReceipt(100L, ImportReceiptStatus.CHO_KIEM_HANG, manager);
+        DiscrepancyReport report = discrepancyReport(500L, receipt, manager);
+
+        when(discrepancyReportRepository.findById(500L)).thenReturn(Optional.of(report));
+
+        assertThatThrownBy(() -> importReceiptService.approveDiscrepancyReport(100L, 500L))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("tu duyet");
+    }
+
+    @Test
+    void rejectDiscrepancyReport_requiresReasonAndPendingStatus() {
+        Employee manager = createEmployee(9L, RoleCode.MANAGER, EmployeeStatus.HOAT_DONG);
+        Employee creator = createEmployee(1L, RoleCode.EMPLOYEE, EmployeeStatus.HOAT_DONG);
+        authenticateAs(manager);
+        ImportReceipt receipt = createReceipt(100L, ImportReceiptStatus.CHO_KIEM_HANG, creator);
+        DiscrepancyReport report = discrepancyReport(500L, receipt, creator);
+        report.setStatus(DiscrepancyReportStatus.DA_DUYET);
+
+        assertThatThrownBy(() -> importReceiptService.rejectDiscrepancyReport(100L, 500L, new RejectImportReceiptRequest(" ")))
+                .isInstanceOf(BadRequestException.class);
+
+        when(discrepancyReportRepository.findById(500L)).thenReturn(Optional.of(report));
+        assertThatThrownBy(() -> importReceiptService.rejectDiscrepancyReport(100L, 500L, new RejectImportReceiptRequest("Sai so luong")))
+                .isInstanceOf(ConflictException.class);
+    }
+
+    @Test
+    void rejectDiscrepancyReport_managerShouldRejectPendingReport() {
+        Employee manager = createEmployee(9L, RoleCode.MANAGER, EmployeeStatus.HOAT_DONG);
+        Employee creator = createEmployee(1L, RoleCode.EMPLOYEE, EmployeeStatus.HOAT_DONG);
+        authenticateAs(manager);
+        ImportReceipt receipt = createReceipt(100L, ImportReceiptStatus.CHO_KIEM_HANG, creator);
+        DiscrepancyReport report = discrepancyReport(500L, receipt, creator);
+
+        when(discrepancyReportRepository.findById(500L)).thenReturn(Optional.of(report));
+        when(discrepancyReportRepository.saveAndFlush(report)).thenReturn(report);
+
+        DiscrepancyReportResponse response = importReceiptService.rejectDiscrepancyReport(100L, 500L, new RejectImportReceiptRequest("Sai so luong"));
+
+        assertThat(response.getStatus()).isEqualTo("TU_CHOI");
+        assertThat(report.getRejectedBy()).isEqualTo(manager);
+        assertThat(report.getRejectReason()).isEqualTo("Sai so luong");
+    }
+
     private Employee createEmployee(Long id, RoleCode code, EmployeeStatus status) {
         Employee employee = new Employee();
         employee.setId(id);
@@ -586,6 +667,17 @@ class ImportReceiptDetailServiceTest {
         detail.setExpectedUnitPrice(BigDecimal.valueOf(100));
         detail.setExpectedLineTotal(BigDecimal.valueOf(1000));
         return detail;
+    }
+
+    private DiscrepancyReport discrepancyReport(Long id, ImportReceipt receipt, Employee creator) {
+        DiscrepancyReport report = new DiscrepancyReport();
+        report.setId(id);
+        report.setImportReceipt(receipt);
+        report.setCode("BBCL-" + receipt.getCode());
+        report.setStatus(DiscrepancyReportStatus.CHO_DUYET);
+        report.setCreatedBy(creator);
+        report.setReportDate(LocalDateTime.now());
+        return report;
     }
 
     private ImportReceiptHistory createHistory(Long id, ImportReceipt receipt, Employee actor) {

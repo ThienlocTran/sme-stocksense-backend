@@ -123,3 +123,12 @@ Lưu trữ chi tiết các sản phẩm bị chênh lệch số lượng.
 ```bash
 .\mvnw.cmd test
 ```
+## M4 status workflow note
+
+- Migration: `V38__add_discrepancy_report_status.sql`.
+- Column: `bien_ban_chenh_lech.trang_thai`.
+- Values: `CHO_DUYET`, `DA_DUYET`, `TU_CHOI`, `HUY`.
+- Backfill: existing BBCL rows become `CHO_DUYET` because there is no reliable approved/rejected evidence.
+- Creation: new BBCL is explicitly created with `CHO_DUYET`; API response includes `status`.
+- Approve/reject/cancel: no BBCL endpoints exist yet; not added in M4.
+- Remaining: M5 enum rename, M8/M9 cancel endpoints, M13.

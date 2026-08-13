@@ -201,7 +201,7 @@ Chỉ có thể duyệt hoặc từ chối khi phiếu ở trạng thái `CHO_DU
 
 ### 5.3 Từ CHO_DUYET_CAP_2 → Approved / Ready to Export
 
-**Trạng thái**: CHO_DUYET_CAP_2 → CHO_XUAT hoặc HOAN_THANH (hoặc CHO_XUAT_HANG)
+**Trạng thái**: CHO_DUYET → DA_DUYET hoặc HOAN_THANH
 
 **Điều kiện cho phép**:
 - ✓ Phiếu đang ở trạng thái CHO_DUYET_CAP_2
@@ -211,7 +211,7 @@ Chỉ có thể duyệt hoặc từ chối khi phiếu ở trạng thái `CHO_DU
 **Người thực hiện**: ADMIN hoặc MANAGER
 
 **Kết quả**:
-- `status` = CHO_XUAT (hoặc HOAN_THANH tùy quy trình)
+- `status` = DA_DUYET (hoặc HOAN_THANH tùy quy trình)
 - `level2ApprovedBy` = MANAGER/ADMIN duyệt cấp 2
 - `level2ApprovedAt` = LocalDateTime.now()
 - Giảm tồn kho (nếu quy trình cho phép)
@@ -344,7 +344,7 @@ Chỉ có thể duyệt hoặc từ chối khi phiếu ở trạng thái `CHO_DU
     │              │ │
     ▼              ▼ │
 ┌──────────────┐ ┌──────────────────┐
-│ CHO_XUAT     │ │ TU_CHOI (Từ chối)│
+│ DA_DUYET     │ │ TU_CHOI (Từ chối)│
 │(Sẵn sàng xuất) │ └──────────────────┘
 │ hoặc         │       │
 │ HOAN_THANH   │       │ [Edit & Resubmit]
@@ -367,12 +367,12 @@ Chỉ có thể duyệt hoặc từ chối khi phiếu ở trạng thái `CHO_DU
 | NHAP | HUY | Phiếu nháp | Người tạo / ADMIN | Cancel |
 | CHO_DUYET_CAP_1 | CHO_DUYET_CAP_2 | Approved by Mgr/Admin | MANAGER / ADMIN | Approve Level 1 |
 | CHO_DUYET_CAP_1 | TU_CHOI | Có lý do | MANAGER / ADMIN | Reject Level 1 |
-| CHO_DUYET_CAP_2 | CHO_XUAT/HOAN_THANH | Approved by Mgr/Admin | MANAGER / ADMIN | Approve Level 2 |
+| CHO_DUYET | DA_DUYET/HOAN_THANH | Approved by Mgr/Admin | MANAGER / ADMIN | Approve |
 | CHO_DUYET_CAP_2 | TU_CHOI | Có lý do | MANAGER / ADMIN | Reject Level 2 |
 | TU_CHOI | NHAP | Người tạo muốn chỉnh sửa | EMPLOYEE/ADMIN | Edit & Go Back |
 | TU_CHOI | CHO_DUYET_CAP_1 | Sau khi chỉnh sửa | EMPLOYEE/MANAGER/ADMIN | Resubmit |
 | TU_CHOI | HUY | Từ bỏ phiếu | EMPLOYEE/ADMIN | Cancel |
-| CHO_XUAT/HOAN_THANH | (none) | Terminal state | - | Read Only |
+| DA_DUYET/HOAN_THANH | (none) | Terminal state | - | Read Only |
 | HUY | (none) | Terminal state | - | Read Only |
 
 ### 8.3 Các Trạng Thái
@@ -382,7 +382,7 @@ public enum ExportReceiptStatus {
     NHAP,              // Nháp - chưa gửi duyệt
     CHO_DUYET_CAP_1,   // Chờ duyệt cấp 1 (MANAGER/ADMIN)
     CHO_DUYET_CAP_2,   // Chờ duyệt cấp 2 (MANAGER/ADMIN)
-    CHO_XUAT,          // Sẵn sàng xuất (sau duyệt cấp 2)
+    DA_DUYET,          // Sẵn sàng xuất (sau duyệt)
     HOAN_THANH,        // Hoàn tất (đã xuất, giảm tồn kho)
     TU_CHOI,           // Từ chối (có thể sửa lại hoặc hủy)
     HUY                // Hủy (terminal - không thay đổi được)
@@ -465,7 +465,7 @@ public enum ExportReceiptAction {
 - `GET /api/export-receipts/pending-approval` - Danh sách chờ duyệt (T91 equivalent)
 - `GET /api/export-receipts/{id}/approval-detail` - Chi tiết để duyệt (T92 equivalent)
 - `PUT /api/export-receipts/{id}/submit` - Gửi duyệt (NHAP → CHO_DUYET_CAP_1)
-- `PUT /api/export-receipts/{id}/approve` - Duyệt (CHO_DUYET_CAP_1 → CHO_DUYET_CAP_2, CHO_DUYET_CAP_2 → CHO_XUAT)
+- `PUT /api/export-receipts/{id}/approve` - Duyệt (CHO_DUYET → DA_DUYET)
 - `PUT /api/export-receipts/{id}/reject` - Từ chối (→ TU_CHOI)
 
 ### 11.3 Detail & History Operations
@@ -598,7 +598,7 @@ public enum ExportReceiptAction {
   - Xác nhận tồn kho đủ để xuất
   - Thường được MANAGER/ADMIN cấp quản lý trực tiếp phục vụ
 
-- **Cấp 2** (CHO_DUYET_CAP_2 → CHO_XUAT/HOAN_THANH):
+- **Duyệt** (CHO_DUYET → DA_DUYET/HOAN_THANH):
   - Review lại tính hợp lệ từ cấp 1
   - Xác nhận có thể xuất hàng
   - Có thể là ADMIN hoặc MANAGER cấp cao hơn/khác
@@ -613,11 +613,11 @@ public enum ExportReceiptAction {
   - Re-check tồn kho hiện tại
   - Nếu tồn kho < yêu cầu, có thể reject hoặc cho phép submit lại
 
-- **Khi Duyệt Cấp 2** (CHO_DUYET_CAP_2 → CHO_XUAT):
+- **Khi Duyệt** (CHO_DUYET → DA_DUYET):
   - Final check tồn kho
   - Lock pessimistic nếu cần để tránh race condition
 
-- **Khi Hoàn Tất** (CHO_XUAT → HOAN_THANH):
+- **Khi Hoàn Tất** (DA_DUYET → HOAN_THANH):
   - Giảm tồn kho cuối cùng
 
 ### 13.3 Từ Chối - Quy Tắc Quay Lại
@@ -654,7 +654,7 @@ Trong thiết kế này:
 | **2. Role duyệt cấp 1** | ADMIN, MANAGER |
 | **3. Role duyệt cấp 2** | ADMIN, MANAGER |
 | **4. Role từ chối** | ADMIN, MANAGER |
-| **5. Trạng thái đầy đủ** | NHAP, CHO_DUYET_CAP_1, CHO_DUYET_CAP_2, CHO_XUAT, HOAN_THANH, TU_CHOI, HUY |
+| **5. Trạng thái đầy đủ** | NHAP, CHO_DUYET, DA_DUYET, HOAN_THANH, TU_CHOI, HUY |
 | **6. Điều kiện không được duyệt** | Xem mục 6 - 7 |
 | **7. Điều kiện không được từ chối** | Xem mục 7 |
 | **8. State Machine** | Xem mục 8 - sơ đồ đầy đủ |

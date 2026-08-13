@@ -1,16 +1,20 @@
 package com.smartflow.smestocksensebackend.service.impl;
 
 import com.smartflow.smestocksensebackend.entity.Employee;
-import com.smartflow.smestocksensebackend.entity.Role;
+
 import com.smartflow.smestocksensebackend.dto.response.DashboardOverviewResponse;
 import com.smartflow.smestocksensebackend.dto.response.OverviewMetricsDTO;
 import com.smartflow.smestocksensebackend.dto.response.PendingTasksDTO;
 import com.smartflow.smestocksensebackend.entity.ExportReceiptStatus;
+import com.smartflow.smestocksensebackend.entity.EmployeeStatus;
 import com.smartflow.smestocksensebackend.entity.ImportReceiptStatus;
 import com.smartflow.smestocksensebackend.entity.InventoryAlertStatus;
 import com.smartflow.smestocksensebackend.entity.ProductStatus;
 import com.smartflow.smestocksensebackend.entity.RoleCode;
 import com.smartflow.smestocksensebackend.entity.WarehouseStatus;
+import com.smartflow.smestocksensebackend.exception.AccountInactiveException;
+import com.smartflow.smestocksensebackend.exception.MissingRoleException;
+import com.smartflow.smestocksensebackend.repository.EmployeeRepository;
 import com.smartflow.smestocksensebackend.repository.ExportReceiptRepository;
 import com.smartflow.smestocksensebackend.repository.ImportReceiptRepository;
 import com.smartflow.smestocksensebackend.repository.InventoryAlertRepository;
@@ -19,6 +23,7 @@ import com.smartflow.smestocksensebackend.repository.ProductRepository;
 import com.smartflow.smestocksensebackend.repository.WarehouseRepository;
 import com.smartflow.smestocksensebackend.service.DashboardService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,6 +34,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class DashboardServiceImpl implements DashboardService {
 
+    private final EmployeeRepository employeeRepository;
     private final ProductRepository productRepository;
     private final WarehouseRepository warehouseRepository;
     private final InventoryLevelRepository inventoryLevelRepository;
@@ -44,9 +50,8 @@ public class DashboardServiceImpl implements DashboardService {
     );
 
     private static final List<ExportReceiptStatus> EXPORT_PENDING = List.of(
-            ExportReceiptStatus.CHO_DUYET_CAP_1,
-            ExportReceiptStatus.CHO_DUYET_CAP_2,
-            ExportReceiptStatus.CHO_XUAT
+            ExportReceiptStatus.CHO_DUYET,
+            ExportReceiptStatus.DA_DUYET
     );
 
     private static final List<InventoryAlertStatus> ALERT_PENDING = List.of(
@@ -56,9 +61,20 @@ public class DashboardServiceImpl implements DashboardService {
 
     @Override
     @Transactional(readOnly = true)
-    public DashboardOverviewResponse getOverview(Employee employee) {
-        if (employee == null || employee.getRole() == null || employee.getRole().getCode() == null) {
-            throw new AccessDeniedException("Vui lòng đăng nhập để xem thông tin.");
+    public DashboardOverviewResponse getOverview(Employee principal) {
+        if (principal == null || principal.getId() == null) {
+            throw new AuthenticationCredentialsNotFoundException("Vui lòng đăng nhập để xem thông tin.");
+        }
+
+        Employee employee = employeeRepository.findById(principal.getId())
+                .orElseThrow(() -> new AuthenticationCredentialsNotFoundException("Tài khoản không tồn tại."));
+
+        if (employee.getStatus() != EmployeeStatus.HOAT_DONG) {
+            throw new AccountInactiveException();
+        }
+
+        if (employee.getRole() == null || employee.getRole().getCode() == null) {
+            throw new MissingRoleException();
         }
 
         RoleCode roleCode = employee.getRole().getCode();

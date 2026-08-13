@@ -1,6 +1,7 @@
 package com.smartflow.smestocksensebackend.controller;
 
 import com.smartflow.smestocksensebackend.dto.inbound.AddImportReceiptItemRequest;
+import com.smartflow.smestocksensebackend.dto.inbound.CancelReceiptRequest;
 import com.smartflow.smestocksensebackend.dto.inbound.CreateImportReceiptRequest;
 import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptArrivalRequest;
 import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptDraftResponse;
@@ -170,6 +171,14 @@ public class ImportReceiptController {
         return importReceiptService.cancelDraft(receiptId);
     }
 
+    @PostMapping("/{receiptId}/cancel")
+    public ImportReceiptDraftResponse cancel(
+            @PathVariable Long receiptId,
+            @Valid @RequestBody(required = false) CancelReceiptRequest request
+    ) {
+        return importReceiptService.cancel(receiptId, request);
+    }
+
     @PutMapping("/{receiptId}/submit")
     public ImportReceiptDraftResponse submitForApproval(@PathVariable Long receiptId) {
         return importReceiptService.submitForApproval(receiptId);
@@ -225,6 +234,23 @@ public class ImportReceiptController {
             @Valid @RequestBody CreateDiscrepancyReportRequest request
     ) {
         return importReceiptService.createDiscrepancyReport(receiptId, request);
+    }
+
+    @PostMapping("/{receiptId}/discrepancy-reports/{reportId}/approve")
+    public DiscrepancyReportResponse approveDiscrepancyReport(
+            @PathVariable Long receiptId,
+            @PathVariable Long reportId
+    ) {
+        return importReceiptService.approveDiscrepancyReport(receiptId, reportId);
+    }
+
+    @PostMapping("/{receiptId}/discrepancy-reports/{reportId}/reject")
+    public DiscrepancyReportResponse rejectDiscrepancyReport(
+            @PathVariable Long receiptId,
+            @PathVariable Long reportId,
+            @Valid @RequestBody RejectImportReceiptRequest request
+    ) {
+        return importReceiptService.rejectDiscrepancyReport(receiptId, reportId, request);
     }
 
     /**

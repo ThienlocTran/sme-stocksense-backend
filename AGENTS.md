@@ -48,6 +48,6 @@ Người dùng đã thiết lập Quy trình làm việc tĩnh (Strict Skills Ha
 2. **Khai báo chuẩn Core Protocol:** Mọi câu trả lời code phải luôn bắt đầu bằng `🤖 Applying knowledge of @[agent]...` và `📚 Using skill: @[skill]...`.
 3. **Áp dụng `@ponytail`:** Luôn dùng skill `@ponytail` mức độ `full` (viết code ngắn gọn, không đẻ thêm class/DTO thừa nếu framework đã có sẵn).
 4. **Code Comments & Docs:** 
-   - Đánh số và comment bằng Tiếng Việt rõ ràng vào từng khối logic trong các file code (Service, Controller...).
+   - Chỉ thêm comment ngắn khi thật sự cần; không comment dài dòng hoặc giải thích lại code.
    - Tạo 1 file `docs/README_T[Mã Task].md` tóm tắt API (Chức năng, Logic, JSON Request/Response).
 5. **Verify:** Bắt buộc chạy lệnh `mvnw clean compile` thành công (BUILD SUCCESS) thì mới được phép cập nhật file `progress.md` và `feature_list.json`.

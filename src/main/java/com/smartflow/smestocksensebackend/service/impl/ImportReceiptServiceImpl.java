@@ -1,6 +1,7 @@
 package com.smartflow.smestocksensebackend.service.impl;
 
 import com.smartflow.smestocksensebackend.dto.inbound.AddImportReceiptItemRequest;
+import com.smartflow.smestocksensebackend.dto.inbound.CancelReceiptRequest;
 import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptArrivalRequest;
 import com.smartflow.smestocksensebackend.domain.inbound.ImportReceiptAmountCalculator;
 import com.smartflow.smestocksensebackend.domain.inbound.ImportReceiptItemValidator;
@@ -45,9 +46,10 @@ import com.smartflow.smestocksensebackend.repository.ImportReceiptRepository;
 import com.smartflow.smestocksensebackend.repository.PartnerRepository;
 import com.smartflow.smestocksensebackend.repository.WarehouseRepository;
 import com.smartflow.smestocksensebackend.repository.DiscrepancyReportRepository;
-import com.smartflow.smestocksensebackend.repository.DiscrepancyReportDetailRepository;
+
 import com.smartflow.smestocksensebackend.entity.DiscrepancyReport;
 import com.smartflow.smestocksensebackend.entity.DiscrepancyReportDetail;
+import com.smartflow.smestocksensebackend.entity.DiscrepancyReportStatus;
 import com.smartflow.smestocksensebackend.service.ImportReceiptCodeGenerator;
 import com.smartflow.smestocksensebackend.service.ImportReceiptService;
 import com.smartflow.smestocksensebackend.service.InventoryService;
@@ -112,9 +114,13 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
     private final ImportReceiptItemValidator itemValidator;
     private final ImportReceiptAmountCalculator amountCalculator;
     private final DiscrepancyReportRepository discrepancyReportRepository;
-    private final DiscrepancyReportDetailRepository discrepancyReportDetailRepository;
+
     private final InventoryService inventoryService;
     private final ImportReceiptHistoryRepository importReceiptHistoryRepository;
+
+    /** Ngưỡng tổng tiền để bắt buộc 2 cấp duyệt, mặc định 50 triệu VND */
+    @org.springframework.beans.factory.annotation.Value("${app.import-receipt.second-approval-threshold-amount:50000000}")
+    private java.math.BigDecimal secondApprovalThreshold;
 
     @Override
     @Transactional
@@ -294,7 +300,7 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
         if (!ImportReceiptStatePolicy.isEditable(receipt.getStatus())) {
             throw new ConflictException("Chi duoc gui duyet phieu nhap o trang thai NHAP hoac TU_CHOI.");
         }
-        if (!ImportReceiptStatePolicy.canTransition(receipt.getStatus(), ImportReceiptStatus.CHO_DUYET_CAP_2)) {
+        if (!ImportReceiptStatePolicy.canTransition(receipt.getStatus(), ImportReceiptStatus.CHO_DUYET_CAP_1)) {
             throw new ConflictException("Chi duoc gui duyet phieu nhap o trang thai NHAP hoac TU_CHOI.");
         }
 
@@ -318,12 +324,12 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
         try {
             receipt.setTotalAmount(totalAmount);
             LocalDateTime submittedAt = LocalDateTime.now();
-            receipt.setStatus(ImportReceiptStatus.CHO_DUYET_CAP_2);
+            // M1 fix: chuyển sang CHO_DUYET_CAP_1, không tự duyệt cấp 1
+            receipt.setStatus(ImportReceiptStatus.CHO_DUYET_CAP_1);
             receipt.setRejectionReason(null);
             receipt.setSubmittedBy(actor);
             receipt.setSubmittedAt(submittedAt);
-            receipt.setLevel1ApprovedBy(actor);
-            receipt.setLevel1ApprovedAt(submittedAt);
+            // Không đặt level1ApprovedBy ở đây — phải do người khác duyệt
             ImportReceipt savedReceipt = importReceiptRepository.saveAndFlush(receipt);
             saveHistory(savedReceipt, actor, ImportReceiptAction.GUI_DUYET, null);
             return ImportReceiptDraftResponse.from(savedReceipt, details);
@@ -476,15 +482,42 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
         ImportReceipt receipt = importReceiptRepository.findById(receiptId)
                 .orElseThrow(() -> new NotFoundException("Phieu nhap khong ton tai."));
 
+        // M2 fix: chặn tự duyệt
+        if (actor.getId().equals(receipt.getCreatedBy().getId())) {
+            throw new BadRequestException("Nguoi tao phieu khong duoc tu duyet phieu cua chinh minh.");
+        }
+        if (receipt.getSubmittedBy() != null && actor.getId().equals(receipt.getSubmittedBy().getId())) {
+            throw new BadRequestException("Nguoi gui duyet khong duoc tu duyet phieu cua chinh minh.");
+        }
+
         ImportReceiptStatus current = receipt.getStatus();
         LocalDateTime now = LocalDateTime.now();
 
         ImportReceiptStatus nextStatus;
         ImportReceiptAction action;
-        
-        if (current == ImportReceiptStatus.CHO_DUYET_CAP_1
-                || current == ImportReceiptStatus.CHO_DUYET_CAP_2) {
-            // Cấp 1 do người tạo xác nhận khi gửi; quản lý/admin duyệt là cấp 2 và kết thúc duyệt.
+
+        if (current == ImportReceiptStatus.CHO_DUYET_CAP_1) {
+            // M7 fix: kiểm tra ngưỡng để quyết định 1 hay 2 cấp duyệt
+            BigDecimal totalAmount = receipt.getTotalAmount() != null ? receipt.getTotalAmount() : BigDecimal.ZERO;
+            if (totalAmount.compareTo(secondApprovalThreshold) > 0) {
+                // Phữu vượt ngưỡng: chuyển sang CHO_DUYET_CAP_2
+                nextStatus = ImportReceiptStatus.CHO_DUYET_CAP_2;
+                receipt.setLevel1ApprovedBy(actor);
+                receipt.setLevel1ApprovedAt(now);
+                action = ImportReceiptAction.DUYET_CAP_1;
+            } else {
+                // Phữu dưới ngưỡng: 1 cấp duyệt, chuyển thẳng sang CHO_HANG_VE
+                nextStatus = ImportReceiptStatus.CHO_HANG_VE;
+                receipt.setLevel1ApprovedBy(actor);
+                receipt.setLevel1ApprovedAt(now);
+                action = ImportReceiptAction.DUYET_CAP_1;
+            }
+        } else if (current == ImportReceiptStatus.CHO_DUYET_CAP_2) {
+            // M3 fix: kiểm tra four-eyes — người duyệt cấp 2 phải khác cấp 1
+            if (receipt.getLevel1ApprovedBy() != null
+                    && actor.getId().equals(receipt.getLevel1ApprovedBy().getId())) {
+                throw new BadRequestException("Nguoi duyet cap 2 phai khac nguoi da duyet cap 1 (nguyen tac 4 mat).");
+            }
             nextStatus = ImportReceiptStatus.CHO_HANG_VE;
             receipt.setLevel2ApprovedBy(actor);
             receipt.setLevel2ApprovedAt(now);
@@ -1001,6 +1034,7 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
             report.setImportReceipt(receipt);
             report.setCreatedBy(actor);
             report.setReportDate(LocalDateTime.now());
+            report.setStatus(DiscrepancyReportStatus.CHO_DUYET);
         }
         report.setNote(normalizeOptional(request.getNote()));
 
@@ -1053,6 +1087,106 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
         return DiscrepancyReportResponse.from(savedReport);
     }
 
+    @Override
+    @Transactional
+    public ImportReceiptDraftResponse cancel(Long receiptId, CancelReceiptRequest request) {
+        Employee actor = currentEmployee();
+        if (actor.getStatus() != EmployeeStatus.HOAT_DONG) {
+            throw new AccountInactiveException();
+        }
+
+        ImportReceipt receipt = importReceiptRepository.findById(receiptId)
+                .orElseThrow(() -> new NotFoundException("Phieu nhap khong ton tai."));
+        if (receipt.getStatus() == ImportReceiptStatus.NHAP) {
+            return cancelDraft(receiptId);
+        }
+        if (receipt.getStatus() != ImportReceiptStatus.CHO_HANG_VE
+                && receipt.getStatus() != ImportReceiptStatus.CHO_KIEM_HANG) {
+            throw new ConflictException("Chi duoc huy phieu nhap o trang thai NHAP, CHO_HANG_VE hoac CHO_KIEM_HANG.");
+        }
+        ensureCanApprove(actor);
+        String reason = request != null ? normalizeOptional(request.reason()) : null;
+        if (reason == null) {
+            throw new BadRequestException("Ly do huy khong duoc de trong.");
+        }
+
+        try {
+            receipt.setStatus(ImportReceiptStatus.HUY);
+            receipt.setCancelledBy(actor);
+            receipt.setCancelledAt(LocalDateTime.now());
+            ImportReceipt savedReceipt = importReceiptRepository.saveAndFlush(receipt);
+            saveHistory(savedReceipt, actor, ImportReceiptAction.HUY, reason);
+            List<ImportReceiptDetail> details = importReceiptDetailRepository.findByDocumentId(receiptId);
+            return ImportReceiptDraftResponse.from(savedReceipt, details);
+        } catch (OptimisticLockingFailureException exception) {
+            throw new ConflictException("Phieu nhap da duoc cap nhat boi request khac.");
+        }
+    }
+
+    @Override
+    @Transactional
+    public DiscrepancyReportResponse approveDiscrepancyReport(Long receiptId, Long reportId) {
+        Employee actor = currentActiveDiscrepancyApprover();
+        DiscrepancyReport report = pendingDiscrepancyReport(receiptId, reportId);
+        Employee creator = report.getCreatedBy();
+        if (creator != null && actor.getId().equals(creator.getId())) {
+            throw new BadRequestException("Nguoi lap bien ban khong duoc tu duyet bien ban chenh lech.");
+        }
+        report.setStatus(DiscrepancyReportStatus.DA_DUYET);
+        report.setApprovedBy(actor);
+        report.setApprovedAt(LocalDateTime.now());
+        report.setRejectedBy(null);
+        report.setRejectedAt(null);
+        report.setRejectReason(null);
+        return DiscrepancyReportResponse.from(discrepancyReportRepository.saveAndFlush(report));
+    }
+
+    @Override
+    @Transactional
+    public DiscrepancyReportResponse rejectDiscrepancyReport(Long receiptId, Long reportId, RejectImportReceiptRequest request) {
+        String reason = request != null ? normalizeOptional(request.reason()) : null;
+        if (reason == null) {
+            throw new BadRequestException("Ly do tu choi khong duoc de trong.");
+        }
+        Employee actor = currentActiveDiscrepancyApprover();
+        DiscrepancyReport report = pendingDiscrepancyReport(receiptId, reportId);
+        Employee creator = report.getCreatedBy();
+        if (creator != null && actor.getId().equals(creator.getId())) {
+            throw new BadRequestException("Nguoi lap bien ban khong duoc tu choi bien ban chenh lech cua minh.");
+        }
+        report.setStatus(DiscrepancyReportStatus.TU_CHOI);
+        report.setRejectedBy(actor);
+        report.setRejectedAt(LocalDateTime.now());
+        report.setRejectReason(reason);
+        report.setApprovedBy(null);
+        report.setApprovedAt(null);
+        return DiscrepancyReportResponse.from(discrepancyReportRepository.saveAndFlush(report));
+    }
+
+    private Employee currentActiveDiscrepancyApprover() {
+        Employee actor = currentEmployee();
+        if (actor.getStatus() != EmployeeStatus.HOAT_DONG) {
+            throw new AccountInactiveException();
+        }
+        RoleCode roleCode = actor.getRole() != null ? actor.getRole().getCode() : null;
+        if (roleCode != RoleCode.ADMIN && roleCode != RoleCode.MANAGER) {
+            throw new MissingRoleException("Khong co quyen duyet bien ban chenh lech.");
+        }
+        return actor;
+    }
+
+    private DiscrepancyReport pendingDiscrepancyReport(Long receiptId, Long reportId) {
+        DiscrepancyReport report = discrepancyReportRepository.findById(reportId)
+                .orElseThrow(() -> new NotFoundException("Bien ban chenh lech khong ton tai."));
+        if (report.getImportReceipt() == null || !receiptId.equals(report.getImportReceipt().getId())) {
+            throw new NotFoundException("Bien ban chenh lech khong thuoc phieu nhap nay.");
+        }
+        if (report.getStatus() != DiscrepancyReportStatus.CHO_DUYET) {
+            throw new ConflictException("Chi duoc duyet hoac tu choi bien ban o trang thai CHO_DUYET.");
+        }
+        return report;
+    }
+
     /**
      * Hoàn tất phiếu nhập kho (T104).
      * Bọc toàn bộ các khâu vào 1 giao dịch an toàn (ACID):
@@ -1080,8 +1214,12 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
         // Nạp lại chi tiết phiếu nhập sau khi đã được cập nhật kiểm hàng
         List<ImportReceiptDetail> details = importReceiptDetailRepository.findByDocumentId(receiptId);
         boolean hasDiscrepancy = details.stream().anyMatch(this::hasDiscrepancy);
-        if (hasDiscrepancy && discrepancyReportRepository.findByImportReceiptId(receiptId).isEmpty()) {
-            throw new BadRequestException("Có chênh lệch số lượng/tình trạng hàng. Vui lòng lưu biên bản chênh lệch trước khi hoàn tất nhập kho.");
+        if (hasDiscrepancy) {
+            DiscrepancyReport report = discrepancyReportRepository.findByImportReceiptId(receiptId)
+                    .orElseThrow(() -> new BadRequestException("Có chênh lệch số lượng/tình trạng hàng. Vui lòng lưu biên bản chênh lệch trước khi hoàn tất nhập kho."));
+            if (report.getStatus() != DiscrepancyReportStatus.DA_DUYET) {
+                throw new BadRequestException("Bien ban chenh lech phai duoc duyet truoc khi hoan tat nhap kho.");
+            }
         }
 
         // 3. Đổi status phiếu sang HOAN_THANH trước khi tăng tồn kho để thỏa guard nghiệp vụ

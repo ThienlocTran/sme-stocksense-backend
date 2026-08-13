@@ -1,5 +1,6 @@
 package com.smartflow.smestocksensebackend.service;
 
+import com.smartflow.smestocksensebackend.dto.inbound.CancelReceiptRequest;
 import com.smartflow.smestocksensebackend.dto.inbound.RejectExportReceiptRequest;
 import com.smartflow.smestocksensebackend.dto.outbound.ExportReceiptDetailResponse;
 import com.smartflow.smestocksensebackend.dto.outbound.ExportReceiptPageResponse;
@@ -16,6 +17,8 @@ public interface ExportReceiptService {
 
     ExportReceiptDetailResponse approve(Long receiptId);
 
+    ExportReceiptDetailResponse complete(Long receiptId);
+
     ExportReceiptDetailResponse reject(Long receiptId, RejectExportReceiptRequest request);
 
     ExportReceiptResponse createDraft(ExportReceiptDraftRequest request);
@@ -23,6 +26,8 @@ public interface ExportReceiptService {
     ExportReceiptResponse updateDraft(Long id, ExportReceiptDraftRequest request);
 
     void cancelDraft(Long id);
+
+    ExportReceiptDetailResponse cancel(Long id, CancelReceiptRequest request);
 
     ExportReceiptResponse submitForApproval(Long id,
             com.smartflow.smestocksensebackend.dto.request.outbound.ExportReceiptSubmitRequest request);

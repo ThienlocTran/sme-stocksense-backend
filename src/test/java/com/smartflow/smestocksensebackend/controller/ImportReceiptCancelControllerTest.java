@@ -2,6 +2,7 @@ package com.smartflow.smestocksensebackend.controller;
 
 import com.smartflow.smestocksensebackend.config.JwtAuthenticationFilter;
 import com.smartflow.smestocksensebackend.config.SecurityConfig;
+import com.smartflow.smestocksensebackend.dto.inbound.CancelReceiptRequest;
 import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptDraftResponse;
 import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptItemResponse;
 import com.smartflow.smestocksensebackend.exception.ApiExceptionHandler;
@@ -24,9 +25,11 @@ import java.util.List;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -135,6 +138,27 @@ class ImportReceiptCancelControllerTest {
                 .andExpect(content().string(not(containsString("SQL"))))
                 .andExpect(content().string(not(containsString("Hibernate"))))
                 .andExpect(content().string(not(containsString("stackTrace"))));
+    }
+
+    @Test
+    void cancelMidState_managerShouldReturnCancelledResponse() throws Exception {
+        when(importReceiptService.cancel(eq(123L), any(CancelReceiptRequest.class))).thenReturn(response());
+
+        mockMvc.perform(post("/api/import-receipts/123/cancel")
+                        .with(user("manager@example.com").roles("MANAGER"))
+                        .contentType("application/json")
+                        .content("{\"reason\":\"NCC huy\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("HUY"));
+    }
+
+    @Test
+    void cancelMidState_employeeShouldReturn403() throws Exception {
+        mockMvc.perform(post("/api/import-receipts/123/cancel")
+                        .with(user("employee@example.com").roles("EMPLOYEE"))
+                        .contentType("application/json")
+                        .content("{\"reason\":\"NCC huy\"}"))
+                .andExpect(status().isForbidden());
     }
 
     private ImportReceiptDraftResponse response() {

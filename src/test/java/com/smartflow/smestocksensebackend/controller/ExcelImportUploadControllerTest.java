@@ -65,15 +65,15 @@ class ExcelImportUploadControllerTest {
     }
 
     @Test
-    void upload_adminProductOnlyWithoutWarehouseShouldReturnCreatedMetadata() throws Exception {
+    void upload_adminProductOnlyWithoutWarehouseShouldReturnValidatedMetadata() throws Exception {
         when(excelImportUploadService.upload(any(), eq(ExcelImportMode.PRODUCT_ONLY.name()), eq(null)))
                 .thenReturn(new ExcelImportUploadResponse(
                         99L,
                         "products.xlsx",
                         ExcelImportMode.PRODUCT_ONLY.name(),
-                        ExcelImportStatus.CHO_XU_LY.name(),
-                        0,
-                        0,
+                        ExcelImportStatus.SAN_SANG_IMPORT.name(),
+                        2,
+                        2,
                         0,
                         LocalDateTime.of(2026, 6, 25, 9, 0)
                 ));
@@ -86,10 +86,12 @@ class ExcelImportUploadControllerTest {
                 .andExpect(jsonPath("$.id").value(99))
                 .andExpect(jsonPath("$.tenFile").value("products.xlsx"))
                 .andExpect(jsonPath("$.loaiImport").value(ExcelImportMode.PRODUCT_ONLY.name()))
-                .andExpect(jsonPath("$.trangThai").value(ExcelImportStatus.CHO_XU_LY.name()))
-                .andExpect(jsonPath("$.tongSoDong").value(0))
-                .andExpect(jsonPath("$.soDongHopLe").value(0))
-                .andExpect(jsonPath("$.soDongLoi").value(0));
+                .andExpect(jsonPath("$.trangThai").value(ExcelImportStatus.SAN_SANG_IMPORT.name()))
+                .andExpect(jsonPath("$.tongSoDong").value(2))
+                .andExpect(jsonPath("$.soDongHopLe").value(2))
+                .andExpect(jsonPath("$.soDongLoi").value(0))
+                .andExpect(jsonPath("$.valid").value(true))
+                .andExpect(jsonPath("$.canConfirm").value(true));
     }
 
     @Test

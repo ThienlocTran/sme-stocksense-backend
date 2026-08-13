@@ -1,0 +1,760 @@
+<title>Quy trình Nhập kho · Xuất kho · Phê duyệt · Import Excel</title>
+<style>
+  :root {
+    --bg: #f3f4ef;
+    --surface: #ffffff;
+    --surface-2: #eceee7;
+    --ink: #1f2620;
+    --ink-soft: #5b6259;
+    --line: #d8dad2;
+    --accent: #1f5c54;
+    --accent-ink: #ffffff;
+    --accent-soft: #dce8e4;
+    --ok: #2f7d4f;
+    --ok-soft: #e1efe4;
+    --warn: #a86b16;
+    --warn-soft: #f5ead4;
+    --danger: #b23a34;
+    --danger-soft: #f6e2e0;
+    --radius: 4px;
+    --font-display: Georgia, "Times New Roman", "Noto Serif", serif;
+    --font-body: "Segoe UI", Calibri, Roboto, "Helvetica Neue", Arial, sans-serif;
+    --font-mono: Consolas, "SFMono-Regular", Menlo, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #171c19;
+      --surface: #1f2521;
+      --surface-2: #262c27;
+      --ink: #e9ebe4;
+      --ink-soft: #a4ab9f;
+      --line: #333a34;
+      --accent: #5fb3a3;
+      --accent-ink: #10201c;
+      --accent-soft: #223330;
+      --ok: #6fbf8b;
+      --ok-soft: #1f322a;
+      --warn: #d9a85c;
+      --warn-soft: #382d1c;
+      --danger: #e08a84;
+      --danger-soft: #3a2323;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #171c19;
+    --surface: #1f2521;
+    --surface-2: #262c27;
+    --ink: #e9ebe4;
+    --ink-soft: #a4ab9f;
+    --line: #333a34;
+    --accent: #5fb3a3;
+    --accent-ink: #10201c;
+    --accent-soft: #223330;
+    --ok: #6fbf8b;
+    --ok-soft: #1f322a;
+    --warn: #d9a85c;
+    --warn-soft: #382d1c;
+    --danger: #e08a84;
+    --danger-soft: #3a2323;
+  }
+  :root[data-theme="light"] {
+    --bg: #f3f4ef;
+    --surface: #ffffff;
+    --surface-2: #eceee7;
+    --ink: #1f2620;
+    --ink-soft: #5b6259;
+    --line: #d8dad2;
+    --accent: #1f5c54;
+    --accent-ink: #ffffff;
+    --accent-soft: #dce8e4;
+    --ok: #2f7d4f;
+    --ok-soft: #e1efe4;
+    --warn: #a86b16;
+    --warn-soft: #f5ead4;
+    --danger: #b23a34;
+    --danger-soft: #f6e2e0;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; color: var(--ink); }
+  a { color: var(--accent); }
+  .tabular { font-variant-numeric: tabular-nums; font-family: var(--font-mono); }
+
+  .page {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 2.5rem 1.5rem 6rem;
+    display: grid;
+    grid-template-columns: 220px minmax(0, 1fr);
+    gap: 3rem;
+  }
+  @media (max-width: 900px) {
+    .page { grid-template-columns: 1fr; gap: 1.5rem; }
+  }
+
+  /* ---------- Header ---------- */
+  .doc-header {
+    grid-column: 1 / -1;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 1.75rem;
+    margin-bottom: 0.5rem;
+  }
+  .eyebrow {
+    font-family: var(--font-body);
+    font-size: 0.72rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent);
+    font-weight: 700;
+    margin: 0 0 0.6rem;
+  }
+  .doc-header h1 {
+    font-size: clamp(1.65rem, 3vw, 2.35rem);
+    margin: 0 0 0.6rem;
+    font-weight: 700;
+  }
+  .doc-header p {
+    max-width: 62ch;
+    color: var(--ink-soft);
+    margin: 0 0 0.9rem;
+  }
+  .doc-meta {
+    display: flex;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+    font-size: 0.85rem;
+    color: var(--ink-soft);
+  }
+  .doc-meta strong { color: var(--ink); font-weight: 600; }
+
+  /* ---------- Nav ---------- */
+  .toc {
+    align-self: start;
+    position: sticky;
+    top: 1.5rem;
+  }
+  .toc-label {
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    font-weight: 700;
+    margin-bottom: 0.75rem;
+  }
+  .toc ol { list-style: none; margin: 0; padding: 0; border-left: 1px solid var(--line); }
+  .toc li { margin: 0; }
+  .toc a {
+    display: block;
+    padding: 0.4rem 0 0.4rem 0.9rem;
+    margin-left: -1px;
+    border-left: 2px solid transparent;
+    color: var(--ink-soft);
+    text-decoration: none;
+    font-size: 0.92rem;
+  }
+  .toc a:hover { color: var(--accent); border-left-color: var(--accent); }
+  @media (max-width: 900px) {
+    .toc { position: static; }
+    .toc ol { display: flex; flex-wrap: wrap; border-left: none; gap: 0 0.25rem; }
+    .toc a { border-left: none; border-bottom: 2px solid transparent; padding: 0.3rem 0.6rem; }
+    .toc a:hover { border-bottom-color: var(--accent); }
+  }
+
+  main { min-width: 0; }
+
+  section.block {
+    margin-bottom: 3.25rem;
+    scroll-margin-top: 1.5rem;
+  }
+  section.block .eyebrow { margin-bottom: 0.3rem; }
+  section.block h2 {
+    font-size: 1.5rem;
+    margin: 0 0 0.4rem;
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+  }
+  .section-num {
+    font-family: var(--font-mono);
+    font-size: 0.95rem;
+    color: var(--accent);
+    font-weight: 700;
+  }
+  section.block > .lede {
+    color: var(--ink-soft);
+    max-width: 68ch;
+    margin: 0 0 1.4rem;
+  }
+  h3.sub {
+    font-family: var(--font-body);
+    font-size: 0.95rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-weight: 700;
+    color: var(--ink);
+    margin: 2rem 0 0.9rem;
+    padding-top: 1.4rem;
+    border-top: 1px solid var(--line);
+  }
+  section.block > h3.sub:first-of-type { border-top: none; padding-top: 0; }
+
+  /* ---------- Flow diagram ---------- */
+  .flow-wrap { overflow-x: auto; padding-bottom: 0.4rem; }
+  .flow {
+    display: flex;
+    align-items: flex-start;
+    flex-wrap: nowrap;
+    gap: 0;
+    min-width: max-content;
+    padding: 0.25rem 0.1rem 1rem;
+  }
+  .flow-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.35rem;
+    width: 148px;
+    flex-shrink: 0;
+  }
+  .chip {
+    width: 100%;
+    text-align: center;
+    padding: 0.55rem 0.5rem;
+    border-radius: var(--radius);
+    border: 1.5px solid var(--line);
+    background: var(--surface);
+    font-family: var(--font-mono);
+    font-size: 0.82rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    color: var(--ink);
+  }
+  .chip.st-neutral { border-color: var(--ink-soft); }
+  .chip.st-pending { background: var(--warn-soft); border-color: var(--warn); color: var(--warn); }
+  .chip.st-success { background: var(--ok-soft); border-color: var(--ok); color: var(--ok); }
+  .chip.st-danger  { background: var(--danger-soft); border-color: var(--danger); color: var(--danger); }
+  .chip.is-conditional { border-style: dashed; }
+  .flow-step .cap {
+    font-size: 0.72rem;
+    color: var(--ink-soft);
+    text-align: center;
+    line-height: 1.3;
+    min-height: 1.8em;
+  }
+  .flow-arrow {
+    flex-shrink: 0;
+    width: 34px;
+    padding-top: 0.7rem;
+    text-align: center;
+    color: var(--ink-soft);
+    font-size: 1.05rem;
+  }
+
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 1.1rem;
+    font-size: 0.8rem;
+    color: var(--ink-soft);
+    margin: -0.3rem 0 1.5rem;
+  }
+  .legend span { display: inline-flex; align-items: center; gap: 0.4rem; }
+  .legend i {
+    width: 0.65rem; height: 0.65rem; border-radius: 2px; display: inline-block;
+  }
+  .legend .lg-neutral { background: var(--ink-soft); }
+  .legend .lg-pending { background: var(--warn); }
+  .legend .lg-success { background: var(--ok); }
+  .legend .lg-danger { background: var(--danger); }
+
+  /* ---------- tables ---------- */
+  .table-wrap { overflow-x: auto; margin: 0 0 1.4rem; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.88rem;
+    background: var(--surface);
+  }
+  caption {
+    text-align: left;
+    font-size: 0.78rem;
+    color: var(--ink-soft);
+    margin-bottom: 0.5rem;
+    caption-side: top;
+  }
+  th, td {
+    text-align: left;
+    padding: 0.55rem 0.7rem;
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+  }
+  thead th {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--ink-soft);
+    font-weight: 700;
+    border-bottom: 1.5px solid var(--ink);
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  td.mono, th.mono { font-family: var(--font-mono); font-size: 0.85rem; }
+  .role-pill {
+    display: inline-block;
+    padding: 0.1rem 0.5rem;
+    border-radius: 999px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-size: 0.76rem;
+    font-weight: 700;
+    margin: 0.1rem 0.25rem 0.1rem 0;
+    white-space: nowrap;
+  }
+
+  /* ---------- callouts ---------- */
+  .rule-box {
+    border-left: 3px solid var(--accent);
+    background: var(--surface);
+    border-radius: 0 var(--radius) var(--radius) 0;
+    padding: 0.85rem 1.1rem;
+    margin: 0 0 1rem;
+    font-size: 0.92rem;
+  }
+  .rule-box b { color: var(--accent); }
+  .rule-box.warn { border-left-color: var(--warn); }
+  .rule-box.warn b { color: var(--warn); }
+  .rule-box.danger { border-left-color: var(--danger); }
+  .rule-box.danger b { color: var(--danger); }
+  .rule-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 0.9rem;
+    margin: 0 0 1.6rem;
+  }
+
+  /* ---------- excel phase diagram ---------- */
+  .phase-flow {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 0.9rem;
+    margin: 1.2rem 0 1.6rem;
+  }
+  .phase-card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 0.9rem 1rem;
+    position: relative;
+  }
+  .phase-card .ph-num {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--accent);
+    font-weight: 700;
+    margin-bottom: 0.35rem;
+  }
+  .phase-card h4 { margin: 0 0 0.3rem; font-size: 0.95rem; font-family: var(--font-body); }
+  .phase-card p { margin: 0; font-size: 0.83rem; color: var(--ink-soft); }
+  .phase-card.loop { border-style: dashed; border-color: var(--warn); }
+  .phase-card.loop .ph-num { color: var(--warn); }
+  .phase-card.final { border-color: var(--ok); }
+  .phase-card.final .ph-num { color: var(--ok); }
+
+  .compare {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.2rem;
+    margin: 0 0 1.6rem;
+  }
+  @media (max-width: 640px) { .compare { grid-template-columns: 1fr; } }
+  .compare .col {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 1rem 1.1rem;
+  }
+  .compare h4 { margin: 0 0 0.6rem; font-size: 1rem; }
+  .compare ul { margin: 0; padding-left: 1.1rem; font-size: 0.88rem; color: var(--ink-soft); }
+  .compare li { margin-bottom: 0.35rem; }
+
+  footer.doc-footer {
+    grid-column: 1 / -1;
+    border-top: 1px solid var(--line);
+    padding-top: 1.2rem;
+    font-size: 0.8rem;
+    color: var(--ink-soft);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .toc a { transition: color 0.15s ease, border-color 0.15s ease; }
+  }
+</style>
+
+<div class="page">
+
+  <header class="doc-header">
+    <p class="eyebrow">Tài liệu nghiệp vụ — SME StockSense</p>
+    <h1>Quy trình Nhập kho · Xuất kho · Phê duyệt · Import Excel</h1>
+    <p>Mô tả luồng xử lý, các trạng thái chứng từ, ngưỡng phê duyệt và quy tắc kiểm soát nội bộ đang áp dụng trong hệ thống quản lý kho.</p>
+    <div class="doc-meta">
+      <span>Phạm vi: <strong>Phiếu nhập kho · Phiếu xuất kho · Kiểm kê kho · Import Excel tồn đầu kỳ</strong></span>
+      <span>Cập nhật: <strong>08/07/2026</strong></span>
+    </div>
+  </header>
+
+  <nav class="toc">
+    <p class="toc-label">Nội dung</p>
+    <ol>
+      <li><a href="#nhap-kho">1. Nhập kho</a></li>
+      <li><a href="#xuat-kho">2. Xuất kho</a></li>
+      <li><a href="#so-sanh">3. So sánh Nhập / Xuất</a></li>
+      <li><a href="#kiem-ke-kho">4. Kiểm kê kho</a></li>
+      <li><a href="#import-excel">5. Import Excel</a></li>
+      <li><a href="#phan-quyen">6. Phân quyền</a></li>
+    </ol>
+  </nav>
+
+  <main>
+
+    <!-- ============ 1. NHẬP KHO ============ -->
+    <section class="block" id="nhap-kho">
+      <p class="eyebrow section-num-wrap"><span class="section-num">01</span></p>
+      <h2>Nhập kho (Phiếu nhập)</h2>
+      <p class="lede">Từ lúc tạo phiếu đến khi hàng về, kiểm hàng và ghi nhận vào tồn kho. Có thể yêu cầu 1 hoặc 2 cấp phê duyệt tùy giá trị phiếu.</p>
+
+      <div class="legend">
+        <span><i class="lg-neutral"></i>Nháp / trung gian</span>
+        <span><i class="lg-pending"></i>Chờ xử lý</span>
+        <span><i class="lg-success"></i>Hoàn tất</span>
+        <span><i class="lg-danger"></i>Từ chối / Huỷ</span>
+      </div>
+
+      <h3 class="sub">Luồng trạng thái chính</h3>
+      <div class="flow-wrap">
+        <div class="flow">
+          <div class="flow-step">
+            <div class="chip st-neutral">NHAP</div>
+            <div class="cap">Tạo phiếu, thêm sản phẩm</div>
+          </div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step">
+            <div class="chip st-pending">CHO_DUYET_CAP_1</div>
+            <div class="cap">Gửi duyệt lần 1</div>
+          </div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step">
+            <div class="chip st-pending is-conditional">CHO_DUYET_CAP_2</div>
+            <div class="cap">Chỉ khi tổng tiền &gt; 50.000.000đ</div>
+          </div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step">
+            <div class="chip st-pending">CHO_HANG_VE</div>
+            <div class="cap">Đã duyệt, chờ NCC giao hàng</div>
+          </div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step">
+            <div class="chip st-pending">CHO_KIEM_HANG</div>
+            <div class="cap">Hàng đã về, chờ kiểm đếm</div>
+          </div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step">
+            <div class="chip st-success">HOAN_THANH</div>
+            <div class="cap">Đã ghi tăng tồn kho</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="rule-box">
+        <b>Ngưỡng phê duyệt:</b> cấu hình tại <code class="tabular">app.import-receipt.second-approval-threshold-amount</code>, mặc định <span class="tabular">50.000.000đ</span>. Phiếu có tổng tiền vượt ngưỡng bắt buộc đủ <b>2 cấp duyệt bởi 2 người khác nhau</b>; phiếu nhỏ hơn hoặc bằng ngưỡng chỉ cần <b>1 cấp duyệt</b> là chuyển thẳng sang chờ hàng về.
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <caption>Các chuyển trạng thái khác (ngoài luồng chính ở trên)</caption>
+          <thead>
+            <tr><th class="mono">Từ</th><th class="mono">Đến</th><th>Điều kiện / Ghi chú</th></tr>
+          </thead>
+          <tbody>
+            <tr><td class="mono">NHAP</td><td class="mono">HUY</td><td>Chủ phiếu hoặc ADMIN huỷ nháp, không cần lý do.</td></tr>
+            <tr><td class="mono">TU_CHOI</td><td class="mono">CHO_DUYET_CAP_1 / NHAP</td><td>Sửa lại và gửi duyệt tiếp, hoặc đưa về nháp để chỉnh nhiều hơn.</td></tr>
+            <tr><td class="mono">TU_CHOI</td><td class="mono">HUY</td><td>Bỏ hẳn phiếu bị từ chối.</td></tr>
+            <tr><td class="mono">CHO_DUYET_CAP_1 / CHO_DUYET_CAP_2</td><td class="mono">TU_CHOI</td><td>Người duyệt từ chối — <b>bắt buộc nhập lý do</b>.</td></tr>
+            <tr><td class="mono">CHO_HANG_VE / CHO_KIEM_HANG</td><td class="mono">HUY</td><td>NCC không giao hàng — chỉ ADMIN/MANAGER huỷ được, <b>bắt buộc lý do</b> (đây là quyết định nghiệp vụ mua hàng, không phải thao tác nháp).</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 class="sub">Quy tắc kiểm soát khi phê duyệt</h3>
+      <div class="rule-grid">
+        <div class="rule-box"><b>Không tự duyệt phiếu của mình</b> — hệ thống chặn nếu người duyệt trùng người tạo phiếu.</div>
+        <div class="rule-box"><b>Nguyên tắc 2 người (four-eyes)</b> — ở cấp duyệt thứ 2, người duyệt bắt buộc phải khác người đã duyệt cấp 1.</div>
+        <div class="rule-box warn"><b>Từ chối phải có lý do</b> — áp dụng cho cả từ chối phiếu nhập lẫn từ chối biên bản chênh lệch.</div>
+      </div>
+
+      <h3 class="sub">Kiểm hàng &amp; chênh lệch</h3>
+      <p style="color:var(--ink-soft); max-width:68ch; margin:0 0 1rem;">Khi kiểm hàng ở trạng thái <code class="tabular">CHO_KIEM_HANG</code> phát hiện số lượng thực nhận lệch so với đặt hàng, hệ thống bắt buộc lập <b>Biên bản chênh lệch</b> (mã <code class="tabular">BBCL-{'{'}mã phiếu{'}'}</code>) và biên bản này phải được duyệt riêng trước khi phiếu nhập được hoàn tất.</p>
+
+      <div class="flow-wrap">
+        <div class="flow">
+          <div class="flow-step">
+            <div class="chip st-pending">CHO_DUYET</div>
+            <div class="cap">Biên bản vừa lập</div>
+          </div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step">
+            <div class="chip st-success">DA_DUYET</div>
+            <div class="cap">ADMIN/MANAGER duyệt (≠ người lập)</div>
+          </div>
+        </div>
+      </div>
+      <div class="rule-box danger" style="margin-top:-0.6rem;">
+        <b>Chặn hoàn tất:</b> nếu phiếu có dòng chênh lệch mà biên bản chưa ở trạng thái <code class="tabular">DA_DUYET</code>, thao tác "hoàn tất nhập kho" sẽ bị từ chối.
+      </div>
+
+      <h3 class="sub">Hoàn tất &amp; ghi nhận tồn kho</h3>
+      <p style="color:var(--ink-soft); max-width:68ch;">Khi hoàn tất (<code class="tabular">HOAN_THANH</code>), hệ thống tính lại <b>tổng tiền thực tế</b> theo số lượng thực nhận (<code class="tabular">đơn giá dự kiến × SL thực nhận</code>) — lưu song song với tổng tiền dự kiến ban đầu để đối chiếu — rồi mới cộng tăng tồn kho theo số lượng thực nhận của từng dòng.</p>
+    </section>
+
+    <!-- ============ 2. XUẤT KHO ============ -->
+    <section class="block" id="xuat-kho">
+      <p class="eyebrow"><span class="section-num">02</span></p>
+      <h2>Xuất kho (Phiếu xuất)</h2>
+      <p class="lede">Đơn giản hơn nhập kho: chỉ 1 cấp phê duyệt, không có bước "hàng về/kiểm hàng" — hàng xuất đi ngay khi hoàn tất. Bù lại, tồn kho được kiểm tra chặt ở nhiều bước.</p>
+
+      <h3 class="sub">Luồng trạng thái chính</h3>
+      <div class="flow-wrap">
+        <div class="flow">
+          <div class="flow-step">
+            <div class="chip st-neutral">NHAP</div>
+            <div class="cap">Tạo phiếu, thêm sản phẩm</div>
+          </div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step">
+            <div class="chip st-pending">CHO_DUYET</div>
+            <div class="cap">Gửi duyệt (đã kiểm tồn kho)</div>
+          </div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step">
+            <div class="chip st-pending">DA_DUYET</div>
+            <div class="cap">Đã duyệt, chờ xuất hàng</div>
+          </div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step">
+            <div class="chip st-success">HOAN_THANH</div>
+            <div class="cap">Đã trừ tồn kho</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <caption>Các chuyển trạng thái khác</caption>
+          <thead>
+            <tr><th class="mono">Từ</th><th class="mono">Đến</th><th>Điều kiện / Ghi chú</th></tr>
+          </thead>
+          <tbody>
+            <tr><td class="mono">NHAP</td><td class="mono">HUY</td><td>Chủ phiếu hoặc ADMIN huỷ nháp, không cần lý do.</td></tr>
+            <tr><td class="mono">TU_CHOI</td><td class="mono">CHO_DUYET / NHAP</td><td>Sửa và gửi duyệt lại, hoặc đưa về nháp.</td></tr>
+            <tr><td class="mono">TU_CHOI</td><td class="mono">HUY</td><td>Bỏ hẳn phiếu bị từ chối.</td></tr>
+            <tr><td class="mono">CHO_DUYET</td><td class="mono">TU_CHOI</td><td>ADMIN/MANAGER từ chối — <b>bắt buộc lý do</b>.</td></tr>
+            <tr><td class="mono">DA_DUYET</td><td class="mono">HUY</td><td>Khách huỷ đơn trước khi xuất — chỉ ADMIN/MANAGER, <b>bắt buộc lý do</b>.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 class="sub">Kiểm tra tồn kho — chốt chặn 3 lớp</h3>
+      <div class="rule-grid">
+        <div class="rule-box"><b>Lớp 1 — Thêm sản phẩm:</b> chặn ngay nếu số lượng nhập vượt tồn kho hiện có tại kho xuất.</div>
+        <div class="rule-box"><b>Lớp 2 — Gửi duyệt:</b> kiểm tra lại toàn bộ dòng hàng trước khi chuyển sang <code class="tabular">CHO_DUYET</code>.</div>
+        <div class="rule-box"><b>Lớp 3 — Phê duyệt:</b> kiểm tra lại lần nữa trước khi duyệt, phòng trường hợp tồn kho đã thay đổi từ lúc gửi duyệt.</div>
+      </div>
+      <div class="rule-box">
+        <b>Không tự duyệt phiếu của mình</b> — cùng nguyên tắc như nhập kho, người duyệt phải khác người tạo phiếu.
+      </div>
+    </section>
+
+    <!-- ============ 3. SO SÁNH ============ -->
+    <section class="block" id="so-sanh">
+      <p class="eyebrow"><span class="section-num">03</span></p>
+      <h2>So sánh Nhập kho / Xuất kho</h2>
+      <p class="lede">Xuất kho dùng thiết kế đơn giản hơn có chủ đích — không copy độ phức tạp 2 cấp duyệt từ nhập kho sang.</p>
+
+      <div class="compare">
+        <div class="col">
+          <h4>Nhập kho</h4>
+          <ul>
+            <li>1 hoặc 2 cấp duyệt, tuỳ ngưỡng <span class="tabular">50.000.000đ</span></li>
+            <li>Có bước chờ hàng về + kiểm hàng riêng biệt</li>
+            <li>Có thể phát sinh biên bản chênh lệch, phải duyệt riêng</li>
+            <li>Tính lại tổng tiền thực tế theo số lượng nhận thật</li>
+            <li>Tăng tồn kho khi hoàn tất</li>
+          </ul>
+        </div>
+        <div class="col">
+          <h4>Xuất kho</h4>
+          <ul>
+            <li>Luôn 1 cấp duyệt duy nhất</li>
+            <li>Không có bước hàng về/kiểm hàng — xuất ngay khi hoàn tất</li>
+            <li>Không có biên bản chênh lệch</li>
+            <li>Kiểm tra đủ tồn kho ở 3 bước (thêm dòng, gửi duyệt, phê duyệt)</li>
+            <li>Giảm tồn kho khi hoàn tất</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="rule-box">
+        Điểm chung: cả hai luồng đều <b>chặn tự duyệt</b> (người duyệt ≠ người tạo), <b>bắt buộc lý do khi từ chối/huỷ ở giai đoạn đã gửi duyệt</b>, và chỉ ghi nhận biến động tồn kho tại bước <b>hoàn tất</b> — không ghi sớm hơn.
+      </div>
+    </section>
+
+    <!-- ============ 4. KIỂM KÊ KHO ============ -->
+    <section class="block" id="kiem-ke-kho">
+      <p class="eyebrow"><span class="section-num">04</span></p>
+      <h2>Kiểm kê kho</h2>
+      <p class="lede">Kiểm kê kho dùng cho kiểm kê định kỳ hoặc kiểm kê đột xuất. Mục tiêu là đối chiếu tồn kho hệ thống với số lượng thực tế tại kho.</p>
+
+      <h3 class="sub">Luồng trạng thái</h3>
+      <div class="rule-box">
+        <b>Luồng chính:</b> <code>DANG_KIEM_KE</code> → <code>DA_CHOT</code><br>
+        <b>Luồng khác:</b> <code>DANG_KIEM_KE</code> → <code>DA_HUY</code>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th class="mono">Trạng thái</th><th>Ý nghĩa</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">DANG_KIEM_KE</td><td>Đợt kiểm kê đang mở, nhân viên có thể nhập số lượng thực tế.</td></tr>
+            <tr><td class="mono">DA_CHOT</td><td>Đã chốt, hệ thống ghi nhận chênh lệch và cân bằng tồn kho.</td></tr>
+            <tr><td class="mono">DA_HUY</td><td>Đợt kiểm kê bị hủy, không thay đổi tồn kho.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 class="sub">Quy tắc nghiệp vụ</h3>
+      <ul>
+        <li>Không xóa đợt kiểm kê để giữ lịch sử/audit trail.</li>
+        <li>Chỉ cập nhật tồn kho khi chốt kiểm kê.</li>
+        <li>Hủy kiểm kê không làm thay đổi tồn kho.</li>
+        <li>Sau khi chốt/hủy thì khóa chỉnh sửa.</li>
+        <li>Chênh lệch = số lượng thực tế - tồn hệ thống.</li>
+        <li>Nếu có chênh lệch, hệ thống ghi nhận giao dịch điều chỉnh kho hoặc log kiểm kê theo thiết kế hiện tại.</li>
+        <li>Kiểm kê có thể dùng cho kiểm định kỳ hàng tuần/tháng hoặc kiểm kê đột xuất.</li>
+        <li>Đợt kiểm kê nên gắn với kho cụ thể.</li>
+        <li>Chi tiết kiểm kê nên lưu tồn hệ thống tại thời điểm kiểm kê, số lượng thực tế, chênh lệch và ghi chú.</li>
+      </ul>
+
+      <h3 class="sub">Phân quyền kiểm kê</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Vai trò</th><th>Quyền</th></tr></thead>
+          <tbody>
+            <tr><td>ADMIN</td><td>Xem toàn bộ đợt kiểm kê; tạo đợt kiểm kê; chốt kiểm kê; hủy kiểm kê; xem kết quả/chênh lệch.</td></tr>
+            <tr><td>MANAGER</td><td>Xem toàn bộ đợt kiểm kê; tạo đợt kiểm kê định kỳ; chốt kiểm kê; hủy kiểm kê; xem kết quả/chênh lệch.</td></tr>
+            <tr><td>EMPLOYEE</td><td>Xem đợt kiểm kê đang được xử lý; nhập/cập nhật số lượng thực tế; ghi chú chênh lệch; không được chốt/hủy.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============ 5. IMPORT EXCEL ============ -->
+    <section class="block" id="import-excel">
+      <p class="eyebrow"><span class="section-num">05</span></p>
+      <h2>Import Excel — Tồn đầu kỳ</h2>
+      <p class="lede">Nhập hàng loạt tồn kho ban đầu từ file Excel, tách riêng 2 bước "kiểm tra" và "ghi thật" để đảm bảo toàn vẹn dữ liệu.</p>
+
+      <div class="phase-flow">
+        <div class="phase-card">
+          <div class="ph-num">Bước 0</div>
+          <h4>Tải file mẫu</h4>
+          <p>Cột bắt buộc: Mã sản phẩm, Số lượng. Cột tuỳ chọn: Ghi chú.</p>
+        </div>
+        <div class="phase-card">
+          <div class="ph-num">Bước 1</div>
+          <h4>Chọn kho &amp; Upload</h4>
+          <p>Hệ thống đọc và validate từng dòng. <b>Chưa ghi vào tồn kho.</b></p>
+        </div>
+        <div class="phase-card loop">
+          <div class="ph-num">Nếu có lỗi</div>
+          <h4>CO_LOI → sửa file → upload lại</h4>
+          <p>Lặp lại đến khi không còn dòng lỗi nào.</p>
+        </div>
+        <div class="phase-card">
+          <div class="ph-num">Bước 2</div>
+          <h4>SAN_SANG_IMPORT</h4>
+          <p>Toàn bộ dòng hợp lệ, có thể xác nhận import.</p>
+        </div>
+        <div class="phase-card final">
+          <div class="ph-num">Bước 3</div>
+          <h4>Xác nhận → DA_IMPORT</h4>
+          <p>Validate lại lần cuối, sau đó mới cộng tăng tồn kho.</p>
+        </div>
+      </div>
+
+      <div class="rule-box danger">
+        <b>Nguyên tắc toàn vẹn dữ liệu:</b> chỉ cần còn 1 dòng lỗi là <b>không cho import cả file</b>. Không có khái niệm "import một phần" — phải sửa xong toàn bộ lỗi trong file gốc rồi tải lên lại.
+      </div>
+      <div class="rule-box warn">
+        <b>Kiểm tra lại trước khi ghi thật:</b> ở bước xác nhận, hệ thống đọc lại file và validate lần nữa (đề phòng dữ liệu sản phẩm đã đổi giữa lúc upload và lúc xác nhận, ví dụ sản phẩm bị ngừng hoạt động). Nếu phát hiện lỗi mới, huỷ toàn bộ thao tác xác nhận thay vì ghi một phần.
+      </div>
+
+      <h3 class="sub">Các trạng thái của một lượt import</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th class="mono">Trạng thái</th><th>Ý nghĩa</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">CHO_XU_LY</td><td>Vừa upload, đang xử lý.</td></tr>
+            <tr><td class="mono">CO_LOI</td><td>Có ít nhất 1 dòng lỗi — không thể xác nhận.</td></tr>
+            <tr><td class="mono">SAN_SANG_IMPORT</td><td>Không còn lỗi, có thể bấm xác nhận.</td></tr>
+            <tr><td class="mono">DA_IMPORT</td><td>Đã ghi tăng tồn kho thành công.</td></tr>
+            <tr><td class="mono">THAT_BAI</td><td>Lỗi hệ thống trong lúc xử lý.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============ 6. PHÂN QUYỀN ============ -->
+    <section class="block" id="phan-quyen">
+      <p class="eyebrow"><span class="section-num">06</span></p>
+      <h2>Phân quyền theo vai trò</h2>
+      <p class="lede">MANAGER không có quyền tạo/sửa phiếu trực tiếp — vai trò của MANAGER giới hạn ở việc phê duyệt.</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Hành động</th><th>ADMIN</th><th>MANAGER</th><th>EMPLOYEE</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Tạo / sửa / gửi duyệt phiếu nhập kho</td><td>✓</td><td>—</td><td>✓</td></tr>
+            <tr><td>Duyệt / từ chối phiếu nhập kho (cấp 1 &amp; 2)</td><td>✓</td><td>✓</td><td>—</td></tr>
+            <tr><td>Duyệt / từ chối biên bản chênh lệch</td><td>✓</td><td>✓</td><td>—</td></tr>
+            <tr><td>Tạo / sửa / gửi duyệt / hoàn tất phiếu xuất kho</td><td>✓</td><td>—</td><td>✓</td></tr>
+            <tr><td>Duyệt / từ chối phiếu xuất kho</td><td>✓</td><td>✓</td><td>—</td></tr>
+            <tr><td>Xem danh sách toàn bộ phiếu (không phải "của tôi")</td><td>✓</td><td>✓</td><td>—</td></tr>
+            <tr><td>Xem danh sách phiếu "của tôi"</td><td>✓</td><td>—</td><td>✓</td></tr>
+            <tr><td>Tạo đợt kiểm kê</td><td>✓</td><td>✓</td><td>—</td></tr>
+            <tr><td>Nhập số lượng thực tế kiểm kê</td><td>✓</td><td>✓</td><td>✓</td></tr>
+            <tr><td>Chốt / hủy kiểm kê</td><td>✓</td><td>✓</td><td>—</td></tr>
+            <tr><td>Xem kết quả kiểm kê</td><td>✓</td><td>✓</td><td>✓</td></tr>
+            <tr><td>Import Excel (upload / xác nhận)</td><td>✓</td><td>—</td><td>✓</td></tr>
+            <tr><td>Xem template / lịch sử Import Excel</td><td>✓</td><td>✓</td><td>✓</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="doc-footer">
+    Tài liệu mô tả hành vi hiện tại của hệ thống (backend <code class="tabular">sme-stocksense-backend</code>), dùng để tham chiếu nội bộ khi vận hành hoặc đối chiếu khi có thay đổi nghiệp vụ.
+  </footer>
+
+</div>

@@ -31,10 +31,12 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.math.BigDecimal;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -85,6 +87,7 @@ class ImportReceiptApprovalServiceTest {
         warehouse.setId(1L);
         warehouse.setName("Kho tong");
 
+        ReflectionTestUtils.setField(importReceiptService, "secondApprovalThreshold", BigDecimal.valueOf(50000000));
         authenticate(manager);
     }
 
@@ -116,6 +119,10 @@ class ImportReceiptApprovalServiceTest {
         receipt.setStatus(status);
         receipt.setWarehouse(warehouse);
         receipt.setVersion(1L);
+        receipt.setTotalAmount(BigDecimal.valueOf(1000));
+        Employee creator = employeeWith(RoleCode.EMPLOYEE);
+        creator.setId(5L);
+        receipt.setCreatedBy(creator);
         return receipt;
     }
 
@@ -135,10 +142,10 @@ class ImportReceiptApprovalServiceTest {
 
         assertEquals(ImportReceiptStatus.CHO_HANG_VE.name(), response.status());
         assertEquals(ImportReceiptStatus.CHO_HANG_VE, receipt.getStatus());
-        assertNull(receipt.getLevel1ApprovedBy());
-        assertNull(receipt.getLevel1ApprovedAt());
-        assertEquals(manager, receipt.getLevel2ApprovedBy());
-        assertNotNull(receipt.getLevel2ApprovedAt());
+        assertEquals(manager, receipt.getLevel1ApprovedBy());
+        assertNotNull(receipt.getLevel1ApprovedAt());
+        assertNull(receipt.getLevel2ApprovedBy());
+        assertNull(receipt.getLevel2ApprovedAt());
         // Bước duyệt KHÔNG được cộng tồn kho.
         verify(inventoryService, never()).increaseInventory(anyLong(), anyLong(), anyInt(), any());
     }

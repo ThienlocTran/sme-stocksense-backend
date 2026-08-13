@@ -95,7 +95,8 @@ class ExcelImportValidateControllerTest {
                 .andExpect(jsonPath("$.loaiImport").value(ExcelImportMode.PRODUCT_ONLY.name()))
                 .andExpect(jsonPath("$.tongSoDong").value(1))
                 .andExpect(jsonPath("$.soDongHopLe").value(1))
-                .andExpect(jsonPath("$.soDongLoi").value(0));
+                .andExpect(jsonPath("$.soDongLoi").value(0))
+                .andExpect(jsonPath("$.canConfirm").value(true));
     }
 
     @Test
@@ -118,7 +119,8 @@ class ExcelImportValidateControllerTest {
                 .andExpect(jsonPath("$.valid").value(false))
                 .andExpect(jsonPath("$.tongSoDong").value(1))
                 .andExpect(jsonPath("$.soDongHopLe").value(0))
-                .andExpect(jsonPath("$.soDongLoi").value(1));
+                .andExpect(jsonPath("$.soDongLoi").value(1))
+                .andExpect(jsonPath("$.canConfirm").value(false));
     }
 
     @Test

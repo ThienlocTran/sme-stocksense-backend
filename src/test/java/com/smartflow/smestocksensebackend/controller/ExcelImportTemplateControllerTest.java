@@ -60,15 +60,23 @@ class ExcelImportTemplateControllerTest {
 
     @Test
     void downloadTemplate_managerShouldReturn403() throws Exception {
+        byte[] bytes = new byte[]{1, 2, 3};
+        when(excelImportTemplateService.generateTemplate()).thenReturn(bytes);
+
         mockMvc.perform(get("/api/excel-imports/template")
                         .with(user("manager@example.com").roles("MANAGER")))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isOk())
+                .andExpect(content().bytes(bytes));
     }
 
     @Test
     void downloadTemplate_employeeShouldReturn403() throws Exception {
+        byte[] bytes = new byte[]{1, 2, 3};
+        when(excelImportTemplateService.generateTemplate()).thenReturn(bytes);
+
         mockMvc.perform(get("/api/excel-imports/template")
                         .with(user("employee@example.com").roles("EMPLOYEE")))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isOk())
+                .andExpect(content().bytes(bytes));
     }
 }

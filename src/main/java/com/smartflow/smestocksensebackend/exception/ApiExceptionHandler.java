@@ -4,6 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -40,6 +41,12 @@ public class ApiExceptionHandler {
         return new ApiErrorResponse(exception.getMessage());
     }
 
+    @ExceptionHandler(AccessDeniedException.class)
+    @ResponseStatus(HttpStatus.FORBIDDEN)
+    public ApiErrorResponse handleAccessDenied(AccessDeniedException exception) {
+        return new ApiErrorResponse(exception.getMessage());
+    }
+
     @ExceptionHandler(BadRequestException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ApiErrorResponse handleBadRequest(BadRequestException exception) {
@@ -58,9 +65,21 @@ public class ApiExceptionHandler {
         return new ApiErrorResponse(exception.getMessage());
     }
 
+    @ExceptionHandler(UnsupportedMediaTypeException.class)
+    @ResponseStatus(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
+    public ApiErrorResponse handleUnsupportedMediaType(UnsupportedMediaTypeException exception) {
+        return new ApiErrorResponse(exception.getMessage());
+    }
+
     @ExceptionHandler(ConflictException.class)
     @ResponseStatus(HttpStatus.CONFLICT)
     public ApiErrorResponse handleConflict(ConflictException exception) {
+        return new ApiErrorResponse(exception.getMessage());
+    }
+
+    @ExceptionHandler(CloudinaryConfigurationException.class)
+    @ResponseStatus(HttpStatus.SERVICE_UNAVAILABLE)
+    public ApiErrorResponse handleCloudinaryConfiguration(CloudinaryConfigurationException exception) {
         return new ApiErrorResponse(exception.getMessage());
     }
 

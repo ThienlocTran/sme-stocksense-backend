@@ -406,3 +406,10 @@ Nếu lỡ commit mật khẩu hoặc connection string thật, cần đổi m�
 - Nhóm: SmartFlow
 - Sản phẩm: SME StockSense
 - Đề tài: Hệ thống dự báo tồn kho thông minh cho SME
+## M4 discrepancy report status
+
+- Migration: `V38__add_discrepancy_report_status.sql`.
+- Status values: `CHO_DUYET`, `DA_DUYET`, `TU_CHOI`, `HUY`.
+- Backfill: old `bien_ban_chenh_lech` rows are set to `CHO_DUYET`.
+- API: `POST /api/import-receipts/{receiptId}/discrepancy-report` returns `status`.
+- Remaining mismatches: M5, M8/M9, M13.

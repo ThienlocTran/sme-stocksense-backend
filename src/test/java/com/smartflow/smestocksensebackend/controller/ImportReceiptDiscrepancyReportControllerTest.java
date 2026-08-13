@@ -82,6 +82,7 @@ class ImportReceiptDiscrepancyReportControllerTest {
                 .andExpect(jsonPath("$.id").value(1))
                 .andExpect(jsonPath("$.receiptId").value(123))
                 .andExpect(jsonPath("$.code").value("BBCL-123"))
+                .andExpect(jsonPath("$.status").value("CHO_DUYET"))
                 .andExpect(jsonPath("$.detailCount").value(1));
     }
 
@@ -186,6 +187,7 @@ class ImportReceiptDiscrepancyReportControllerTest {
                 123L,
                 "PNK-001",
                 "BBCL-123",
+                "CHO_DUYET",
                 LocalDateTime.of(2026, 6, 22, 10, 0),
                 2L,
                 "Nguyen Van Employee",

@@ -25,6 +25,7 @@ public class DiscrepancyReportResponse {
     private Long receiptId;
     private String receiptCode;
     private String code;
+    private String status;
     private LocalDateTime reportDate;
     private Long createdById;
     private String createdByName;
@@ -51,6 +52,7 @@ public class DiscrepancyReportResponse {
                 .receiptId(report.getImportReceipt() != null ? report.getImportReceipt().getId() : null)
                 .receiptCode(report.getImportReceipt() != null ? report.getImportReceipt().getCode() : null)
                 .code(report.getCode())
+                .status(report.getStatus() != null ? report.getStatus().name() : null)
                 .reportDate(report.getReportDate())
                 .createdById(report.getCreatedBy() != null ? report.getCreatedBy().getId() : null)
                 .createdByName(report.getCreatedBy() != null ? report.getCreatedBy().getFullName() : null)

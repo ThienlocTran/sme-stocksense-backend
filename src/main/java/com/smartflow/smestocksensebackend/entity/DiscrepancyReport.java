@@ -3,6 +3,8 @@ package com.smartflow.smestocksensebackend.entity;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -61,6 +63,10 @@ public class DiscrepancyReport {
      */
     @Column(name = "ngay_lap", nullable = false)
     private LocalDateTime reportDate = LocalDateTime.now();
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "trang_thai", nullable = false, length = 20)
+    private DiscrepancyReportStatus status = DiscrepancyReportStatus.CHO_DUYET;
 
     /**
      * Nhân viên lập biên bản chênh lệch (người thực hiện kiểm đếm và phát hiện chênh lệch).

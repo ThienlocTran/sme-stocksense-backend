@@ -48,6 +48,7 @@ import com.smartflow.smestocksensebackend.repository.DiscrepancyReportRepository
 
 import com.smartflow.smestocksensebackend.entity.DiscrepancyReport;
 import com.smartflow.smestocksensebackend.entity.DiscrepancyReportDetail;
+import com.smartflow.smestocksensebackend.entity.DiscrepancyReportStatus;
 import com.smartflow.smestocksensebackend.service.ImportReceiptCodeGenerator;
 import com.smartflow.smestocksensebackend.service.ImportReceiptService;
 import com.smartflow.smestocksensebackend.service.InventoryService;
@@ -1032,6 +1033,7 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
             report.setImportReceipt(receipt);
             report.setCreatedBy(actor);
             report.setReportDate(LocalDateTime.now());
+            report.setStatus(DiscrepancyReportStatus.CHO_DUYET);
         }
         report.setNote(normalizeOptional(request.getNote()));
 

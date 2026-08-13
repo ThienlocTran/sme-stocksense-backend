@@ -383,6 +383,7 @@ class ImportReceiptDetailServiceTest {
         assertThat(response).isNotNull();
         assertThat(response.getId()).isEqualTo(500L);
         assertThat(response.getCode()).isEqualTo("BBCL-PNK-100");
+        assertThat(response.getStatus()).isEqualTo("CHO_DUYET");
         assertThat(response.getDetails()).hasSize(1);
         assertThat(response.getDetails().get(0).getDiscrepancyQuantity()).isEqualTo(-2);
         assertThat(response.getDetails().get(0).getReason()).isEqualTo("Thieu hang");
@@ -449,6 +450,7 @@ class ImportReceiptDetailServiceTest {
         existing.setImportReceipt(receipt);
         existing.setCode("BBCL-PNK-100");
         existing.setCreatedBy(owner);
+        existing.setStatus(com.smartflow.smestocksensebackend.entity.DiscrepancyReportStatus.CHO_DUYET);
 
         CreateDiscrepancyReportItemRequest itemReq = new CreateDiscrepancyReportItemRequest(20L, "Thieu hang", "Giao bu");
         CreateDiscrepancyReportRequest request = new CreateDiscrepancyReportRequest("Ghi chu moi", List.of(itemReq));
@@ -461,6 +463,7 @@ class ImportReceiptDetailServiceTest {
         DiscrepancyReportResponse response = importReceiptService.createDiscrepancyReport(100L, request);
 
         assertThat(response.getId()).isEqualTo(500L);
+        assertThat(response.getStatus()).isEqualTo("CHO_DUYET");
         assertThat(response.getNote()).isEqualTo("Ghi chu moi");
         assertThat(response.getDetails()).hasSize(1);
         assertThat(response.getDetails().get(0).getReason()).isEqualTo("Thieu hang");

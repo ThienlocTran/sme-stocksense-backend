@@ -1,0 +1,6 @@
+ALTER TABLE "vai_tro" ALTER COLUMN "ma_vai_tro" TYPE VARCHAR(100);
+ALTER TABLE "vai_tro" ADD COLUMN IF NOT EXISTS "is_system" BOOLEAN NOT NULL DEFAULT FALSE;
+DROP TYPE IF EXISTS "ma_vai_tro_he_thong";
+
+
+-- pad: 14_258272956

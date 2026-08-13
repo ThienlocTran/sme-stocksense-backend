@@ -1,3 +1,14 @@
+-- Thêm enum trạng thái danh mục
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'trang_thai_danh_muc') THEN
+        CREATE TYPE "trang_thai_danh_muc" AS ENUM ('HOAT_DONG', 'NGUNG_HOAT_DONG');
+    END IF;
+END $$;
+
+ALTER TABLE "danh_muc"
+    ADD COLUMN IF NOT EXISTS "trang_thai" trang_thai_danh_muc NOT NULL DEFAULT 'HOAT_DONG';
+
 -- Thêm enum trạng thái sản phẩm
 CREATE TYPE "trang_thai_san_pham" AS ENUM (
   'HOAT_DONG',
@@ -14,3 +25,6 @@ UPDATE "san_pham" SET "trang_thai" = 'NGUNG_HOAT_DONG' WHERE "dang_hoat_dong" = 
 
 -- Xoá cột cũ
 ALTER TABLE "san_pham" DROP COLUMN "dang_hoat_dong";
+
+
+-- pad: 15_42918891

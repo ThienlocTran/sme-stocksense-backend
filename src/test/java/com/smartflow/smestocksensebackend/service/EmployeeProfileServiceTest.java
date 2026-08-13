@@ -9,6 +9,7 @@ import com.smartflow.smestocksensebackend.entity.RoleCode;
 import com.smartflow.smestocksensebackend.entity.EmployeeStatus;
 import com.smartflow.smestocksensebackend.exception.AccountInactiveException;
 import com.smartflow.smestocksensebackend.exception.BadRequestException;
+import com.smartflow.smestocksensebackend.exception.CloudinaryConfigurationException;
 import com.smartflow.smestocksensebackend.exception.FieldValidationException;
 import com.smartflow.smestocksensebackend.exception.UnsupportedMediaTypeException;
 import com.smartflow.smestocksensebackend.repository.EmployeeRepository;
@@ -152,6 +153,33 @@ class EmployeeProfileServiceTest {
 
         assertThrows(RuntimeException.class, () -> employeeService.uploadMyAvatar(file));
         verify(cloudinaryService, times(1)).deleteAvatarByPublicId("new_pub_id");
+    }
+
+    @Test
+    void uploadMyAvatar_CloudinaryMissingConfig_PropagatesServiceUnavailableException() throws Exception {
+        byte[] validImageBytes = createValidImageBytes();
+        MockMultipartFile file = new MockMultipartFile("file", "test.jpg", "image/jpeg", validImageBytes);
+
+        when(employeeRepository.findById(1L)).thenReturn(Optional.of(mockEmployee));
+        when(cloudinaryService.uploadAvatar(file, 1L))
+                .thenThrow(new CloudinaryConfigurationException("Cloudinary chưa được cấu hình."));
+
+        assertThrows(CloudinaryConfigurationException.class, () -> employeeService.uploadMyAvatar(file));
+        verify(employeeRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void uploadMyAvatar_MissingSecureUrl_ThrowsBadRequest() throws Exception {
+        byte[] validImageBytes = createValidImageBytes();
+        MockMultipartFile file = new MockMultipartFile("file", "test.jpg", "image/jpeg", validImageBytes);
+
+        when(employeeRepository.findById(1L)).thenReturn(Optional.of(mockEmployee));
+        when(cloudinaryService.uploadAvatar(file, 1L)).thenReturn(Map.of(
+                "public_id", "new_pub_id"
+        ));
+
+        assertThrows(BadRequestException.class, () -> employeeService.uploadMyAvatar(file));
+        verify(employeeRepository, never()).saveAndFlush(any());
     }
 
     private byte[] createValidImageBytes() throws IOException {

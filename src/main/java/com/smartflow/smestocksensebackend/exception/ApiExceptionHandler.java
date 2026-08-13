@@ -77,6 +77,12 @@ public class ApiExceptionHandler {
         return new ApiErrorResponse(exception.getMessage());
     }
 
+    @ExceptionHandler(CloudinaryConfigurationException.class)
+    @ResponseStatus(HttpStatus.SERVICE_UNAVAILABLE)
+    public ApiErrorResponse handleCloudinaryConfiguration(CloudinaryConfigurationException exception) {
+        return new ApiErrorResponse(exception.getMessage());
+    }
+
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ApiErrorResponse handleTypeMismatch(MethodArgumentTypeMismatchException exception) {

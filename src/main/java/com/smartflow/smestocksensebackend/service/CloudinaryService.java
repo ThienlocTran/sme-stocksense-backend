@@ -2,6 +2,7 @@ package com.smartflow.smestocksensebackend.service;
 
 import com.cloudinary.Cloudinary;
 import com.cloudinary.utils.ObjectUtils;
+import com.smartflow.smestocksensebackend.exception.CloudinaryConfigurationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -24,13 +25,13 @@ public class CloudinaryService {
     }
 
     public Map<String, Object> uploadAvatar(MultipartFile file, Long employeeId) throws IOException {
-        if (env == null || "test".equals(env) || cloudinary.config.cloudName == null || cloudinary.config.cloudName.isBlank() || "${CLOUDINARY_CLOUD_NAME}".equals(cloudinary.config.cloudName)) {
-             throw new RuntimeException("Cloudinary chưa được cấu hình. Vui lòng cập nhật biến môi trường.");
+        if (isMissingConfig()) {
+            throw new CloudinaryConfigurationException("Cloudinary chưa được cấu hình.");
         }
-        
+
         String folderPath = "sme-stocksense/" + env + "/avatars";
         String publicId = "employee_" + employeeId + "_" + System.currentTimeMillis();
-        
+
         try {
             @SuppressWarnings("unchecked")
             Map<String, Object> uploadResult = cloudinary.uploader().upload(file.getBytes(), ObjectUtils.asMap(
@@ -42,7 +43,7 @@ public class CloudinaryService {
             return uploadResult;
         } catch (RuntimeException e) {
             if (e.getMessage() != null && e.getMessage().contains("cloud_name is disabled")) {
-                throw new RuntimeException("Cloudinary chưa được cấu hình hoặc key không hợp lệ. Vui lòng kiểm tra lại cấu hình.");
+                throw new CloudinaryConfigurationException("Cloudinary chưa được cấu hình.");
             }
             throw e;
         }
@@ -50,12 +51,20 @@ public class CloudinaryService {
 
     public void deleteAvatarByPublicId(String publicId) {
         if (publicId == null || publicId.isBlank()) return;
-        
+
         try {
             cloudinary.uploader().destroy(publicId, ObjectUtils.emptyMap());
             log.info("Deleted old avatar on Cloudinary: {}", publicId);
         } catch (Exception e) {
             log.warn("Could not delete old avatar from Cloudinary: {}", e.getMessage());
         }
+    }
+
+    private boolean isMissingConfig() {
+        return env == null
+                || "test".equals(env)
+                || cloudinary.config.cloudName == null
+                || cloudinary.config.cloudName.isBlank()
+                || "${CLOUDINARY_CLOUD_NAME}".equals(cloudinary.config.cloudName);
     }
 }

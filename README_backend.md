@@ -17,9 +17,29 @@ Option A - Neon profile config:
 
 Option B - Environment variables:
 1. Copy `.env.example` to `.env` for reference.
-2. Configure IntelliJ Run Configuration, EnvFile plugin, terminal environment, or OS environment variables to export `NEON_DB_URL`, `NEON_DB_USERNAME`, `NEON_DB_PASSWORD`, `JWT_SECRET`, `JWT_EXPIRATION_SECONDS`, and `FLYWAY_ENABLED`.
+2. Configure IntelliJ Run Configuration, EnvFile plugin, terminal environment, or OS environment variables to export `NEON_DB_URL`, `NEON_DB_USERNAME`, `NEON_DB_PASSWORD`, `JWT_SECRET`, `JWT_EXPIRATION_SECONDS`, `FLYWAY_ENABLED`, `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, and `CLOUDINARY_API_SECRET`.
 3. Keep `application-neon.yml` using placeholders.
 4. Never commit `.env`.
+
+Cloudinary avatar upload reads these variables through `src/main/resources/application.yml`:
+
+```yaml
+cloudinary:
+  cloud-name: ${CLOUDINARY_CLOUD_NAME:}
+  api-key: ${CLOUDINARY_API_KEY:}
+  api-secret: ${CLOUDINARY_API_SECRET:}
+```
+
+IntelliJ: Run Configuration -> Environment variables, add `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`.
+
+PowerShell before running:
+
+```powershell
+$env:CLOUDINARY_CLOUD_NAME="your-cloud-name"
+$env:CLOUDINARY_API_KEY="your-api-key"
+$env:CLOUDINARY_API_SECRET="your-api-secret"
+.\mvnw.cmd spring-boot:run -Dspring-boot.run.profiles=neon
+```
 
 Backend Spring Boot cho hệ thống **SME StockSense** - hệ thống quản lý tồn kho tích hợp dự báo nhu cầu cho doanh nghiệp vừa và nhỏ.
 

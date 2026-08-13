@@ -119,8 +119,11 @@ public class EmployeeService {
             throw new BadRequestException("Upload ảnh thất bại: " + e.getMessage());
         }
 
-        String secureUrl = result.get("secure_url").toString();
-        String newPublicId = result.get("public_id").toString();
+        String secureUrl = stringResult(result, "secure_url");
+        String newPublicId = stringResult(result, "public_id");
+        if (secureUrl == null || newPublicId == null) {
+            throw new BadRequestException("Upload ảnh thất bại: Cloudinary không trả URL hợp lệ.");
+        }
         String oldPublicId = employee.getAvatarPublicId();
 
         employee.setAvatarUrl(secureUrl);
@@ -147,6 +150,11 @@ public class EmployeeService {
             normalized = "0" + normalized.substring(3);
         }
         return normalized;
+    }
+
+    private String stringResult(Map<String, Object> result, String key) {
+        Object value = result.get(key);
+        return value == null || value.toString().isBlank() ? null : value.toString();
     }
 
     private ProfileResponse mapToProfileResponse(Employee employee) {

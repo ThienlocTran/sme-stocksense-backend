@@ -2,6 +2,7 @@ package com.smartflow.smestocksensebackend.service.impl;
 
 import com.smartflow.smestocksensebackend.entity.Employee;
 import com.smartflow.smestocksensebackend.entity.EmployeeStatus;
+import com.smartflow.smestocksensebackend.entity.ExportReceiptStatus;
 import com.smartflow.smestocksensebackend.entity.Role;
 import com.smartflow.smestocksensebackend.entity.RoleCode;
 import com.smartflow.smestocksensebackend.entity.ProductStatus;
@@ -18,6 +19,7 @@ import com.smartflow.smestocksensebackend.repository.WarehouseRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -122,6 +124,27 @@ class DashboardServiceImplTest {
         org.mockito.Mockito.verify(exportReceiptRepository).countByStatusIn(any());
         org.mockito.Mockito.verify(importReceiptRepository, org.mockito.Mockito.never()).countByStatusInAndCreatedById(any(), any());
         org.mockito.Mockito.verify(exportReceiptRepository, org.mockito.Mockito.never()).countByStatusInAndCreatedById(any(), any());
+    }
+
+    @Test
+    void getOverview_ExportPendingStatuses_MatchDbEnum() {
+        when(productRepository.countByStatus(ProductStatus.HOAT_DONG)).thenReturn(0L);
+        when(warehouseRepository.countByStatus(WarehouseStatus.HOAT_DONG)).thenReturn(0L);
+        when(inventoryLevelRepository.sumTotalQuantity()).thenReturn(0L);
+        when(importReceiptRepository.countByStatusIn(any())).thenReturn(0L);
+        when(exportReceiptRepository.countByStatusIn(any())).thenReturn(0L);
+        when(inventoryAlertRepository.countByStatusIn(any())).thenReturn(0L);
+
+        dashboardService.getOverview(adminPrincipal);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<ExportReceiptStatus>> captor = ArgumentCaptor.forClass(List.class);
+        org.mockito.Mockito.verify(exportReceiptRepository).countByStatusIn(captor.capture());
+        assertEquals(List.of(
+                ExportReceiptStatus.CHO_DUYET_CAP_1,
+                ExportReceiptStatus.CHO_DUYET_CAP_2,
+                ExportReceiptStatus.DA_DUYET
+        ), captor.getValue());
     }
 
     @Test

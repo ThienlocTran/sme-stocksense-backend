@@ -52,7 +52,7 @@ public class DashboardServiceImpl implements DashboardService {
     private static final List<ExportReceiptStatus> EXPORT_PENDING = List.of(
             ExportReceiptStatus.CHO_DUYET_CAP_1,
             ExportReceiptStatus.CHO_DUYET_CAP_2,
-            ExportReceiptStatus.CHO_XUAT
+            ExportReceiptStatus.DA_DUYET
     );
 
     private static final List<InventoryAlertStatus> ALERT_PENDING = List.of(

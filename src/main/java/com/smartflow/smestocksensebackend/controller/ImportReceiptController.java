@@ -227,6 +227,23 @@ public class ImportReceiptController {
         return importReceiptService.createDiscrepancyReport(receiptId, request);
     }
 
+    @PostMapping("/{receiptId}/discrepancy-reports/{reportId}/approve")
+    public DiscrepancyReportResponse approveDiscrepancyReport(
+            @PathVariable Long receiptId,
+            @PathVariable Long reportId
+    ) {
+        return importReceiptService.approveDiscrepancyReport(receiptId, reportId);
+    }
+
+    @PostMapping("/{receiptId}/discrepancy-reports/{reportId}/reject")
+    public DiscrepancyReportResponse rejectDiscrepancyReport(
+            @PathVariable Long receiptId,
+            @PathVariable Long reportId,
+            @Valid @RequestBody RejectImportReceiptRequest request
+    ) {
+        return importReceiptService.rejectDiscrepancyReport(receiptId, reportId, request);
+    }
+
     /**
      * API hoàn tất nhập kho (T104).
      * Bọc toàn bộ các khâu (kiểm hàng, tăng tồn, ghi log, đổi trạng thái) trong 1 giao dịch an toàn (ACID).

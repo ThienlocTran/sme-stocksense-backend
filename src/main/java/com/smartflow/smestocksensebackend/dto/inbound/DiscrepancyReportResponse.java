@@ -29,6 +29,13 @@ public class DiscrepancyReportResponse {
     private LocalDateTime reportDate;
     private Long createdById;
     private String createdByName;
+    private Long approvedById;
+    private String approvedByName;
+    private LocalDateTime approvedAt;
+    private Long rejectedById;
+    private String rejectedByName;
+    private LocalDateTime rejectedAt;
+    private String rejectReason;
     private String note;
     private List<DiscrepancyReportDetailResponse> details;
     private Integer detailCount;
@@ -56,6 +63,13 @@ public class DiscrepancyReportResponse {
                 .reportDate(report.getReportDate())
                 .createdById(report.getCreatedBy() != null ? report.getCreatedBy().getId() : null)
                 .createdByName(report.getCreatedBy() != null ? report.getCreatedBy().getFullName() : null)
+                .approvedById(report.getApprovedBy() != null ? report.getApprovedBy().getId() : null)
+                .approvedByName(report.getApprovedBy() != null ? report.getApprovedBy().getFullName() : null)
+                .approvedAt(report.getApprovedAt())
+                .rejectedById(report.getRejectedBy() != null ? report.getRejectedBy().getId() : null)
+                .rejectedByName(report.getRejectedBy() != null ? report.getRejectedBy().getFullName() : null)
+                .rejectedAt(report.getRejectedAt())
+                .rejectReason(report.getRejectReason())
                 .note(report.getNote())
                 .details(detailResponses)
                 .detailCount(detailResponses.size())

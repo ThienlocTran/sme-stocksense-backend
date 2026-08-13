@@ -179,6 +179,7 @@ class ImportReceiptCompleteServiceTest {
         DiscrepancyReport report = new DiscrepancyReport();
         report.setId(99L);
         report.setImportReceipt(receipt);
+        report.setStatus(DiscrepancyReportStatus.DA_DUYET);
 
         when(importReceiptRepository.findById(123L)).thenReturn(Optional.of(receipt));
         when(importReceiptDetailRepository.findByDocumentId(123L)).thenReturn(List.of(detail));
@@ -191,6 +192,29 @@ class ImportReceiptCompleteServiceTest {
         assertNotNull(response);
         assertEquals("HOAN_THANH", response.status());
         verify(inventoryService, times(1)).increaseInventory(eq(25L), eq(1L), eq(8), same(receipt));
+    }
+
+    @Test
+    void completeImport_error_whenDiscrepancyReportPending_shouldThrowBadRequest() {
+        InspectImportReceiptRequest request = new InspectImportReceiptRequest(
+                List.of(new InspectImportReceiptItemRequest(25L, 8, "Binh thuong", null))
+        );
+        DiscrepancyReport report = new DiscrepancyReport();
+        report.setId(99L);
+        report.setImportReceipt(receipt);
+        report.setStatus(DiscrepancyReportStatus.CHO_DUYET);
+
+        when(importReceiptRepository.findById(123L)).thenReturn(Optional.of(receipt));
+        when(importReceiptDetailRepository.findByDocumentId(123L)).thenReturn(List.of(detail));
+        when(importReceiptDetailRepository.findByDocumentIdOrderByIdAsc(123L)).thenReturn(List.of(detail));
+        when(discrepancyReportRepository.findByImportReceiptId(123L)).thenReturn(Optional.of(report));
+        when(importReceiptRepository.saveAndFlush(any(ImportReceipt.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        BadRequestException exception = assertThrows(BadRequestException.class,
+                () -> importReceiptService.completeImport(123L, request));
+
+        assertEquals("Bien ban chenh lech phai duoc duyet truoc khi hoan tat nhap kho.", exception.getMessage());
+        verify(inventoryService, never()).increaseInventory(anyLong(), anyLong(), anyInt(), any(ImportReceipt.class));
     }
 
     @Test

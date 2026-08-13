@@ -182,6 +182,10 @@ public class SecurityConfig {
                                                 .requestMatchers(HttpMethod.POST,
                                                                 "/api/import-receipts/*/discrepancy-report")
                                                 .hasAnyRole("ADMIN", "EMPLOYEE")
+                                                .requestMatchers(HttpMethod.POST,
+                                                                "/api/import-receipts/*/discrepancy-reports/*/approve",
+                                                                "/api/import-receipts/*/discrepancy-reports/*/reject")
+                                                .hasAnyRole("ADMIN", "MANAGER")
                                                 .requestMatchers(HttpMethod.PUT, "/api/import-receipts/*/cancel")
                                                 .hasAnyRole("ADMIN", "EMPLOYEE")
                                                 .requestMatchers(HttpMethod.PUT, "/api/import-receipts/*/draft")

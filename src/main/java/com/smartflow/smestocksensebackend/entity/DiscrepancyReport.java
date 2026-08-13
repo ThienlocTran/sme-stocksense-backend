@@ -75,6 +75,23 @@ public class DiscrepancyReport {
     @JoinColumn(name = "nguoi_lap_id", nullable = false)
     private Employee createdBy;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "nguoi_duyet_id")
+    private Employee approvedBy;
+
+    @Column(name = "ngay_duyet")
+    private LocalDateTime approvedAt;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "nguoi_tu_choi_id")
+    private Employee rejectedBy;
+
+    @Column(name = "ngay_tu_choi")
+    private LocalDateTime rejectedAt;
+
+    @Column(name = "ly_do_tu_choi", length = 500)
+    private String rejectReason;
+
     /**
      * Ghi chú chung về biên bản chênh lệch.
      */

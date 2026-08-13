@@ -108,6 +108,10 @@ public interface ImportReceiptService {
      */
     DiscrepancyReportResponse createDiscrepancyReport(Long receiptId, CreateDiscrepancyReportRequest request);
 
+    DiscrepancyReportResponse approveDiscrepancyReport(Long receiptId, Long reportId);
+
+    DiscrepancyReportResponse rejectDiscrepancyReport(Long receiptId, Long reportId, RejectImportReceiptRequest request);
+
     /**
      * Hoàn tất phiếu nhập kho (T104).
      * Bọc toàn bộ các khâu vào 1 giao dịch an toàn (ACID):

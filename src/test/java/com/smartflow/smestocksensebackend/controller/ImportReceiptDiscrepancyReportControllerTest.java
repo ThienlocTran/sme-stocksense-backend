@@ -6,6 +6,7 @@ import com.smartflow.smestocksensebackend.dto.inbound.CreateDiscrepancyReportIte
 import com.smartflow.smestocksensebackend.dto.inbound.CreateDiscrepancyReportRequest;
 import com.smartflow.smestocksensebackend.dto.inbound.DiscrepancyReportDetailResponse;
 import com.smartflow.smestocksensebackend.dto.inbound.DiscrepancyReportResponse;
+import com.smartflow.smestocksensebackend.dto.inbound.RejectImportReceiptRequest;
 import com.smartflow.smestocksensebackend.exception.ApiExceptionHandler;
 import com.smartflow.smestocksensebackend.exception.BadRequestException;
 import com.smartflow.smestocksensebackend.exception.ConflictException;
@@ -181,6 +182,36 @@ class ImportReceiptDiscrepancyReportControllerTest {
                 .andExpect(jsonPath("$.message").value("Không có dòng sản phẩm nào bị chênh lệch."));
     }
 
+    @Test
+    void approveDiscrepancyReport_managerShouldReturnOk() throws Exception {
+        DiscrepancyReportResponse approved = response();
+        approved.setStatus("DA_DUYET");
+        when(importReceiptService.approveDiscrepancyReport(123L, 1L)).thenReturn(approved);
+
+        mockMvc.perform(post("/api/import-receipts/123/discrepancy-reports/1/approve")
+                        .with(user("manager@example.com").roles("MANAGER")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("DA_DUYET"));
+    }
+
+    @Test
+    void approveDiscrepancyReport_employeeShouldReturn403() throws Exception {
+        mockMvc.perform(post("/api/import-receipts/123/discrepancy-reports/1/approve")
+                        .with(user("employee@example.com").roles("EMPLOYEE")))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void rejectDiscrepancyReport_blankReasonShouldReturn400() throws Exception {
+        RejectImportReceiptRequest request = new RejectImportReceiptRequest(" ");
+
+        mockMvc.perform(post("/api/import-receipts/123/discrepancy-reports/1/reject")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request))
+                        .with(user("manager@example.com").roles("MANAGER")))
+                .andExpect(status().isBadRequest());
+    }
+
     private DiscrepancyReportResponse response() {
         return new DiscrepancyReportResponse(
                 1L,
@@ -191,6 +222,13 @@ class ImportReceiptDiscrepancyReportControllerTest {
                 LocalDateTime.of(2026, 6, 22, 10, 0),
                 2L,
                 "Nguyen Van Employee",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
                 "Biên bản lệch",
                 List.of(new DiscrepancyReportDetailResponse(
                         1L,

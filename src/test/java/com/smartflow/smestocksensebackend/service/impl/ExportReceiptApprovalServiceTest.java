@@ -31,6 +31,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.util.List;
@@ -93,8 +94,9 @@ class ExportReceiptApprovalServiceTest {
     }
 
     private void authenticate(Employee employee) {
-        SecurityContextHolder.getContext().setAuthentication(
-                new UsernamePasswordAuthenticationToken(employee, null, List.of()));
+        SecurityContext context = SecurityContextHolder.createEmptyContext();
+        context.setAuthentication(new UsernamePasswordAuthenticationToken(employee, null, List.of()));
+        SecurityContextHolder.setContext(context);
     }
 
     private Employee employeeWith(RoleCode roleCode) {
@@ -114,6 +116,9 @@ class ExportReceiptApprovalServiceTest {
         receipt.setCode("XUAT-001");
         receipt.setStatus(status);
         receipt.setWarehouse(warehouse);
+        Employee creator = employeeWith(RoleCode.EMPLOYEE);
+        creator.setId(5L);
+        receipt.setCreatedBy(creator);
         return receipt;
     }
 
@@ -276,6 +281,8 @@ class ExportReceiptApprovalServiceTest {
 
     @Test
     void approve_whenTransactionRecordingFailsShouldNotCompleteReceipt() {
+        manager.setStatus(EmployeeStatus.HOAT_DONG);
+        authenticate(manager);
         ExportReceipt receipt = receiptWithStatus(ExportReceiptStatus.CHO_DUYET_CAP_2);
         Product product = new Product();
         product.setId(10L);
@@ -293,7 +300,11 @@ class ExportReceiptApprovalServiceTest {
         when(inventoryTransactionService.recordExportTransaction(any(), any(), any(), any(), any(), any(), any(), any()))
                 .thenThrow(new IllegalStateException("Khong ghi duoc giao dich"));
 
-        assertThrows(IllegalStateException.class, () -> exportReceiptService.approve(100L));
+        assertThrows(IllegalStateException.class, () -> {
+            manager.setStatus(EmployeeStatus.HOAT_DONG);
+            authenticate(manager);
+            exportReceiptService.approve(100L);
+        });
 
         assertEquals(ExportReceiptStatus.CHO_DUYET_CAP_2, receipt.getStatus());
         verify(exportReceiptRepository, never()).saveAndFlush(any());
@@ -321,6 +332,16 @@ class ExportReceiptApprovalServiceTest {
 
         assertThrows(MissingRoleException.class, () -> exportReceiptService.approve(100L));
         verify(exportReceiptRepository, never()).findById(any());
+    }
+
+    @Test
+    void approve_creatorShouldNotSelfApprove() {
+        ExportReceipt receipt = receiptWithStatus(ExportReceiptStatus.CHO_DUYET_CAP_1);
+        receipt.setCreatedBy(manager);
+        when(exportReceiptRepository.findById(100L)).thenReturn(Optional.of(receipt));
+
+        assertThrows(BadRequestException.class, () -> exportReceiptService.approve(100L));
+        verify(exportReceiptRepository, never()).saveAndFlush(any());
     }
 
     @Test

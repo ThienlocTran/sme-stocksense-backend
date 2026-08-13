@@ -171,6 +171,7 @@ public class ExportReceiptServiceImpl implements ExportReceiptService {
                 throw new ConflictException(
                         "Chi duoc duyet phieu xuat o trang thai CHO_DUYET.");
             }
+            ensureInventoryAvailableForApproval(receiptId, receipt);
 
             receipt.setStatus(ExportReceiptStatus.DA_DUYET);
             receipt.setApprovedBy(actor);
@@ -568,6 +569,32 @@ public class ExportReceiptServiceImpl implements ExportReceiptService {
                     quantityAfter,
                     receipt,
                     "Hoan tat phieu xuat");
+        }
+    }
+
+    private void ensureInventoryAvailableForApproval(Long receiptId, ExportReceipt receipt) {
+        List<ExportReceiptDetail> details = exportReceiptDetailRepository.findByExportReceiptIdOrderByIdAsc(receiptId);
+        if (details.isEmpty()) {
+            throw new BadRequestException("Phieu xuat chua co san pham nao.");
+        }
+
+        Long warehouseId = receipt.getWarehouse() != null ? receipt.getWarehouse().getId() : null;
+        if (warehouseId == null) {
+            throw new BadRequestException("Kho xuat khong hop le.");
+        }
+
+        for (ExportReceiptDetail detail : details) {
+            Long productId = detail.getProduct() != null ? detail.getProduct().getId() : null;
+            int quantityNeeded = detail.getQuantity() != null ? detail.getQuantity() : 0;
+            if (productId == null || quantityNeeded <= 0) {
+                throw new BadRequestException("Chi tiet phieu xuat khong hop le.");
+            }
+
+            InventoryLevel inventory = inventoryLevelRepository.findByProductIdAndWarehouseId(productId, warehouseId)
+                    .orElseThrow(() -> new ConflictException("Khong du ton kho cho san pham " + productId + "."));
+            if (inventory.getQuantity() < quantityNeeded) {
+                throw new ConflictException("Khong du ton kho cho san pham " + productId + ".");
+            }
         }
     }
 

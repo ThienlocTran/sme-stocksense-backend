@@ -217,10 +217,18 @@ class ExportReceiptApprovalServiceTest {
     @Test
     void approve_pendingReceiptShouldMoveToApprovedWithoutDeductingInventory() {
         ExportReceipt receipt = receiptWithStatus(ExportReceiptStatus.CHO_DUYET);
+        Product product = new Product();
+        product.setId(10L);
+        ExportReceiptDetail detail = new ExportReceiptDetail();
+        detail.setProduct(product);
+        detail.setQuantity(5);
+        InventoryLevel inventoryLevel = new InventoryLevel();
+        inventoryLevel.setQuantity(8);
         when(exportReceiptRepository.findById(100L)).thenReturn(Optional.of(receipt));
         when(exportReceiptRepository.saveAndFlush(any(ExportReceipt.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
-        when(exportReceiptDetailRepository.findByExportReceiptIdOrderByIdAsc(100L)).thenReturn(List.of());
+        when(exportReceiptDetailRepository.findByExportReceiptIdOrderByIdAsc(100L)).thenReturn(List.of(detail));
+        when(inventoryLevelRepository.findByProductIdAndWarehouseId(10L, 1L)).thenReturn(Optional.of(inventoryLevel));
 
         ExportReceiptDetailResponse response = exportReceiptService.approve(100L);
 
@@ -228,7 +236,7 @@ class ExportReceiptApprovalServiceTest {
         assertEquals(ExportReceiptStatus.DA_DUYET, receipt.getStatus());
         assertEquals(manager, receipt.getApprovedBy());
         assertNotNull(receipt.getApprovedAt());
-        verify(inventoryLevelRepository, never()).findByProductIdAndWarehouseId(any(), any());
+        verify(inventoryLevelRepository, never()).findByProductIdAndWarehouseIdForUpdate(any(), any());
     }
 
     @Test
@@ -248,10 +256,31 @@ class ExportReceiptApprovalServiceTest {
         when(exportReceiptRepository.saveAndFlush(any(ExportReceipt.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
         when(exportReceiptDetailRepository.findByExportReceiptIdOrderByIdAsc(100L)).thenReturn(List.of(detail));
+        when(inventoryLevelRepository.findByProductIdAndWarehouseId(10L, 1L)).thenReturn(Optional.of(inventoryLevel));
         exportReceiptService.approve(100L);
 
         verify(inventoryLevelRepository, never()).findByProductIdAndWarehouseIdForUpdate(any(), any());
         assertEquals(8, inventoryLevel.getQuantity());
+    }
+
+    @Test
+    void approve_whenInventoryInsufficientShouldThrowConflict() {
+        ExportReceipt receipt = receiptWithStatus(ExportReceiptStatus.CHO_DUYET);
+        Product product = new Product();
+        product.setId(10L);
+        ExportReceiptDetail detail = new ExportReceiptDetail();
+        detail.setProduct(product);
+        detail.setQuantity(5);
+        InventoryLevel inventoryLevel = new InventoryLevel();
+        inventoryLevel.setQuantity(3);
+        when(exportReceiptRepository.findById(100L)).thenReturn(Optional.of(receipt));
+        when(exportReceiptDetailRepository.findByExportReceiptIdOrderByIdAsc(100L)).thenReturn(List.of(detail));
+        when(inventoryLevelRepository.findByProductIdAndWarehouseId(10L, 1L)).thenReturn(Optional.of(inventoryLevel));
+
+        assertThrows(ConflictException.class, () -> exportReceiptService.approve(100L));
+
+        assertEquals(ExportReceiptStatus.CHO_DUYET, receipt.getStatus());
+        verify(exportReceiptRepository, never()).saveAndFlush(any());
     }
 
     @Test

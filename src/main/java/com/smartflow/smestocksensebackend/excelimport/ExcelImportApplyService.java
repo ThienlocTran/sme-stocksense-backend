@@ -188,21 +188,22 @@ public class ExcelImportApplyService {
                     return created;
                 });
         Integer quantityBefore = inventoryLevel.getQuantity() == null ? 0 : inventoryLevel.getQuantity();
-        inventoryLevel.setQuantity(quantity);
+        // Cộng dồn tồn đầu kỳ vào tồn hiện có (không overwrite)
+        Integer quantityAfter = quantityBefore + quantity;
+        inventoryLevel.setQuantity(quantityAfter);
         inventoryLevelRepository.saveAndFlush(inventoryLevel);
-        if (!quantityBefore.equals(quantity)) {
-            InventoryTransaction transaction = new InventoryTransaction();
-            transaction.setProduct(product);
-            transaction.setWarehouse(warehouse);
-            transaction.setTransactionType(InventoryTransactionType.NHAP_DAU_KY);
-            transaction.setQuantity(Math.abs(quantity - quantityBefore));
-            transaction.setQuantityBefore(quantityBefore);
-            transaction.setQuantityAfter(quantity);
-            transaction.setImportBatchId(excelImport.getId());
-            transaction.setCreatedBy(excelImport.getCreatedBy());
-            transaction.setNote("Nhap dau ky tu import Excel.");
-            inventoryTransactionRepository.saveAndFlush(transaction);
-        }
+        // Luôn ghi log giao dịch kho khi import thành công
+        InventoryTransaction transaction = new InventoryTransaction();
+        transaction.setProduct(product);
+        transaction.setWarehouse(warehouse);
+        transaction.setTransactionType(InventoryTransactionType.NHAP_DAU_KY);
+        transaction.setQuantity(quantity);
+        transaction.setQuantityBefore(quantityBefore);
+        transaction.setQuantityAfter(quantityAfter);
+        transaction.setImportBatchId(excelImport.getId());
+        transaction.setCreatedBy(excelImport.getCreatedBy());
+        transaction.setNote("Nhap dau ky tu import Excel.");
+        inventoryTransactionRepository.saveAndFlush(transaction);
     }
 
     private ProductStatus parseStatusOrDefault(String value) {

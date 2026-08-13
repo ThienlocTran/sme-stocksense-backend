@@ -156,8 +156,17 @@ public class ExportReceiptServiceImpl implements ExportReceiptService {
         ExportReceipt receipt = exportReceiptRepository.findById(receiptId)
                 .orElseThrow(() -> new NotFoundException("Phieu xuat khong ton tai."));
 
-        LocalDateTime now = LocalDateTime.now();
+        // M6 fix: chặn tự duyệt phiếu xuất
+        if (actor.getId().equals(receipt.getCreatedBy().getId())) {
+            throw new BadRequestException("Nguoi tao phieu khong duoc tu duyet phieu xuat cua chinh minh.");
+        }
+        if (receipt.getSubmittedBy() != null && actor.getId().equals(receipt.getSubmittedBy().getId())) {
+            throw new BadRequestException("Nguoi gui duyet khong duoc tu duyet phieu xuat cua chinh minh.");
+        }
+
+
         try {
+            LocalDateTime now = LocalDateTime.now();
             ExportReceiptAction historyAction;
             if (receipt.getStatus() == ExportReceiptStatus.CHO_DUYET_CAP_1
                     || receipt.getStatus() == ExportReceiptStatus.CHO_DUYET_CAP_2) {

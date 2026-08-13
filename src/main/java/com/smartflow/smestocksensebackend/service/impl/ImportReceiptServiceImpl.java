@@ -116,6 +116,10 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
     private final InventoryService inventoryService;
     private final ImportReceiptHistoryRepository importReceiptHistoryRepository;
 
+    /** Ngưỡng tổng tiền để bắt buộc 2 cấp duyệt, mặc định 50 triệu VND */
+    @org.springframework.beans.factory.annotation.Value("${app.import-receipt.second-approval-threshold-amount:50000000}")
+    private java.math.BigDecimal secondApprovalThreshold;
+
     @Override
     @Transactional
     public ImportReceiptResponse createDraft(CreateImportReceiptRequest request) {
@@ -294,7 +298,7 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
         if (!ImportReceiptStatePolicy.isEditable(receipt.getStatus())) {
             throw new ConflictException("Chi duoc gui duyet phieu nhap o trang thai NHAP hoac TU_CHOI.");
         }
-        if (!ImportReceiptStatePolicy.canTransition(receipt.getStatus(), ImportReceiptStatus.CHO_DUYET_CAP_2)) {
+        if (!ImportReceiptStatePolicy.canTransition(receipt.getStatus(), ImportReceiptStatus.CHO_DUYET_CAP_1)) {
             throw new ConflictException("Chi duoc gui duyet phieu nhap o trang thai NHAP hoac TU_CHOI.");
         }
 
@@ -318,12 +322,12 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
         try {
             receipt.setTotalAmount(totalAmount);
             LocalDateTime submittedAt = LocalDateTime.now();
-            receipt.setStatus(ImportReceiptStatus.CHO_DUYET_CAP_2);
+            // M1 fix: chuyển sang CHO_DUYET_CAP_1, không tự duyệt cấp 1
+            receipt.setStatus(ImportReceiptStatus.CHO_DUYET_CAP_1);
             receipt.setRejectionReason(null);
             receipt.setSubmittedBy(actor);
             receipt.setSubmittedAt(submittedAt);
-            receipt.setLevel1ApprovedBy(actor);
-            receipt.setLevel1ApprovedAt(submittedAt);
+            // Không đặt level1ApprovedBy ở đây — phải do người khác duyệt
             ImportReceipt savedReceipt = importReceiptRepository.saveAndFlush(receipt);
             saveHistory(savedReceipt, actor, ImportReceiptAction.GUI_DUYET, null);
             return ImportReceiptDraftResponse.from(savedReceipt, details);
@@ -476,15 +480,42 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
         ImportReceipt receipt = importReceiptRepository.findById(receiptId)
                 .orElseThrow(() -> new NotFoundException("Phieu nhap khong ton tai."));
 
+        // M2 fix: chặn tự duyệt
+        if (actor.getId().equals(receipt.getCreatedBy().getId())) {
+            throw new BadRequestException("Nguoi tao phieu khong duoc tu duyet phieu cua chinh minh.");
+        }
+        if (receipt.getSubmittedBy() != null && actor.getId().equals(receipt.getSubmittedBy().getId())) {
+            throw new BadRequestException("Nguoi gui duyet khong duoc tu duyet phieu cua chinh minh.");
+        }
+
         ImportReceiptStatus current = receipt.getStatus();
         LocalDateTime now = LocalDateTime.now();
 
         ImportReceiptStatus nextStatus;
         ImportReceiptAction action;
-        
-        if (current == ImportReceiptStatus.CHO_DUYET_CAP_1
-                || current == ImportReceiptStatus.CHO_DUYET_CAP_2) {
-            // Cấp 1 do người tạo xác nhận khi gửi; quản lý/admin duyệt là cấp 2 và kết thúc duyệt.
+
+        if (current == ImportReceiptStatus.CHO_DUYET_CAP_1) {
+            // M7 fix: kiểm tra ngưỡng để quyết định 1 hay 2 cấp duyệt
+            BigDecimal totalAmount = receipt.getTotalAmount() != null ? receipt.getTotalAmount() : BigDecimal.ZERO;
+            if (totalAmount.compareTo(secondApprovalThreshold) > 0) {
+                // Phữu vượt ngưỡng: chuyển sang CHO_DUYET_CAP_2
+                nextStatus = ImportReceiptStatus.CHO_DUYET_CAP_2;
+                receipt.setLevel1ApprovedBy(actor);
+                receipt.setLevel1ApprovedAt(now);
+                action = ImportReceiptAction.DUYET_CAP_1;
+            } else {
+                // Phữu dưới ngưỡng: 1 cấp duyệt, chuyển thẳng sang CHO_HANG_VE
+                nextStatus = ImportReceiptStatus.CHO_HANG_VE;
+                receipt.setLevel1ApprovedBy(actor);
+                receipt.setLevel1ApprovedAt(now);
+                action = ImportReceiptAction.DUYET_CAP_1;
+            }
+        } else if (current == ImportReceiptStatus.CHO_DUYET_CAP_2) {
+            // M3 fix: kiểm tra four-eyes — người duyệt cấp 2 phải khác cấp 1
+            if (receipt.getLevel1ApprovedBy() != null
+                    && actor.getId().equals(receipt.getLevel1ApprovedBy().getId())) {
+                throw new BadRequestException("Nguoi duyet cap 2 phai khac nguoi da duyet cap 1 (nguyen tac 4 mat).");
+            }
             nextStatus = ImportReceiptStatus.CHO_HANG_VE;
             receipt.setLevel2ApprovedBy(actor);
             receipt.setLevel2ApprovedAt(now);

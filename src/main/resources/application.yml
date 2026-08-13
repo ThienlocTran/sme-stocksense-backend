@@ -21,3 +21,8 @@ server:
       force: true
       force-request: true
       force-response: true
+
+app:
+  import-receipt:
+    # Ngưỡng tổng tiền để bắt buộc 2 cấp duyệt (mặc định 50.000.000đ)
+    second-approval-threshold-amount: 50000000

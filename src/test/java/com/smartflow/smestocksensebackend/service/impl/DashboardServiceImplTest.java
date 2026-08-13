@@ -141,8 +141,7 @@ class DashboardServiceImplTest {
         ArgumentCaptor<List<ExportReceiptStatus>> captor = ArgumentCaptor.forClass(List.class);
         org.mockito.Mockito.verify(exportReceiptRepository).countByStatusIn(captor.capture());
         assertEquals(List.of(
-                ExportReceiptStatus.CHO_DUYET_CAP_1,
-                ExportReceiptStatus.CHO_DUYET_CAP_2,
+                ExportReceiptStatus.CHO_DUYET,
                 ExportReceiptStatus.DA_DUYET
         ), captor.getValue());
     }

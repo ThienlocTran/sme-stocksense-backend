@@ -14,7 +14,7 @@
 ## 2. Quy chuẩn Trạng thái (Statuses)
 Các công việc đang chờ xử lý (Pending Tasks) được tính toán dựa trên các Enum trạng thái chuẩn của hệ thống:
 - **Phiếu Nhập (Import)**: `CHO_DUYET_CAP_1`, `CHO_DUYET_CAP_2`, `CHO_HANG_VE`, `CHO_KIEM_HANG`
-- **Phiếu Xuất (Export)**: `CHO_DUYET_CAP_1`, `CHO_DUYET_CAP_2`, `CHO_XUAT`
+- **Phiếu Xuất (Export)**: `CHO_DUYET`, `DA_DUYET`
 - **Cảnh báo Tồn kho (Alert)**: `OPEN`, `ACKNOWLEDGED`
 
 ## 3. API Endpoint

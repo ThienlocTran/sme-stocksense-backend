@@ -47,8 +47,7 @@ import java.util.stream.Collectors;
 public class ExportReceiptServiceImpl implements ExportReceiptService {
 
     private static final List<ExportReceiptStatus> PENDING_APPROVAL_STATUSES = List.of(
-            ExportReceiptStatus.CHO_DUYET_CAP_1,
-            ExportReceiptStatus.CHO_DUYET_CAP_2);
+            ExportReceiptStatus.CHO_DUYET);
 
     private static final int MAX_CODE_ATTEMPTS = 3;
 
@@ -96,7 +95,7 @@ public class ExportReceiptServiceImpl implements ExportReceiptService {
         }
         if (!PENDING_APPROVAL_STATUSES.contains(parsedStatus)) {
             throw new BadRequestException(
-                    "Chi duoc loc theo trang thai cho duyet (CHO_DUYET_CAP_1 hoac CHO_DUYET_CAP_2).");
+                    "Chi duoc loc theo trang thai cho duyet (CHO_DUYET).");
         }
         return ExportReceiptPageResponse.from(exportReceiptRepository
                 .findByStatus(parsedStatus, pageable)
@@ -168,70 +167,43 @@ public class ExportReceiptServiceImpl implements ExportReceiptService {
 
         try {
             LocalDateTime now = LocalDateTime.now();
-            ExportReceiptAction historyAction;
-            if (receipt.getStatus() == ExportReceiptStatus.CHO_DUYET_CAP_1
-                    || receipt.getStatus() == ExportReceiptStatus.CHO_DUYET_CAP_2) {
-                List<ExportReceiptDetail> details = exportReceiptDetailRepository
-                        .findByExportReceiptIdOrderByIdAsc(receiptId);
-                details = details.stream()
-                        .sorted((left, right) -> {
-                            Long leftProductId = left.getProduct() != null ? left.getProduct().getId() : null;
-                            Long rightProductId = right.getProduct() != null ? right.getProduct().getId() : null;
-                            int comparison = Long.compare(
-                                    leftProductId != null ? leftProductId : Long.MAX_VALUE,
-                                    rightProductId != null ? rightProductId : Long.MAX_VALUE);
-                            if (comparison != 0) {
-                                return comparison;
-                            }
-                            return Long.compare(
-                                    left.getId() != null ? left.getId() : Long.MAX_VALUE,
-                                    right.getId() != null ? right.getId() : Long.MAX_VALUE);
-                        })
-                        .toList();
-                for (ExportReceiptDetail detail : details) {
-                    Long productId = detail.getProduct() != null ? detail.getProduct().getId() : null;
-                    Long warehouseId = receipt.getWarehouse() != null ? receipt.getWarehouse().getId() : null;
-                    if (productId == null || warehouseId == null) {
-                        throw new BadRequestException("Chi tiet phieu xuat khong hop le.");
-                    }
-
-                    InventoryLevel inventoryLevel = inventoryLevelRepository
-                            .findByProductIdAndWarehouseIdForUpdate(productId, warehouseId)
-                            .orElseThrow(
-                                    () -> new ConflictException("Khong du ton kho cho san pham " + productId + "."));
-
-                    int quantityBefore = inventoryLevel.getQuantity();
-                    int quantityNeeded = detail.getQuantity() != null ? detail.getQuantity() : 0;
-                    if (quantityBefore < quantityNeeded) {
-                        throw new ConflictException("Khong du ton kho cho san pham " + productId + ".");
-                    }
-
-                    int quantityAfter = quantityBefore - quantityNeeded;
-                    inventoryLevel.setQuantity(quantityAfter);
-                    inventoryLevelRepository.saveAndFlush(inventoryLevel);
-                    inventoryTransactionService.recordExportTransaction(
-                            productId,
-                            warehouseId,
-                            InventoryTransactionType.XUAT_KHO,
-                            quantityNeeded,
-                            quantityBefore,
-                            quantityAfter,
-                            receipt,
-                            "Duyet phieu xuat cap 2");
-                }
-                receipt.setStatus(ExportReceiptStatus.HOAN_THANH);
-                historyAction = ExportReceiptAction.DUYET_CAP_2;
-            } else {
+            if (receipt.getStatus() != ExportReceiptStatus.CHO_DUYET) {
                 throw new ConflictException(
-                        "Chi duoc duyet phieu xuat o trang thai CHO_DUYET_CAP_1 hoac CHO_DUYET_CAP_2.");
+                        "Chi duoc duyet phieu xuat o trang thai CHO_DUYET.");
             }
 
-            if (receipt.getStatus() == ExportReceiptStatus.HOAN_THANH) {
-                receipt.setApprovedBy(actor);
-                receipt.setApprovedAt(now);
-            }
+            receipt.setStatus(ExportReceiptStatus.DA_DUYET);
+            receipt.setApprovedBy(actor);
+            receipt.setApprovedAt(now);
             ExportReceipt savedReceipt = exportReceiptRepository.saveAndFlush(receipt);
-            saveHistory(savedReceipt, actor, historyAction, null);
+            saveHistory(savedReceipt, actor, ExportReceiptAction.DUYET_CAP_1, null);
+            return buildDetailResponse(savedReceipt);
+        } catch (OptimisticLockingFailureException exception) {
+            throw new ConflictException("Phieu xuat da duoc cap nhat boi request khac.", exception);
+        }
+    }
+
+    @Override
+    @Transactional
+    public ExportReceiptDetailResponse complete(Long receiptId) {
+        Employee actor = currentEmployee();
+        if (actor.getStatus() != EmployeeStatus.HOAT_DONG) {
+            throw new AccountInactiveException();
+        }
+
+        ExportReceipt receipt = exportReceiptRepository.findById(receiptId)
+                .orElseThrow(() -> new NotFoundException("Phieu xuat khong ton tai."));
+        if (receipt.getStatus() != ExportReceiptStatus.DA_DUYET) {
+            throw new ConflictException("Chi duoc hoan tat phieu xuat o trang thai DA_DUYET.");
+        }
+
+        try {
+            deductInventory(receiptId, receipt);
+            receipt.setStatus(ExportReceiptStatus.HOAN_THANH);
+            receipt.setCompletedBy(actor);
+            receipt.setCompletedAt(LocalDateTime.now());
+            ExportReceipt savedReceipt = exportReceiptRepository.saveAndFlush(receipt);
+            saveHistory(savedReceipt, actor, ExportReceiptAction.HOAN_THANH, null);
             return buildDetailResponse(savedReceipt);
         } catch (OptimisticLockingFailureException exception) {
             throw new ConflictException("Phieu xuat da duoc cap nhat boi request khac.", exception);
@@ -389,8 +361,8 @@ public class ExportReceiptServiceImpl implements ExportReceiptService {
             cancelDraft(id);
             return buildDetailResponse(receipt);
         }
-        if (receipt.getStatus() != ExportReceiptStatus.CHO_XUAT) {
-            throw new ConflictException("Chi duoc huy phieu xuat o trang thai NHAP, TU_CHOI hoac CHO_XUAT.");
+        if (receipt.getStatus() != ExportReceiptStatus.DA_DUYET) {
+            throw new ConflictException("Chi duoc huy phieu xuat o trang thai NHAP, TU_CHOI hoac DA_DUYET.");
         }
         ensureCanApprove(actor);
         String reason = request != null && request.reason() != null ? request.reason().trim() : null;
@@ -457,11 +429,9 @@ public class ExportReceiptServiceImpl implements ExportReceiptService {
 
         // 7. Người tạo gửi phiếu đồng nghĩa đã duyệt cấp 1, chuyển thẳng sang chờ cấp 2.
         LocalDateTime submittedAt = LocalDateTime.now();
-        receipt.setStatus(ExportReceiptStatus.CHO_DUYET_CAP_2);
+        receipt.setStatus(ExportReceiptStatus.CHO_DUYET);
         receipt.setSubmittedBy(actor);
         receipt.setSubmittedAt(submittedAt);
-        receipt.setLevel1ApprovedBy(actor);
-        receipt.setLevel1ApprovedAt(submittedAt);
 
         // Lưu ý: Trường version sẽ được Hibernate tự động tăng lên 1 nhờ @Version trên
         // Entity
@@ -549,6 +519,56 @@ public class ExportReceiptServiceImpl implements ExportReceiptService {
         history.setAction(action);
         history.setNote(note);
         exportReceiptHistoryRepository.save(history);
+    }
+
+    private void deductInventory(Long receiptId, ExportReceipt receipt) {
+        List<ExportReceiptDetail> details = exportReceiptDetailRepository
+                .findByExportReceiptIdOrderByIdAsc(receiptId);
+        details = details.stream()
+                .sorted((left, right) -> {
+                    Long leftProductId = left.getProduct() != null ? left.getProduct().getId() : null;
+                    Long rightProductId = right.getProduct() != null ? right.getProduct().getId() : null;
+                    int comparison = Long.compare(
+                            leftProductId != null ? leftProductId : Long.MAX_VALUE,
+                            rightProductId != null ? rightProductId : Long.MAX_VALUE);
+                    if (comparison != 0) {
+                        return comparison;
+                    }
+                    return Long.compare(
+                            left.getId() != null ? left.getId() : Long.MAX_VALUE,
+                            right.getId() != null ? right.getId() : Long.MAX_VALUE);
+                })
+                .toList();
+        for (ExportReceiptDetail detail : details) {
+            Long productId = detail.getProduct() != null ? detail.getProduct().getId() : null;
+            Long warehouseId = receipt.getWarehouse() != null ? receipt.getWarehouse().getId() : null;
+            if (productId == null || warehouseId == null) {
+                throw new BadRequestException("Chi tiet phieu xuat khong hop le.");
+            }
+
+            InventoryLevel inventoryLevel = inventoryLevelRepository
+                    .findByProductIdAndWarehouseIdForUpdate(productId, warehouseId)
+                    .orElseThrow(() -> new ConflictException("Khong du ton kho cho san pham " + productId + "."));
+
+            int quantityBefore = inventoryLevel.getQuantity();
+            int quantityNeeded = detail.getQuantity() != null ? detail.getQuantity() : 0;
+            if (quantityBefore < quantityNeeded) {
+                throw new ConflictException("Khong du ton kho cho san pham " + productId + ".");
+            }
+
+            int quantityAfter = quantityBefore - quantityNeeded;
+            inventoryLevel.setQuantity(quantityAfter);
+            inventoryLevelRepository.saveAndFlush(inventoryLevel);
+            inventoryTransactionService.recordExportTransaction(
+                    productId,
+                    warehouseId,
+                    InventoryTransactionType.XUAT_KHO,
+                    quantityNeeded,
+                    quantityBefore,
+                    quantityAfter,
+                    receipt,
+                    "Hoan tat phieu xuat");
+        }
     }
 
     // --- Helper Methods ---

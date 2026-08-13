@@ -125,12 +125,22 @@ class ExportReceiptApprovalControllerTest {
 
         @Test
         void approve_managerShouldReturn200() throws Exception {
-                when(exportReceiptService.approve(eq(100L))).thenReturn(detailResponse("CHO_DUYET_CAP_2"));
+                when(exportReceiptService.approve(eq(100L))).thenReturn(detailResponse("DA_DUYET"));
 
                 mockMvc.perform(put("/api/export-receipts/100/approve")
                                 .with(user("manager@example.com").roles("MANAGER")))
                                 .andExpect(status().isOk())
-                                .andExpect(jsonPath("$.status").value("CHO_DUYET_CAP_2"));
+                                .andExpect(jsonPath("$.status").value("DA_DUYET"));
+        }
+
+        @Test
+        void complete_employeeShouldReturn200() throws Exception {
+                when(exportReceiptService.complete(eq(100L))).thenReturn(detailResponse("HOAN_THANH"));
+
+                mockMvc.perform(put("/api/export-receipts/100/complete")
+                                .with(user("employee@example.com").roles("EMPLOYEE")))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.status").value("HOAN_THANH"));
         }
 
         @Test

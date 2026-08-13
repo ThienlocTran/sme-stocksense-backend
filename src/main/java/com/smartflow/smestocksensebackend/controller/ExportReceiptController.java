@@ -53,6 +53,11 @@ public class ExportReceiptController {
         return exportReceiptService.approve(id);
     }
 
+    @PutMapping("/{id:\\d+}/complete")
+    public ExportReceiptDetailResponse complete(@PathVariable Long id) {
+        return exportReceiptService.complete(id);
+    }
+
     @PutMapping("/{id:\\d+}/reject")
     public ExportReceiptDetailResponse reject(
             @PathVariable Long id,

@@ -23,6 +23,7 @@ public final class ExportReceiptStatePolicy {
 
     static {
         TRANSITIONS.put(ExportReceiptStatus.NHAP, EnumSet.of(
+                ExportReceiptStatus.CHO_DUYET,
                 ExportReceiptStatus.CHO_DUYET_CAP_1,
                 ExportReceiptStatus.CHO_DUYET_CAP_2,
                 ExportReceiptStatus.HUY
@@ -36,6 +37,16 @@ public final class ExportReceiptStatePolicy {
         TRANSITIONS.put(ExportReceiptStatus.CHO_DUYET_CAP_2, EnumSet.of(
                 ExportReceiptStatus.HOAN_THANH,
                 ExportReceiptStatus.TU_CHOI
+        ));
+
+        TRANSITIONS.put(ExportReceiptStatus.CHO_DUYET, EnumSet.of(
+                ExportReceiptStatus.DA_DUYET,
+                ExportReceiptStatus.TU_CHOI
+        ));
+
+        TRANSITIONS.put(ExportReceiptStatus.DA_DUYET, EnumSet.of(
+                ExportReceiptStatus.HOAN_THANH,
+                ExportReceiptStatus.HUY
         ));
         
         TRANSITIONS.put(ExportReceiptStatus.TU_CHOI, EnumSet.of(

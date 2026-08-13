@@ -17,6 +17,8 @@ public interface ExportReceiptService {
 
     ExportReceiptDetailResponse approve(Long receiptId);
 
+    ExportReceiptDetailResponse complete(Long receiptId);
+
     ExportReceiptDetailResponse reject(Long receiptId, RejectExportReceiptRequest request);
 
     ExportReceiptResponse createDraft(ExportReceiptDraftRequest request);

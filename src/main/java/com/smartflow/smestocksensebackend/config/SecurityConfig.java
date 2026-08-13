@@ -167,6 +167,8 @@ public class SecurityConfig {
                                                 .hasAnyRole("ADMIN", "MANAGER", "EMPLOYEE")
                                                 .requestMatchers(HttpMethod.PUT, "/api/export-receipts/*/approve")
                                                 .hasAnyRole("ADMIN", "MANAGER")
+                                                .requestMatchers(HttpMethod.PUT, "/api/export-receipts/*/complete")
+                                                .hasAnyRole("ADMIN", "EMPLOYEE")
                                                 .requestMatchers(HttpMethod.PUT, "/api/export-receipts/*/reject")
                                                 .hasAnyRole("ADMIN", "MANAGER")
                                                 .requestMatchers(HttpMethod.POST, "/api/import-receipts/*/cancel",

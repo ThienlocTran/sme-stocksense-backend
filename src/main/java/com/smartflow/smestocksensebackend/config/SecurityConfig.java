@@ -161,9 +161,17 @@ public class SecurityConfig {
                                                 .requestMatchers(HttpMethod.GET, "/api/import-receipts/*")
                                                 .hasAnyRole("ADMIN", "MANAGER", "EMPLOYEE")
                                                 .requestMatchers(HttpMethod.GET,
+                                                                "/api/import-receipts/*/export/pdf",
+                                                                "/api/import-receipts/*/export/excel")
+                                                .hasAnyRole("ADMIN", "MANAGER", "EMPLOYEE")
+                                                .requestMatchers(HttpMethod.GET,
                                                                 "/api/export-receipts/pending-approval")
                                                 .hasAnyRole("ADMIN", "MANAGER")
                                                 .requestMatchers(HttpMethod.GET, "/api/export-receipts/*")
+                                                .hasAnyRole("ADMIN", "MANAGER", "EMPLOYEE")
+                                                .requestMatchers(HttpMethod.GET,
+                                                                "/api/export-receipts/*/export/pdf",
+                                                                "/api/export-receipts/*/export/excel")
                                                 .hasAnyRole("ADMIN", "MANAGER", "EMPLOYEE")
                                                 .requestMatchers(HttpMethod.PUT, "/api/export-receipts/*/approve")
                                                 .hasAnyRole("ADMIN", "MANAGER")
@@ -201,6 +209,14 @@ public class SecurityConfig {
                                                 .hasAnyRole("ADMIN", "EMPLOYEE")
                                                 .requestMatchers(HttpMethod.POST, "/api/import-receipts")
                                                 .hasAnyRole("ADMIN", "EMPLOYEE")
+                                                .requestMatchers(HttpMethod.POST, "/api/forecast/seed-history")
+                                                .hasRole("ADMIN")
+                                                .requestMatchers(HttpMethod.GET, "/api/forecast/*/*/drift")
+                                                .hasAnyRole("ADMIN", "MANAGER")
+                                                .requestMatchers(HttpMethod.POST, "/api/forecast/*/*")
+                                                .hasAnyRole("ADMIN", "MANAGER")
+                                                .requestMatchers(HttpMethod.GET, "/api/forecast/*/*")
+                                                .hasAnyRole("ADMIN", "MANAGER", "EMPLOYEE")
                                                 .anyRequest().authenticated())
                                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                                 .build();

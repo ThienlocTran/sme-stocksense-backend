@@ -1,5 +1,7 @@
 package com.smartflow.smestocksensebackend.repository;
 
+import com.smartflow.smestocksensebackend.dto.dashboard.StockHealthProjection;
+import com.smartflow.smestocksensebackend.dto.dashboard.WarehouseDistributionProjection;
 import com.smartflow.smestocksensebackend.dto.inventory.InventoryLevelProjection;
 import com.smartflow.smestocksensebackend.entity.InventoryLevel;
 import jakarta.persistence.LockModeType;
@@ -113,4 +115,23 @@ public interface InventoryLevelRepository extends JpaRepository<InventoryLevel, 
                         @Param("warehouseStatus") String warehouseStatus,
                         @Param("productStatus") String productStatus,
                         Pageable pageable);
+
+        @Query(value = "SELECT "
+                        + "COALESCE(SUM(CASE WHEN t.so_luong > sp.ton_toi_thieu THEN 1 ELSE 0 END), 0) AS \"healthy\", "
+                        + "COALESCE(SUM(CASE WHEN t.so_luong > 0 AND sp.ton_toi_thieu IS NOT NULL AND sp.ton_toi_thieu > 0 AND t.so_luong <= sp.ton_toi_thieu THEN 1 ELSE 0 END), 0) AS \"lowStock\", "
+                        + "COALESCE(SUM(CASE WHEN t.so_luong <= 0 THEN 1 ELSE 0 END), 0) AS \"outOfStock\" "
+                        + "FROM ton_kho t "
+                        + "JOIN san_pham sp ON sp.id = t.san_pham_id "
+                        + "JOIN kho k ON k.id = t.kho_id "
+                        + "WHERE sp.trang_thai = 'HOAT_DONG' AND k.trang_thai = 'HOAT_DONG'", nativeQuery = true)
+        StockHealthProjection countDashboardStockHealth();
+
+        @Query(value = "SELECT k.id AS \"warehouseId\", k.ten_kho AS \"warehouseName\", COALESCE(SUM(t.so_luong), 0) AS \"totalQuantity\" "
+                        + "FROM ton_kho t "
+                        + "JOIN kho k ON k.id = t.kho_id "
+                        + "JOIN san_pham sp ON sp.id = t.san_pham_id "
+                        + "WHERE k.trang_thai = 'HOAT_DONG' AND sp.trang_thai = 'HOAT_DONG' "
+                        + "GROUP BY k.id, k.ten_kho "
+                        + "ORDER BY \"totalQuantity\" DESC, k.id ASC", nativeQuery = true)
+        List<WarehouseDistributionProjection> sumDashboardWarehouseDistribution();
 }

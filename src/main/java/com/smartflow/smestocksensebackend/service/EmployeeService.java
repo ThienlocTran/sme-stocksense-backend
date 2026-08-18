@@ -207,6 +207,8 @@ public class EmployeeService {
     @Transactional
     public EmployeeListItemResponse updateEmployee(Long id, UpdateEmployeeRequest request) {
         Employee employee = findEmployeeById(id);
+        Long currentEmployeeId = getCurrentEmployeeId();
+        boolean selfUpdate = currentEmployeeId != null && currentEmployeeId.equals(id);
 
         String email = normalizeEmail(request.email());
         String phone = normalizeOptional(request.phoneNumber());
@@ -221,6 +223,10 @@ public class EmployeeService {
 
         RoleCode roleCode = parseRequiredEnum(RoleCode.class, request.roleCode(), "roleCode");
         EmployeeStatus status = parseRequiredEnum(EmployeeStatus.class, request.status(), "status");
+        if (selfUpdate && (employee.getRole() == null || employee.getRole().getCode() != roleCode
+                || employee.getStatus() != status)) {
+            throw new BadRequestException("Không thể tự thay đổi role hoặc trạng thái tài khoản.");
+        }
         Role role = roleRepository.findByCode(roleCode)
                 .orElseThrow(() -> new BadRequestException("roleCode khong hop le."));
 

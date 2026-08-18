@@ -14,6 +14,7 @@ import com.smartflow.smestocksensebackend.exception.NotFoundException;
 import com.smartflow.smestocksensebackend.repository.EmployeeRepository;
 import com.smartflow.smestocksensebackend.repository.RoleRepository;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -22,6 +23,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.util.List;
@@ -44,6 +47,11 @@ class EmployeeServiceTest {
 
     @InjectMocks
     private EmployeeService employeeService;
+
+    @AfterEach
+    void clearSecurityContext() {
+        SecurityContextHolder.clearContext();
+    }
 
     @Test
     void listEmployees_shouldReturnPagedEmployees() {
@@ -135,6 +143,73 @@ class EmployeeServiceTest {
     }
 
     @Test
+    void updateEmployee_selfUpdate_shouldAllowSafeProfileFields() {
+        Employee existing = employee(7L, "Old Self", "self@example.com", "0900000010", RoleCode.ADMIN, EmployeeStatus.HOAT_DONG);
+        authenticate(existing);
+        Mockito.when(employeeRepository.findById(7L)).thenReturn(Optional.of(existing));
+        Mockito.when(employeeRepository.existsByEmailIgnoreCaseAndIdNot("self-new@example.com", 7L)).thenReturn(false);
+        Mockito.when(employeeRepository.existsByPhoneAndIdNot("0900000011", 7L)).thenReturn(false);
+        Mockito.when(roleRepository.findByCode(RoleCode.ADMIN)).thenReturn(Optional.of(role(RoleCode.ADMIN)));
+        Mockito.when(employeeRepository.saveAndFlush(existing)).thenReturn(existing);
+
+        var response = employeeService.updateEmployee(7L, new UpdateEmployeeRequest(
+                "Self New", "self-new@example.com", "0900000011", "ADMIN", "HOAT_DONG"
+        ));
+
+        assertEquals("Self New", response.fullName());
+        assertEquals("self-new@example.com", response.email());
+        assertEquals("0900000011", response.phoneNumber());
+        assertEquals("ADMIN", response.roleCode());
+        assertEquals("HOAT_DONG", response.status());
+    }
+
+    @Test
+    void updateEmployee_selfRoleChange_shouldThrowBadRequestException() {
+        Employee existing = employee(8L, "Admin", "admin2@example.com", "0900000012", RoleCode.ADMIN, EmployeeStatus.HOAT_DONG);
+        authenticate(existing);
+        Mockito.when(employeeRepository.findById(8L)).thenReturn(Optional.of(existing));
+        Mockito.when(employeeRepository.existsByEmailIgnoreCaseAndIdNot("admin2@example.com", 8L)).thenReturn(false);
+        Mockito.when(employeeRepository.existsByPhoneAndIdNot("0900000012", 8L)).thenReturn(false);
+
+        assertThrows(BadRequestException.class, () -> employeeService.updateEmployee(8L, new UpdateEmployeeRequest(
+                "Admin", "admin2@example.com", "0900000012", "MANAGER", "HOAT_DONG"
+        )));
+    }
+
+    @Test
+    void updateEmployee_selfStatusChange_shouldThrowBadRequestException() {
+        Employee existing = employee(9L, "Admin", "admin3@example.com", "0900000013", RoleCode.ADMIN, EmployeeStatus.HOAT_DONG);
+        authenticate(existing);
+        Mockito.when(employeeRepository.findById(9L)).thenReturn(Optional.of(existing));
+        Mockito.when(employeeRepository.existsByEmailIgnoreCaseAndIdNot("admin3@example.com", 9L)).thenReturn(false);
+        Mockito.when(employeeRepository.existsByPhoneAndIdNot("0900000013", 9L)).thenReturn(false);
+
+        assertThrows(BadRequestException.class, () -> employeeService.updateEmployee(9L, new UpdateEmployeeRequest(
+                "Admin", "admin3@example.com", "0900000013", "ADMIN", "TAM_KHOA"
+        )));
+    }
+
+    @Test
+    void updateEmployee_otherEmployee_shouldAllowRoleAndStatusChange() {
+        Employee existing = employee(10L, "Staff", "staff2@example.com", "0900000014", RoleCode.EMPLOYEE, EmployeeStatus.HOAT_DONG);
+        Employee admin = employee(1L, "Admin", "admin@example.com", "0900000001", RoleCode.ADMIN, EmployeeStatus.HOAT_DONG);
+        authenticate(admin);
+        Role managerRole = role(RoleCode.MANAGER);
+        Mockito.when(employeeRepository.findById(10L)).thenReturn(Optional.of(existing));
+        Mockito.when(employeeRepository.existsByEmailIgnoreCaseAndIdNot("staff-new@example.com", 10L)).thenReturn(false);
+        Mockito.when(employeeRepository.existsByPhoneAndIdNot("0900000015", 10L)).thenReturn(false);
+        Mockito.when(roleRepository.findByCode(RoleCode.MANAGER)).thenReturn(Optional.of(managerRole));
+        Mockito.when(employeeRepository.saveAndFlush(existing)).thenReturn(existing);
+
+        var response = employeeService.updateEmployee(10L, new UpdateEmployeeRequest(
+                "Staff New", "staff-new@example.com", "0900000015", "MANAGER", "TAM_KHOA"
+        ));
+
+        assertEquals("MANAGER", response.roleCode());
+        assertEquals("TAM_KHOA", response.status());
+    }
+
+    @Test
     void lockEmployee_shouldSetStatusToLocked() {
         Employee existing = employee(4L, "Staff", "staff@example.com", "0900000007", RoleCode.EMPLOYEE, EmployeeStatus.HOAT_DONG);
         Mockito.when(employeeRepository.findById(4L)).thenReturn(Optional.of(existing));
@@ -143,6 +218,14 @@ class EmployeeServiceTest {
         var response = employeeService.lockEmployee(4L);
 
         assertEquals("TAM_KHOA", response.status());
+    }
+
+    @Test
+    void lockEmployee_selfLock_shouldThrowBadRequestException() {
+        Employee existing = employee(11L, "Staff", "staff3@example.com", "0900000016", RoleCode.EMPLOYEE, EmployeeStatus.HOAT_DONG);
+        authenticate(existing);
+
+        assertThrows(BadRequestException.class, () -> employeeService.lockEmployee(11L));
     }
 
     @Test
@@ -194,5 +277,10 @@ class EmployeeServiceTest {
         role.setCode(roleCode);
         role.setName(roleCode.name());
         return role;
+    }
+
+    private void authenticate(Employee employee) {
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(employee, null, List.of()));
     }
 }

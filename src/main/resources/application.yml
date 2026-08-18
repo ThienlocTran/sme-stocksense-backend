@@ -15,6 +15,10 @@ cloudinary:
   api-secret: ${CLOUDINARY_API_SECRET:}
   env: ${CLOUDINARY_ENV:dev}
 
+ai-service:
+  base-url: ${AI_SERVICE_BASE_URL:http://localhost:8000}
+  timeout-seconds: ${AI_SERVICE_TIMEOUT_SECONDS:30}
+
 server:
   port: 8080
   servlet:

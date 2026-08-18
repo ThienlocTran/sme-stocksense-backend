@@ -161,9 +161,17 @@ public class SecurityConfig {
                                                 .requestMatchers(HttpMethod.GET, "/api/import-receipts/*")
                                                 .hasAnyRole("ADMIN", "MANAGER", "EMPLOYEE")
                                                 .requestMatchers(HttpMethod.GET,
+                                                                "/api/import-receipts/*/export/pdf",
+                                                                "/api/import-receipts/*/export/excel")
+                                                .hasAnyRole("ADMIN", "MANAGER", "EMPLOYEE")
+                                                .requestMatchers(HttpMethod.GET,
                                                                 "/api/export-receipts/pending-approval")
                                                 .hasAnyRole("ADMIN", "MANAGER")
                                                 .requestMatchers(HttpMethod.GET, "/api/export-receipts/*")
+                                                .hasAnyRole("ADMIN", "MANAGER", "EMPLOYEE")
+                                                .requestMatchers(HttpMethod.GET,
+                                                                "/api/export-receipts/*/export/pdf",
+                                                                "/api/export-receipts/*/export/excel")
                                                 .hasAnyRole("ADMIN", "MANAGER", "EMPLOYEE")
                                                 .requestMatchers(HttpMethod.PUT, "/api/export-receipts/*/approve")
                                                 .hasAnyRole("ADMIN", "MANAGER")

@@ -37,7 +37,6 @@ public class ExcelImportController {
     private final ExcelImportApplyService excelImportApplyService;
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ExcelImportUploadResponse> upload(
             @RequestParam(required = false) MultipartFile file,
             @RequestParam(required = false) String loaiImport,
@@ -48,7 +47,6 @@ public class ExcelImportController {
     }
 
     @PostMapping(value = "/validate", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ExcelImportValidationResponse> validate(
             @RequestParam(required = false) MultipartFile file,
             @RequestParam(required = false) String loaiImport,
@@ -59,7 +57,6 @@ public class ExcelImportController {
     }
 
     @PostMapping(value = "/{id}/validate-errors", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ExcelImportValidationResponse> validateErrors(
             @PathVariable Long id,
             @RequestParam(required = false) MultipartFile file,
@@ -71,7 +68,6 @@ public class ExcelImportController {
     }
 
     @GetMapping("/{id}/errors")
-    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<PageResponse<ExcelImportErrorResponse>> listErrors(
             @PathVariable Long id,
             @RequestParam(defaultValue = "0") int page,
@@ -91,13 +87,11 @@ public class ExcelImportController {
     }
 
     @PostMapping("/{id}/confirm")
-    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ExcelImportConfirmResponse> confirm(@PathVariable Long id) {
         return ResponseEntity.ok(excelImportValidationService.confirm(id));
     }
 
     @PostMapping(value = "/{id}/apply", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ExcelImportApplyResponse> apply(
             @PathVariable Long id,
             @RequestParam(required = false) MultipartFile file

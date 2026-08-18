@@ -140,12 +140,24 @@ class ExcelImportUploadControllerTest {
     }
 
     @Test
-    void upload_employeeShouldReturn403() throws Exception {
+    void upload_employeeShouldReturnCreated() throws Exception {
+        when(excelImportUploadService.upload(any(), eq(ExcelImportMode.PRODUCT_ONLY.name()), eq(null)))
+                .thenReturn(new ExcelImportUploadResponse(
+                        99L,
+                        "products.xlsx",
+                        ExcelImportMode.PRODUCT_ONLY.name(),
+                        ExcelImportStatus.SAN_SANG_IMPORT.name(),
+                        2,
+                        2,
+                        0,
+                        LocalDateTime.of(2026, 6, 25, 9, 0)
+                ));
+
         mockMvc.perform(multipart("/api/excel-imports")
                         .file(xlsxFile())
                         .param("loaiImport", ExcelImportMode.PRODUCT_ONLY.name())
                         .with(user("employee@example.com").roles("EMPLOYEE")))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isCreated());
     }
 
     private MockMultipartFile xlsxFile() {

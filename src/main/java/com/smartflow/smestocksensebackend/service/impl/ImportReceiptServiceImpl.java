@@ -1312,6 +1312,13 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
         if (receipt.getStatus() != ImportReceiptStatus.CHO_HANG_VE) {
             throw new ConflictException("Chỉ được ghi nhận hàng về cho phiếu nhập ở trạng thái chờ hàng về (CHO_HANG_VE).");
         }
+        
+        if (roleCode == RoleCode.EMPLOYEE) {
+            Employee creator = receipt.getCreatedBy();
+            if (creator == null || !actor.getId().equals(creator.getId())) {
+                throw new MissingRoleException("Khong co quyen tac dong vao phieu nhap cua nguoi khac.");
+            }
+        }
 
         try {
             // Cập nhật ngày hàng về thực tế

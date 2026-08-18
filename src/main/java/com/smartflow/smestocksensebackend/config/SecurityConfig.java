@@ -167,6 +167,12 @@ public class SecurityConfig {
                                                 .requestMatchers(HttpMethod.GET,
                                                                 "/api/export-receipts/pending-approval")
                                                 .hasAnyRole("ADMIN", "MANAGER")
+                                                // Xem toàn bộ phiếu → ADMIN, MANAGER (docs: "Xem danh sách toàn bộ phiếu")
+                                                .requestMatchers(HttpMethod.GET, "/api/export-receipts")
+                                                .hasAnyRole("ADMIN", "MANAGER")
+                                                // Xem phiếu "của tôi" → ADMIN, EMPLOYEE (docs: "Xem danh sách phiếu của tôi")
+                                                .requestMatchers(HttpMethod.GET, "/api/export-receipts/my")
+                                                .hasAnyRole("ADMIN", "EMPLOYEE")
                                                 .requestMatchers(HttpMethod.GET, "/api/export-receipts/*")
                                                 .hasAnyRole("ADMIN", "MANAGER", "EMPLOYEE")
                                                 .requestMatchers(HttpMethod.GET,
@@ -182,6 +188,25 @@ public class SecurityConfig {
                                                 .requestMatchers(HttpMethod.POST, "/api/import-receipts/*/cancel",
                                                                 "/api/export-receipts/*/cancel")
                                                 .hasAnyRole("ADMIN", "MANAGER")
+                                                // Tạo phiếu xuất → ADMIN, EMPLOYEE (docs: "Tạo/sửa/gửi duyệt/hoàn tất phiếu xuất kho")
+                                                .requestMatchers(HttpMethod.POST, "/api/export-receipts/draft")
+                                                .hasAnyRole("ADMIN", "EMPLOYEE")
+                                                // Cập nhật nháp phiếu xuất → ADMIN, EMPLOYEE
+                                                .requestMatchers(HttpMethod.PUT, "/api/export-receipts/*/draft")
+                                                .hasAnyRole("ADMIN", "EMPLOYEE")
+                                                // Gửi duyệt phiếu xuất → ADMIN, EMPLOYEE
+                                                .requestMatchers(HttpMethod.PUT, "/api/export-receipts/*/submit")
+                                                .hasAnyRole("ADMIN", "EMPLOYEE")
+                                                // Thêm/sửa/xoá dòng hàng phiếu xuất → ADMIN, EMPLOYEE
+                                                .requestMatchers(HttpMethod.POST, "/api/export-receipts/*/items")
+                                                .hasAnyRole("ADMIN", "EMPLOYEE")
+                                                .requestMatchers(HttpMethod.PUT, "/api/export-receipts/*/items/*")
+                                                .hasAnyRole("ADMIN", "EMPLOYEE")
+                                                .requestMatchers(HttpMethod.DELETE, "/api/export-receipts/*/items/*")
+                                                .hasAnyRole("ADMIN", "EMPLOYEE")
+                                                // Xoá nháp phiếu xuất → ADMIN, EMPLOYEE
+                                                .requestMatchers(HttpMethod.DELETE, "/api/export-receipts/*/draft")
+                                                .hasAnyRole("ADMIN", "EMPLOYEE")
                                                 .requestMatchers(HttpMethod.PUT, "/api/import-receipts/*/arrival")
                                                 .hasAnyRole("ADMIN", "EMPLOYEE")
                                                 .requestMatchers(HttpMethod.PUT, "/api/import-receipts/*/submit")

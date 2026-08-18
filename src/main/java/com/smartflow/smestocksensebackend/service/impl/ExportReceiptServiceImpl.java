@@ -197,6 +197,10 @@ public class ExportReceiptServiceImpl implements ExportReceiptService {
         if (receipt.getStatus() != ExportReceiptStatus.DA_DUYET) {
             throw new ConflictException("Chi duoc hoan tat phieu xuat o trang thai DA_DUYET.");
         }
+        
+        if (!actor.getId().equals(receipt.getCreatedBy().getId()) && (actor.getRole() == null || actor.getRole().getCode() != RoleCode.ADMIN)) {
+            throw new MissingRoleException("Ban khong co quyen hoan tat phieu xuat nay.");
+        }
 
         try {
             deductInventory(receiptId, receipt);

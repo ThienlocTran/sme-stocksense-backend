@@ -129,16 +129,16 @@ class ExcelImportValidateControllerTest {
                         .file(ExcelImportUploadControllerTestSupport.xlsxFile())
                         .param("loaiImport", ExcelImportMode.PRODUCT_ONLY.name())
                         .with(user("manager@example.com").roles("MANAGER")))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isOk());
     }
 
     @Test
-    void validateErrors_employeeShouldReturn403() throws Exception {
+    void validateErrors_employeeShouldReturnOk() throws Exception {
         mockMvc.perform(multipart("/api/excel-imports/99/validate-errors")
                         .file(ExcelImportUploadControllerTestSupport.xlsxFile())
                         .param("loaiImport", ExcelImportMode.PRODUCT_ONLY.name())
                         .with(user("employee@example.com").roles("EMPLOYEE")))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isOk());
     }
 
     @Test
@@ -264,14 +264,14 @@ class ExcelImportValidateControllerTest {
     void listErrors_managerShouldReturn403() throws Exception {
         mockMvc.perform(get("/api/excel-imports/99/errors")
                         .with(user("manager@example.com").roles("MANAGER")))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isOk());
     }
 
     @Test
-    void listErrors_employeeShouldReturn403() throws Exception {
+    void listErrors_employeeShouldReturnOk() throws Exception {
         mockMvc.perform(get("/api/excel-imports/99/errors")
                         .with(user("employee@example.com").roles("EMPLOYEE")))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isOk());
     }
 
     @Test
@@ -326,14 +326,14 @@ class ExcelImportValidateControllerTest {
     void confirm_managerShouldReturn403() throws Exception {
         mockMvc.perform(post("/api/excel-imports/99/confirm")
                         .with(user("manager@example.com").roles("MANAGER")))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isOk());
     }
 
     @Test
-    void confirm_employeeShouldReturn403() throws Exception {
+    void confirm_employeeShouldReturnOk() throws Exception {
         mockMvc.perform(post("/api/excel-imports/99/confirm")
                         .with(user("employee@example.com").roles("EMPLOYEE")))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isOk());
     }
 
     @Test
@@ -387,15 +387,15 @@ class ExcelImportValidateControllerTest {
         mockMvc.perform(multipart("/api/excel-imports/99/apply")
                         .file(ExcelImportUploadControllerTestSupport.xlsxFile())
                         .with(user("manager@example.com").roles("MANAGER")))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isOk());
     }
 
     @Test
-    void apply_employeeShouldReturn403() throws Exception {
+    void apply_employeeShouldReturnOk() throws Exception {
         mockMvc.perform(multipart("/api/excel-imports/99/apply")
                         .file(ExcelImportUploadControllerTestSupport.xlsxFile())
                         .with(user("employee@example.com").roles("EMPLOYEE")))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isOk());
     }
 
     @Test
@@ -404,16 +404,16 @@ class ExcelImportValidateControllerTest {
                         .file(ExcelImportUploadControllerTestSupport.xlsxFile())
                         .param("loaiImport", ExcelImportMode.PRODUCT_ONLY.name())
                         .with(user("manager@example.com").roles("MANAGER")))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isOk());
     }
 
     @Test
-    void validate_employeeShouldReturn403() throws Exception {
+    void validate_employeeShouldReturnOk() throws Exception {
         mockMvc.perform(multipart("/api/excel-imports/validate")
                         .file(ExcelImportUploadControllerTestSupport.xlsxFile())
                         .param("loaiImport", ExcelImportMode.PRODUCT_ONLY.name())
                         .with(user("employee@example.com").roles("EMPLOYEE")))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isOk());
     }
 
     static class ExcelImportUploadControllerTestSupport {

@@ -28,17 +28,11 @@ import com.smartflow.smestocksensebackend.service.StockDocumentExportService;
 import com.smartflow.smestocksensebackend.service.document.GeneratedDocument;
 import com.smartflow.smestocksensebackend.util.VietnameseNumberToWords;
 import lombok.RequiredArgsConstructor;
-import org.apache.poi.ss.usermodel.BorderStyle;
 import org.apache.poi.ss.usermodel.Cell;
-import org.apache.poi.ss.usermodel.CellStyle;
-import org.apache.poi.ss.usermodel.FillPatternType;
-import org.apache.poi.ss.usermodel.HorizontalAlignment;
-import org.apache.poi.ss.usermodel.IndexedColors;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
-import org.apache.poi.ss.usermodel.VerticalAlignment;
 import org.apache.poi.ss.usermodel.Workbook;
-import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
 
@@ -69,6 +63,8 @@ public class StockDocumentExportServiceImpl implements StockDocumentExportServic
     private static final String XLSX_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
     private static final String PDF_CONTENT_TYPE = "application/pdf";
     private static final DateTimeFormatter DATE_TIME_FORMAT = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
+    private static final String IMPORT_TEMPLATE = "templates/stock-documents/phieu-nhap-kho-tt133.xlsx";
+    private static final String EXPORT_TEMPLATE = "templates/stock-documents/phieu-xuat-kho-tt133.xlsx";
     private final ImportReceiptService importReceiptService;
     private final ExportReceiptService exportReceiptService;
     private final ProductRepository productRepository;
@@ -86,7 +82,7 @@ public class StockDocumentExportServiceImpl implements StockDocumentExportServic
     public GeneratedDocument exportImportReceiptExcel(Long receiptId) {
         ReceiptDocument document = buildImportDocument(importReceiptService.getDetail(receiptId));
         return renderExcel(document, "Mẫu số 01 - VT", "PHIẾU NHẬP KHO", "Thực nhập",
-                fileName("phieu-nhap-", document.code(), "xlsx"));
+                IMPORT_TEMPLATE, true, fileName("phieu-nhap-", document.code(), "xlsx"));
     }
 
     @Override
@@ -100,7 +96,7 @@ public class StockDocumentExportServiceImpl implements StockDocumentExportServic
     public GeneratedDocument exportExportReceiptExcel(Long receiptId) {
         ReceiptDocument document = buildExportDocument(exportReceiptService.getDetail(receiptId));
         return renderExcel(document, "Mẫu số 02 - VT", "PHIẾU XUẤT KHO", "Thực xuất",
-                fileName("phieu-xuat-", document.code(), "xlsx"));
+                EXPORT_TEMPLATE, false, fileName("phieu-xuat-", document.code(), "xlsx"));
     }
 
     private ReceiptDocument buildImportDocument(ImportReceiptDraftResponse receipt) {
@@ -118,10 +114,10 @@ public class StockDocumentExportServiceImpl implements StockDocumentExportServic
                     value(item.productCode()),
                     value(item.productName()),
                     value(unitByProductId.get(item.productId())),
-                    value(item.quantity()),
-                    value(item.actualReceivedQuantity()),
-                    money(item.unitPrice()),
-                    money(item.lineTotal()),
+                    item.quantity(),
+                    item.actualReceivedQuantity(),
+                    item.unitPrice(),
+                    item.lineTotal(),
                     value(item.note())));
         }
 
@@ -135,7 +131,7 @@ public class StockDocumentExportServiceImpl implements StockDocumentExportServic
                 value(receipt.createdByName()),
                 value(receipt.submittedByName()),
                 value(receipt.status()),
-                money(receipt.totalAmount()),
+                receipt.totalAmount(),
                 VietnameseNumberToWords.currency(receipt.totalAmount()),
                 value(receipt.note()),
                 lines);
@@ -151,10 +147,10 @@ public class StockDocumentExportServiceImpl implements StockDocumentExportServic
                     value(item.productCode()),
                     value(item.productName()),
                     value(item.unit()),
-                    value(item.quantity()),
-                    value(item.quantity()),
-                    money(item.unitPrice()),
-                    money(item.lineTotal()),
+                    item.quantity(),
+                    item.quantity(),
+                    item.unitPrice(),
+                    item.lineTotal(),
                     value(item.note())));
         }
 
@@ -168,7 +164,7 @@ public class StockDocumentExportServiceImpl implements StockDocumentExportServic
                 value(receipt.createdByName()),
                 value(receipt.submittedByName()),
                 value(receipt.status()),
-                money(receipt.totalAmount()),
+                receipt.totalAmount(),
                 VietnameseNumberToWords.currency(receipt.totalAmount()),
                 value(receipt.note()),
                 lines);
@@ -245,10 +241,10 @@ public class StockDocumentExportServiceImpl implements StockDocumentExportServic
                 addBodyCell(table, line.productCode(), regular, Element.ALIGN_LEFT);
                 addBodyCell(table, line.productName(), regular, Element.ALIGN_LEFT);
                 addBodyCell(table, line.unit(), regular, Element.ALIGN_CENTER);
-                addBodyCell(table, line.documentQuantity(), regular, Element.ALIGN_CENTER);
-                addBodyCell(table, line.actualQuantity(), regular, Element.ALIGN_CENTER);
-                addBodyCell(table, line.unitPrice(), regular, Element.ALIGN_RIGHT);
-                addBodyCell(table, line.amount(), regular, Element.ALIGN_RIGHT);
+                addBodyCell(table, value(line.documentQuantity()), regular, Element.ALIGN_CENTER);
+                addBodyCell(table, value(line.actualQuantity()), regular, Element.ALIGN_CENTER);
+                addBodyCell(table, money(line.unitPrice()), regular, Element.ALIGN_RIGHT);
+                addBodyCell(table, money(line.amount()), regular, Element.ALIGN_RIGHT);
                 addBodyCell(table, line.note(), regular, Element.ALIGN_LEFT);
             }
             pdf.add(table);
@@ -274,77 +270,17 @@ public class StockDocumentExportServiceImpl implements StockDocumentExportServic
     }
 
     private GeneratedDocument renderExcel(ReceiptDocument document, String templateLabel, String title,
-            String actualQuantityLabel, String filename) {
-        try (Workbook workbook = new XSSFWorkbook();
+            String actualQuantityLabel, String templatePath, boolean importDocument, String filename) {
+        ClassPathResource template = new ClassPathResource(templatePath);
+        try (InputStream inputStream = template.getInputStream();
+                Workbook workbook = WorkbookFactory.create(inputStream);
                 ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
-            Sheet sheet = workbook.createSheet("Phieu");
-            sheet.setDisplayGridlines(false);
-            sheet.setFitToPage(true);
-            sheet.getPrintSetup().setLandscape(false);
-            sheet.getPrintSetup().setPaperSize(org.apache.poi.ss.usermodel.PrintSetup.A4_PAPERSIZE);
-            sheet.setMargin(Sheet.TopMargin, 0.5);
-            sheet.setMargin(Sheet.BottomMargin, 0.5);
-            sheet.setMargin(Sheet.LeftMargin, 0.35);
-            sheet.setMargin(Sheet.RightMargin, 0.35);
-
-            int[] widths = { 5, 14, 30, 10, 10, 12, 14, 16, 24 };
-            for (int i = 0; i < widths.length; i++) {
-                sheet.setColumnWidth(i, widths[i] * 256);
+            Sheet sheet = workbook.getSheetAt(0);
+            if (importDocument) {
+                populateImportTemplate(sheet, document);
+            } else {
+                populateExportTemplate(sheet, document);
             }
-
-            org.apache.poi.ss.usermodel.Font normalFont = workbook.createFont();
-            normalFont.setFontName("Arial");
-            org.apache.poi.ss.usermodel.Font boldFont = workbook.createFont();
-            boldFont.setFontName("Arial");
-            boldFont.setBold(true);
-
-            CellStyle titleStyle = baseStyle(workbook, boldFont, HorizontalAlignment.CENTER, false);
-            CellStyle labelStyle = baseStyle(workbook, boldFont, HorizontalAlignment.LEFT, false);
-            CellStyle valueStyle = baseStyle(workbook, normalFont, HorizontalAlignment.LEFT, false);
-            CellStyle centerStyle = baseStyle(workbook, normalFont, HorizontalAlignment.CENTER, false);
-            CellStyle moneyStyle = baseStyle(workbook, normalFont, HorizontalAlignment.RIGHT, false);
-            CellStyle headerStyle = baseStyle(workbook, boldFont, HorizontalAlignment.CENTER, true);
-            headerStyle.setFillForegroundColor(IndexedColors.GREY_25_PERCENT.getIndex());
-            headerStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
-
-            int rowIndex = 0;
-            rowIndex = writeMergedTitle(sheet, rowIndex, templateLabel, title, titleStyle);
-            rowIndex = writeMeta(sheet, document, rowIndex, labelStyle, valueStyle);
-
-            Row header = sheet.createRow(rowIndex++);
-            String[] headers = { "STT", "Mã SP", "Tên hàng", "ĐVT", "Theo CT", actualQuantityLabel, "Đơn giá",
-                    "Thành tiền", "Ghi chú" };
-            for (int i = 0; i < headers.length; i++) {
-                writeCell(header, i, headers[i], headerStyle);
-            }
-
-            for (DocumentLine line : document.lines()) {
-                Row row = sheet.createRow(rowIndex++);
-                writeCell(row, 0, line.number(), centerStyle);
-                writeCell(row, 1, line.productCode(), valueStyle);
-                writeCell(row, 2, line.productName(), valueStyle);
-                writeCell(row, 3, line.unit(), centerStyle);
-                writeCell(row, 4, line.documentQuantity(), centerStyle);
-                writeCell(row, 5, line.actualQuantity(), centerStyle);
-                writeCell(row, 6, line.unitPrice(), moneyStyle);
-                writeCell(row, 7, line.amount(), moneyStyle);
-                writeCell(row, 8, line.note(), valueStyle);
-            }
-
-            rowIndex++;
-            Row total = sheet.createRow(rowIndex++);
-            writeCell(total, 6, "Tổng cộng", labelStyle);
-            writeCell(total, 7, document.totalAmount(), moneyStyle);
-
-            Row words = sheet.createRow(rowIndex++);
-            writeCell(words, 0, "Tổng số tiền (viết bằng chữ)", labelStyle);
-            writeCell(words, 1, document.totalInWords(), valueStyle);
-
-            rowIndex++;
-            Row sign = sheet.createRow(rowIndex++);
-            writeCell(sign, 0, "Người lập phiếu", labelStyle);
-            writeCell(sign, 3, "Thủ kho", labelStyle);
-            writeCell(sign, 6, "Kế toán trưởng", labelStyle);
 
             workbook.write(outputStream);
             return new GeneratedDocument(outputStream.toByteArray(), XLSX_CONTENT_TYPE, filename);
@@ -353,90 +289,112 @@ public class StockDocumentExportServiceImpl implements StockDocumentExportServic
         }
     }
 
-    private int writeMergedTitle(Sheet sheet, int rowIndex, String templateLabel, String title, CellStyle style) {
-        Row row1 = sheet.createRow(rowIndex++);
-        writeCell(row1, 0, templateLabel, style);
-        mergeRow(sheet, row1.getRowNum(), 0, 8);
-        Row row2 = sheet.createRow(rowIndex++);
-        writeCell(row2, 0, title, style);
-        mergeRow(sheet, row2.getRowNum(), 0, 8);
-        return rowIndex;
+    private void populateImportTemplate(Sheet sheet, ReceiptDocument document) {
+        writeCell(sheet, 5, 2, "Ngày " + dateOnly(document.documentDate()));
+        writeCell(sheet, 6, 2, "Số: " + document.code());
+        writeCell(sheet, 8, 0, "- Họ và tên người giao: " + document.partnerName());
+        writeCell(sheet, 10, 0, "- Nhập tại kho: " + document.warehouseName()
+                + "    địa điểm " + document.warehouseAddress());
+        writeLines(sheet, document.lines(), 15, 18, new int[] { 0, 1, 2, 3, 4, 5, 6, 7 });
+        int totalRow = 18 + Math.max(0, document.lines().size() - 3);
+        writeCell(sheet, totalRow, 7, document.totalAmount());
+        writeCell(sheet, totalRow + 2, 0, "- Tổng số tiền (viết bằng chữ): " + document.totalInWords());
     }
 
-    private int writeMeta(Sheet sheet, ReceiptDocument document, int rowIndex, CellStyle labelStyle, CellStyle valueStyle) {
-        rowIndex = writeLabelValueRow(sheet, rowIndex, "Số phiếu", document.code(), labelStyle, valueStyle);
-        rowIndex = writeLabelValueRow(sheet, rowIndex, "Ngày", formatDate(document.documentDate()), labelStyle, valueStyle);
-        rowIndex = writeLabelValueRow(sheet, rowIndex, "Trạng thái", document.status(), labelStyle, valueStyle);
-        rowIndex = writeLabelValueRow(sheet, rowIndex, "Kho", document.warehouseName(), labelStyle, valueStyle);
-        rowIndex = writeLabelValueRow(sheet, rowIndex, "Địa chỉ kho", document.warehouseAddress(), labelStyle, valueStyle);
-        rowIndex = writeLabelValueRow(sheet, rowIndex, "Đối tác", document.partnerName(), labelStyle, valueStyle);
-        rowIndex = writeLabelValueRow(sheet, rowIndex, "Địa chỉ đối tác", document.partnerAddress(), labelStyle, valueStyle);
-        rowIndex = writeLabelValueRow(sheet, rowIndex, "Người tạo", document.createdBy(), labelStyle, valueStyle);
-        rowIndex = writeLabelValueRow(sheet, rowIndex, "Người gửi duyệt", document.submittedBy(), labelStyle, valueStyle);
-        rowIndex = writeLabelValueRow(sheet, rowIndex, "Bộ phận", "", labelStyle, valueStyle);
-        rowIndex = writeLabelValueRow(sheet, rowIndex, "Người giao hàng", "", labelStyle, valueStyle);
-        rowIndex = writeLabelValueRow(sheet, rowIndex, "Người nhận hàng", "", labelStyle, valueStyle);
-        rowIndex = writeLabelValueRow(sheet, rowIndex, "Số CT gốc", "", labelStyle, valueStyle);
-        rowIndex = writeLabelValueRow(sheet, rowIndex, "Nợ", "", labelStyle, valueStyle);
-        rowIndex = writeLabelValueRow(sheet, rowIndex, "Có", "", labelStyle, valueStyle);
-        rowIndex = writeLabelValueRow(sheet, rowIndex, "Ghi chú", document.note(), labelStyle, valueStyle);
-        return rowIndex;
+    private void populateExportTemplate(Sheet sheet, ReceiptDocument document) {
+        writeCell(sheet, 5, 0, "Ngày " + dateOnly(document.documentDate()));
+        writeCell(sheet, 6, 0, "             Số: " + document.code());
+        writeCell(sheet, 9, 0, "- Họ và tên người nhận hàng: " + document.partnerName());
+        writeCell(sheet, 10, 0, "- Lý do xuất kho: " + document.note());
+        writeCell(sheet, 11, 0, "- Xuất tại kho (ngăn lô): " + document.warehouseName()
+                + "    Địa điểm " + document.warehouseAddress());
+        writeLines(sheet, document.lines(), 16, 19, new int[] { 0, 2, 3, 4, 5, 6, 7, 8 });
+        int totalRow = 19 + Math.max(0, document.lines().size() - 3);
+        writeCell(sheet, totalRow, 8, document.totalAmount());
+        writeCell(sheet, totalRow + 2, 0, "- Tổng số tiền (viết bằng chữ): " + document.totalInWords());
     }
 
-    private int writeLabelValueRow(Sheet sheet, int rowIndex, String label, String value, CellStyle labelStyle,
-            CellStyle valueStyle) {
-        Row row = sheet.createRow(rowIndex++);
-        writeCell(row, 0, label, labelStyle);
-        mergeRow(sheet, row.getRowNum(), 0, 2);
-        writeCell(row, 3, value, valueStyle);
-        mergeRow(sheet, row.getRowNum(), 3, 8);
-        return rowIndex;
-    }
-
-    private void mergeRow(Sheet sheet, int rowNum, int from, int to) {
-        if (from < to) {
-            sheet.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(rowNum, rowNum, from, to));
+    private void writeLines(Sheet sheet, List<DocumentLine> lines, int firstRow, int totalRow, int[] columns) {
+        int rowsNeeded = Math.max(lines.size(), totalRow - firstRow);
+        int templateRows = totalRow - firstRow;
+        if (rowsNeeded > templateRows) {
+            sheet.shiftRows(totalRow, sheet.getLastRowNum(), rowsNeeded - templateRows, true, false);
+            for (int rowIndex = firstRow + templateRows; rowIndex < firstRow + rowsNeeded; rowIndex++) {
+                copyRowStyle(sheet.getRow(firstRow), getOrCreateRow(sheet, rowIndex));
+            }
+        }
+        for (int i = 0; i < rowsNeeded; i++) {
+            Row row = getOrCreateRow(sheet, firstRow + i);
+            if (i < lines.size()) {
+                DocumentLine line = lines.get(i);
+                writeCell(row, columns[0], line.number());
+                writeCell(row, columns[1], line.productName());
+                writeCell(row, columns[2], line.productCode());
+                writeCell(row, columns[3], line.unit());
+                writeCell(row, columns[4], line.documentQuantity());
+                writeCell(row, columns[5], line.actualQuantity());
+                writeCell(row, columns[6], line.unitPrice());
+                writeCell(row, columns[7], line.amount());
+            } else {
+                for (int column : columns) {
+                    writeCell(row, column, "");
+                }
+            }
         }
     }
 
-    private CellStyle baseStyle(Workbook workbook, org.apache.poi.ss.usermodel.Font font, HorizontalAlignment alignment,
-            boolean wrap) {
-        CellStyle style = workbook.createCellStyle();
-        style.setFont(font);
-        style.setAlignment(alignment);
-        style.setVerticalAlignment(VerticalAlignment.CENTER);
-        style.setWrapText(wrap);
-        style.setBorderTop(BorderStyle.THIN);
-        style.setBorderBottom(BorderStyle.THIN);
-        style.setBorderLeft(BorderStyle.THIN);
-        style.setBorderRight(BorderStyle.THIN);
-        return style;
+    private void copyRowStyle(Row source, Row target) {
+        if (source == null || target == null) {
+            return;
+        }
+        target.setHeight(source.getHeight());
+        for (int i = 0; i < source.getLastCellNum(); i++) {
+            Cell sourceCell = source.getCell(i);
+            if (sourceCell != null) {
+                Cell targetCell = getOrCreateCell(target, i);
+                targetCell.setCellStyle(sourceCell.getCellStyle());
+            }
+        }
     }
 
-    private void writeCell(Row row, int index, String value, CellStyle style) {
-        Cell cell = row.createCell(index);
-        cell.setCellValue(value(value));
-        cell.setCellStyle(style);
+    private Row getOrCreateRow(Sheet sheet, int rowIndex) {
+        Row row = sheet.getRow(rowIndex);
+        return row == null ? sheet.createRow(rowIndex) : row;
     }
 
-    private void writeCell(Row row, int index, Integer value, CellStyle style) {
-        Cell cell = row.createCell(index);
-        if (value != null) {
+    private Cell getOrCreateCell(Row row, int index) {
+        Cell cell = row.getCell(index);
+        return cell == null ? row.createCell(index) : cell;
+    }
+
+    private void writeCell(Sheet sheet, int rowIndex, int columnIndex, String value) {
+        writeCell(getOrCreateRow(sheet, rowIndex), columnIndex, value);
+    }
+
+    private void writeCell(Sheet sheet, int rowIndex, int columnIndex, BigDecimal value) {
+        writeCell(getOrCreateRow(sheet, rowIndex), columnIndex, value);
+    }
+
+    private void writeCell(Row row, int index, String value) {
+        getOrCreateCell(row, index).setCellValue(value(value));
+    }
+
+    private void writeCell(Row row, int index, Integer value) {
+        Cell cell = getOrCreateCell(row, index);
+        if (value == null) {
+            cell.setBlank();
+        } else {
             cell.setCellValue(value);
-        } else {
-            cell.setCellValue("");
         }
-        cell.setCellStyle(style);
     }
 
-    private void writeCell(Row row, int index, BigDecimal value, CellStyle style) {
-        Cell cell = row.createCell(index);
-        if (value != null) {
-            cell.setCellValue(value.doubleValue());
+    private void writeCell(Row row, int index, BigDecimal value) {
+        Cell cell = getOrCreateCell(row, index);
+        if (value == null) {
+            cell.setBlank();
         } else {
-            cell.setCellValue("");
+            cell.setCellValue(value.doubleValue());
         }
-        cell.setCellStyle(style);
     }
 
     private void addMetaRow(PdfPTable table, String label, String value, Font bold, Font regular) {
@@ -518,6 +476,14 @@ public class StockDocumentExportServiceImpl implements StockDocumentExportServic
         return value.atZone(ZoneId.systemDefault()).format(DATE_TIME_FORMAT);
     }
 
+    private String dateOnly(LocalDateTime value) {
+        if (value == null) {
+            return "";
+        }
+        LocalDate date = value.toLocalDate();
+        return date.getDayOfMonth() + " tháng " + date.getMonthValue() + " năm " + date.getYear();
+    }
+
     private String money(BigDecimal value) {
         if (value == null) {
             return "";
@@ -548,7 +514,7 @@ public class StockDocumentExportServiceImpl implements StockDocumentExportServic
             String createdBy,
             String submittedBy,
             String status,
-            String totalAmount,
+            BigDecimal totalAmount,
             String totalInWords,
             String note,
             List<DocumentLine> lines) {
@@ -559,10 +525,10 @@ public class StockDocumentExportServiceImpl implements StockDocumentExportServic
             String productCode,
             String productName,
             String unit,
-            String documentQuantity,
-            String actualQuantity,
-            String unitPrice,
-            String amount,
+            Integer documentQuantity,
+            Integer actualQuantity,
+            BigDecimal unitPrice,
+            BigDecimal amount,
             String note) {
     }
 }

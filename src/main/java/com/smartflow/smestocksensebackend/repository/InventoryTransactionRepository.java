@@ -1,5 +1,6 @@
 package com.smartflow.smestocksensebackend.repository;
 
+import com.smartflow.smestocksensebackend.dto.dashboard.InventoryMovementProjection;
 import com.smartflow.smestocksensebackend.dto.inventory.DailyQuantityProjection;
 import com.smartflow.smestocksensebackend.entity.InventoryTransaction;
 import org.springframework.data.jpa.repository.EntityGraph;
@@ -45,4 +46,21 @@ public interface InventoryTransactionRepository extends JpaRepository<InventoryT
             + "ORDER BY ngay ASC", nativeQuery = true)
     List<DailyQuantityProjection> sumDailyXuatKho(@Param("productId") Long productId,
             @Param("warehouseId") Long warehouseId, @Param("start") LocalDate start, @Param("end") LocalDate end);
+
+    @Query(value = "SELECT CAST(gd.ngay_tao AS date) AS \"date\", "
+            + "COALESCE(SUM(CASE WHEN gd.loai_giao_dich IN ('NHAP_KHO', 'NHAP_DAU_KY', 'DIEU_CHINH_TANG') THEN gd.so_luong ELSE 0 END), 0) AS \"inboundQuantity\", "
+            + "COALESCE(SUM(CASE WHEN gd.loai_giao_dich IN ('XUAT_KHO', 'DIEU_CHINH_GIAM') THEN gd.so_luong ELSE 0 END), 0) AS \"outboundQuantity\" "
+            + "FROM giao_dich_kho gd "
+            + "JOIN san_pham sp ON sp.id = gd.san_pham_id "
+            + "JOIN kho k ON k.id = gd.kho_id "
+            + "WHERE CAST(gd.ngay_tao AS date) BETWEEN :from AND :to "
+            + "AND (:warehouseId IS NULL OR k.id = :warehouseId) "
+            + "AND sp.trang_thai = 'HOAT_DONG' "
+            + "AND k.trang_thai = 'HOAT_DONG' "
+            + "AND gd.loai_giao_dich IN ('NHAP_KHO', 'NHAP_DAU_KY', 'DIEU_CHINH_TANG', 'XUAT_KHO', 'DIEU_CHINH_GIAM') "
+            + "GROUP BY CAST(gd.ngay_tao AS date) "
+            + "ORDER BY \"date\" ASC", nativeQuery = true)
+    List<InventoryMovementProjection> sumDashboardMovement(@Param("from") LocalDate from,
+            @Param("to") LocalDate to,
+            @Param("warehouseId") Long warehouseId);
 }

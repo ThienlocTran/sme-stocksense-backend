@@ -28,5 +28,8 @@ public interface ExportReceiptRepository extends JpaRepository<ExportReceipt, Lo
     @EntityGraph(attributePaths = { "warehouse", "createdBy" })
     Optional<ExportReceipt> findById(Long id);
 
+    @EntityGraph(attributePaths = {"warehouse", "partner", "createdBy", "submittedBy", "approvedBy", "rejectedBy", "cancelledBy", "completedBy"})
+    Optional<ExportReceipt> findWithAllAssociationsById(Long id);
+
     boolean existsByCodeIgnoreCase(String code);
 }

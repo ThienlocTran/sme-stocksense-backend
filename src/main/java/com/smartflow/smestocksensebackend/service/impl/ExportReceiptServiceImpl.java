@@ -59,6 +59,9 @@ public class ExportReceiptServiceImpl implements ExportReceiptService {
     private final InventoryLevelRepository inventoryLevelRepository;
     private final ExportReceiptCodeGenerator codeGenerator;
     private final InventoryTransactionService inventoryTransactionService;
+    
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.smartflow.smestocksensebackend.service.EmailService emailService;
 
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private ExportReceiptHistoryRepository exportReceiptHistoryRepository;
@@ -138,6 +141,9 @@ public class ExportReceiptServiceImpl implements ExportReceiptService {
             receipt.setRejectedAt(LocalDateTime.now());
             ExportReceipt savedReceipt = exportReceiptRepository.saveAndFlush(receipt);
             saveHistory(savedReceipt, actor, ExportReceiptAction.TU_CHOI, trimmedReason);
+            if (emailService != null) {
+                emailService.sendExportReceiptRejected(savedReceipt, trimmedReason);
+            }
             return buildDetailResponse(savedReceipt);
         } catch (OptimisticLockingFailureException exception) {
             throw new ConflictException("Phieu xuat da duoc cap nhat boi request khac.", exception);
@@ -178,6 +184,9 @@ public class ExportReceiptServiceImpl implements ExportReceiptService {
             receipt.setApprovedAt(now);
             ExportReceipt savedReceipt = exportReceiptRepository.saveAndFlush(receipt);
             saveHistory(savedReceipt, actor, ExportReceiptAction.DUYET_CAP_1, null);
+            if (emailService != null) {
+                emailService.sendExportReceiptApproved(savedReceipt);
+            }
             return buildDetailResponse(savedReceipt);
         } catch (OptimisticLockingFailureException exception) {
             throw new ConflictException("Phieu xuat da duoc cap nhat boi request khac.", exception);
@@ -209,6 +218,9 @@ public class ExportReceiptServiceImpl implements ExportReceiptService {
             receipt.setCompletedAt(LocalDateTime.now());
             ExportReceipt savedReceipt = exportReceiptRepository.saveAndFlush(receipt);
             saveHistory(savedReceipt, actor, ExportReceiptAction.HOAN_THANH, null);
+            if (emailService != null) {
+                emailService.sendExportReceiptCompleted(savedReceipt);
+            }
             return buildDetailResponse(savedReceipt);
         } catch (OptimisticLockingFailureException exception) {
             throw new ConflictException("Phieu xuat da duoc cap nhat boi request khac.", exception);
@@ -442,6 +454,9 @@ public class ExportReceiptServiceImpl implements ExportReceiptService {
         // Entity
         ExportReceipt savedReceipt = exportReceiptRepository.saveAndFlush(receipt);
         saveHistory(savedReceipt, actor, ExportReceiptAction.GUI_DUYET, null);
+        if (emailService != null) {
+            emailService.sendExportReceiptSubmitted(savedReceipt);
+        }
 
         return ExportReceiptResponse.from(savedReceipt, details);
     }

@@ -59,7 +59,7 @@ public class ExportReceiptServiceImpl implements ExportReceiptService {
     private final InventoryLevelRepository inventoryLevelRepository;
     private final ExportReceiptCodeGenerator codeGenerator;
     private final InventoryTransactionService inventoryTransactionService;
-    
+
     @org.springframework.beans.factory.annotation.Autowired
     private com.smartflow.smestocksensebackend.service.EmailService emailService;
 
@@ -206,8 +206,9 @@ public class ExportReceiptServiceImpl implements ExportReceiptService {
         if (receipt.getStatus() != ExportReceiptStatus.DA_DUYET) {
             throw new ConflictException("Chi duoc hoan tat phieu xuat o trang thai DA_DUYET.");
         }
-        
-        if (!actor.getId().equals(receipt.getCreatedBy().getId()) && (actor.getRole() == null || actor.getRole().getCode() != RoleCode.ADMIN)) {
+
+        if (!actor.getId().equals(receipt.getCreatedBy().getId()) &&
+            (actor.getRole() == null || (actor.getRole().getCode() != RoleCode.ADMIN && actor.getRole().getCode() != RoleCode.MANAGER))) {
             throw new MissingRoleException("Ban khong co quyen hoan tat phieu xuat nay.");
         }
 
@@ -465,10 +466,10 @@ public class ExportReceiptServiceImpl implements ExportReceiptService {
     @Transactional(readOnly = true)
     public org.springframework.data.domain.Page<com.smartflow.smestocksensebackend.dto.response.outbound.ExportReceiptSummaryResponse> listReceipts(
             String status, java.time.LocalDate fromDate, java.time.LocalDate toDate, Long warehouseId, String code, org.springframework.data.domain.Pageable pageable) {
-        
+
         // 1. Khởi tạo Specification cho việc lọc động nhiều tiêu chí
         org.springframework.data.jpa.domain.Specification<ExportReceipt> spec = buildSearchSpec(null, status, fromDate, toDate, warehouseId, code);
-        
+
         // 2. Query từ CSDL kết hợp phân trang
         // ponytail: Trực tiếp map sang DTO thông qua hàm record, bỏ qua wrapper
         return exportReceiptRepository.findAll(spec, pageable)
@@ -479,18 +480,18 @@ public class ExportReceiptServiceImpl implements ExportReceiptService {
     @Transactional(readOnly = true)
     public org.springframework.data.domain.Page<com.smartflow.smestocksensebackend.dto.response.outbound.ExportReceiptSummaryResponse> listMyReceipts(
             String status, java.time.LocalDate fromDate, java.time.LocalDate toDate, Long warehouseId, String code, org.springframework.data.domain.Pageable pageable) {
-        
+
         // 1. Xác thực user đang gọi API để ép tham số `employeeId`
         Employee actor = currentEmployee();
-        
+
         // 2. Khởi tạo Specification lọc phiếu (trong đó bắt buộc phải có điều kiện `employeeId`)
         org.springframework.data.jpa.domain.Specification<ExportReceipt> spec = buildSearchSpec(actor.getId(), status, fromDate, toDate, warehouseId, code);
-        
+
         // 3. Truy vấn và map sang dạng DTO rút gọn
         return exportReceiptRepository.findAll(spec, pageable)
                 .map(com.smartflow.smestocksensebackend.dto.response.outbound.ExportReceiptSummaryResponse::from);
     }
-    
+
     @Override
     @Transactional(readOnly = true)
     public ExportReceiptResponse getReceiptDetails(Long id) {
@@ -624,7 +625,7 @@ public class ExportReceiptServiceImpl implements ExportReceiptService {
             Long employeeId, String status, java.time.LocalDate fromDate, java.time.LocalDate toDate, Long warehouseId, String code) {
         return (root, query, cb) -> {
             java.util.List<jakarta.persistence.criteria.Predicate> predicates = new java.util.ArrayList<>();
-            
+
             // Lọc theo người tạo phiếu (Dùng cho API listMyReceipts)
             if (employeeId != null) {
                 predicates.add(cb.equal(root.get("createdBy").get("id"), employeeId));

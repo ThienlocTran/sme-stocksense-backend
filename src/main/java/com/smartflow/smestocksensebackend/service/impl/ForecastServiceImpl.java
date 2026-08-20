@@ -65,6 +65,15 @@ public class ForecastServiceImpl implements ForecastService {
     private final ForecastDriftLogRepository forecastDriftLogRepository;
     private final RestClient aiServiceRestClient;
 
+    @org.springframework.beans.factory.annotation.Autowired
+    com.smartflow.smestocksensebackend.repository.WarehouseStockConfigRepository warehouseStockConfigRepository;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    com.smartflow.smestocksensebackend.service.EffectiveMinStockResolver effectiveMinStockResolver;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    com.smartflow.smestocksensebackend.service.WarehouseCapacityService warehouseCapacityService;
+
     @Override
     @Transactional
     public ForecastResponse runForecast(Long productId, Long warehouseId) {
@@ -122,15 +131,23 @@ public class ForecastServiceImpl implements ForecastService {
         }
 
         int currentStock = currentStock(productId, warehouseId);
-        int minStock = product.getMinStock() != null ? product.getMinStock() : 0;
+        Integer minStock = effectiveMinStockResolver
+                .resolve(product, warehouseStockConfigRepository.findByProductIdAndWarehouseId(productId, warehouseId).orElse(null))
+                .orElse(null);
+
+        int reorder7 = computeReorderQty(minStock, currentStock, forecastByHorizon.get(7), 7);
+        int reorder14 = computeReorderQty(minStock, currentStock, forecastByHorizon.get(14), 14);
+        int reorder30 = computeReorderQty(minStock, currentStock, forecastByHorizon.get(30), 30);
+
+        CapacityLimitInfo capInfo = calculateCapacityLimit(product.getUnitVolumeM3(), warehouseId, reorder7, reorder14, reorder30);
 
         return new ForecastResponse(productId, warehouseId, version, mode.name(), smape,
                 forecastByHorizon.get(7), forecastByHorizon.get(14), forecastByHorizon.get(30),
-                currentStock, minStock,
-                computeReorderQty(minStock, currentStock, forecastByHorizon.get(7), 7),
-                computeReorderQty(minStock, currentStock, forecastByHorizon.get(14), 14),
-                computeReorderQty(minStock, currentStock, forecastByHorizon.get(30), 30),
-                dataDays, LocalDateTime.now());
+                currentStock, minStock, reorder7, reorder14, reorder30,
+                dataDays, LocalDateTime.now(),
+                capInfo.allowed7d(), capInfo.allowed14d(), capInfo.allowed30d(),
+                capInfo.limited7d(), capInfo.limited14d(), capInfo.limited30d(),
+                capInfo.capacityStatus());
     }
 
     @Override
@@ -154,17 +171,26 @@ public class ForecastServiceImpl implements ForecastService {
             forecastByHorizon.put(result.getHorizonDays(), result.getPredictedQuantity());
         }
 
-        Product product = productRepository.getReferenceById(productId);
+        Product product = productRepository.findById(productId)
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy sản phẩm với id " + productId));
         int currentStock = currentStock(productId, warehouseId);
-        int minStock = product.getMinStock() != null ? product.getMinStock() : 0;
+        Integer minStock = effectiveMinStockResolver
+                .resolve(product, warehouseStockConfigRepository.findByProductIdAndWarehouseId(productId, warehouseId).orElse(null))
+                .orElse(null);
+
+        int reorder7 = computeReorderQty(minStock, currentStock, forecastByHorizon.get(7), 7);
+        int reorder14 = computeReorderQty(minStock, currentStock, forecastByHorizon.get(14), 14);
+        int reorder30 = computeReorderQty(minStock, currentStock, forecastByHorizon.get(30), 30);
+
+        CapacityLimitInfo capInfo = calculateCapacityLimit(product.getUnitVolumeM3(), warehouseId, reorder7, reorder14, reorder30);
 
         return new ForecastResponse(productId, warehouseId, metadata.getVersion(), metadata.getMode().name(),
                 metadata.getSmape(), forecastByHorizon.get(7), forecastByHorizon.get(14), forecastByHorizon.get(30),
-                currentStock, minStock,
-                computeReorderQty(minStock, currentStock, forecastByHorizon.get(7), 7),
-                computeReorderQty(minStock, currentStock, forecastByHorizon.get(14), 14),
-                computeReorderQty(minStock, currentStock, forecastByHorizon.get(30), 30),
-                metadata.getDataDays(), metadata.getCreatedAt());
+                currentStock, minStock, reorder7, reorder14, reorder30,
+                metadata.getDataDays(), metadata.getCreatedAt(),
+                capInfo.allowed7d(), capInfo.allowed14d(), capInfo.allowed30d(),
+                capInfo.limited7d(), capInfo.limited14d(), capInfo.limited30d(),
+                capInfo.capacityStatus());
     }
 
     @Override
@@ -330,8 +356,8 @@ public class ForecastServiceImpl implements ForecastService {
      * trong suốt {@code horizonDays} ngày tới, dựa trên tốc độ tiêu thụ trung bình/ngày
      * dự báo cho đúng khung thời gian đó (forecast7d cho 7 ngày, forecast14d cho 14 ngày, ...).
      */
-    private int computeReorderQty(int minStock, int currentStock, BigDecimal avgDailyDemand, int horizonDays) {
-        if (avgDailyDemand == null) {
+    private int computeReorderQty(Integer minStock, int currentStock, BigDecimal avgDailyDemand, int horizonDays) {
+        if (minStock == null || avgDailyDemand == null) {
             return 0;
         }
         double demandOverHorizon = avgDailyDemand.doubleValue() * horizonDays;
@@ -382,5 +408,36 @@ public class ForecastServiceImpl implements ForecastService {
 
     private static int firstNonNull(Integer value, int fallback) {
         return value != null ? value : fallback;
+    }
+
+    private static record CapacityLimitInfo(
+            int allowed7d, boolean limited7d,
+            int allowed14d, boolean limited14d,
+            int allowed30d, boolean limited30d,
+            String capacityStatus) {}
+
+    private CapacityLimitInfo calculateCapacityLimit(BigDecimal unitVolume, Long warehouseId, int req7d, int req14d, int req30d) {
+        if (unitVolume == null) {
+            return new CapacityLimitInfo(req7d, false, req14d, false, req30d, false, "UNKNOWN");
+        }
+        BigDecimal remaining = warehouseCapacityService.getRemainingCapacity(warehouseId);
+        if (remaining.compareTo(BigDecimal.ZERO) <= 0) {
+            return new CapacityLimitInfo(0, req7d > 0, 0, req14d > 0, 0, req30d > 0, "LIMITED");
+        }
+        int maxFit = remaining.divide(unitVolume, 0, RoundingMode.DOWN).intValue();
+        maxFit = Math.max(0, maxFit);
+
+        boolean lim7 = req7d > maxFit;
+        boolean lim14 = req14d > maxFit;
+        boolean lim30 = req30d > maxFit;
+
+        String status = (lim7 || lim14 || lim30) ? "LIMITED" : "OK";
+
+        return new CapacityLimitInfo(
+                lim7 ? maxFit : req7d, lim7,
+                lim14 ? maxFit : req14d, lim14,
+                lim30 ? maxFit : req30d, lim30,
+                status
+        );
     }
 }

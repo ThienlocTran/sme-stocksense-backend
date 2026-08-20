@@ -67,6 +67,11 @@ class ForecastServiceImplTest {
     ForecastDriftLogRepository forecastDriftLogRepository;
     @Mock
     RestClient aiServiceRestClient;
+    @Mock
+    com.smartflow.smestocksensebackend.repository.WarehouseStockConfigRepository warehouseStockConfigRepository;
+    @Mock
+    com.smartflow.smestocksensebackend.service.WarehouseCapacityService warehouseCapacityService;
+    com.smartflow.smestocksensebackend.service.EffectiveMinStockResolver effectiveMinStockResolver;
 
     ForecastServiceImpl service;
 
@@ -78,14 +83,27 @@ class ForecastServiceImplTest {
         service = new ForecastServiceImpl(productRepository, warehouseRepository, inventoryLevelRepository,
                 inventoryTransactionRepository, salesHistoryRepository, forecastResultRepository,
                 forecastModelMetadataRepository, forecastDriftLogRepository, aiServiceRestClient);
+        service.warehouseStockConfigRepository = warehouseStockConfigRepository;
+        service.warehouseCapacityService = warehouseCapacityService;
+        service.effectiveMinStockResolver = effectiveMinStockResolver = new com.smartflow.smestocksensebackend.service.EffectiveMinStockResolver();
 
         product = new Product();
         product.setId(1L);
-        product.setMinStock(50);
         product.setPrice(new BigDecimal("10000"));
+        product.setDefaultMinStock(10);
 
         warehouse = new Warehouse();
         warehouse.setId(2L);
+
+        com.smartflow.smestocksensebackend.entity.WarehouseStockConfig config = com.smartflow.smestocksensebackend.entity.WarehouseStockConfig.builder()
+                .product(product)
+                .warehouse(warehouse)
+                .minStockOverride(50)
+                .build();
+        org.mockito.Mockito.lenient().when(warehouseStockConfigRepository.findByProductIdAndWarehouseId(1L, 2L))
+                .thenReturn(Optional.of(config));
+        org.mockito.Mockito.lenient().when(warehouseCapacityService.getRemainingCapacity(2L))
+                .thenReturn(new BigDecimal("1000.000"));
     }
 
     private List<SalesHistory> buildHistory(int days, int dailyQuantity) {

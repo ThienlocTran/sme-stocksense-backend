@@ -65,6 +65,12 @@ public class WarehouseServiceImpl implements WarehouseService {
         warehouse.setName(request.tenKho().trim());
         warehouse.setAddress(normalizeOptional(request.diaChi()));
         warehouse.setStatus(parseStatusOrDefault(request.trangThai()));
+        if (request.maxCapacityM3() != null) {
+            if (request.maxCapacityM3().compareTo(java.math.BigDecimal.ZERO) <= 0) {
+                throw new BadRequestException("Sức chứa tối đa phải lớn hơn 0.");
+            }
+            warehouse.setMaxCapacityM3(request.maxCapacityM3());
+        }
 
         Warehouse savedWarehouse = warehouseRepository.saveAndFlush(warehouse);
         return WarehouseResponse.from(savedWarehouse);
@@ -93,6 +99,12 @@ public class WarehouseServiceImpl implements WarehouseService {
             throw new BadRequestException("Trạng thái chỉ nhận HOAT_DONG hoặc NGUNG_HOAT_DONG.");
         }
         warehouse.setStatus(parsedStatus);
+        if (request.maxCapacityM3() != null) {
+            if (request.maxCapacityM3().compareTo(java.math.BigDecimal.ZERO) <= 0) {
+                throw new BadRequestException("Sức chứa tối đa phải lớn hơn 0.");
+            }
+            warehouse.setMaxCapacityM3(request.maxCapacityM3());
+        }
 
         Warehouse savedWarehouse = warehouseRepository.saveAndFlush(warehouse);
         return WarehouseResponse.from(savedWarehouse);

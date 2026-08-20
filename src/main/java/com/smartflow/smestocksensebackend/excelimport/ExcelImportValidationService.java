@@ -275,9 +275,8 @@ public class ExcelImportValidationService {
             String unit = readCell(row, 4);
             String categoryCode = readCell(row, 5);
             String priceRaw = readCell(row, 6);
-            String minStockRaw = readCell(row, 7);
-            String maxStockRaw = readCell(row, 8);
-            String statusRaw = readCell(row, 9);
+            String unitVolumeRaw = readCell(row, 7);
+            String statusRaw = readCell(row, 8);
             Product existingProduct = isBlank(code) ? null : findExistingProductByCode(code);
 
             if (isBlank(code)) {
@@ -303,9 +302,14 @@ public class ExcelImportValidationService {
             }
 
             validateNonNegativeDecimal(sheetName, rowIndex + 1, "gia_ban", priceRaw, state);
-            validateNonNegativeInteger(sheetName, rowIndex + 1, "ton_toi_thieu", minStockRaw, state);
-            validateNonNegativeInteger(sheetName, rowIndex + 1, "ton_toi_da", maxStockRaw, state);
-            validateStockRange(sheetName, rowIndex + 1, minStockRaw, maxStockRaw, state);
+            if (!isBlank(unitVolumeRaw)) {
+                BigDecimal vol = parseDecimal(unitVolumeRaw);
+                if (vol == null) {
+                    state.addRowError(sheetName, rowIndex + 1, "the_tich_don_vi_m3", unitVolumeRaw, "Giá trị số không hợp lệ.", "Nhập số thập phân hợp lệ.");
+                } else if (vol.compareTo(BigDecimal.ZERO) <= 0) {
+                    state.addRowError(sheetName, rowIndex + 1, "the_tich_don_vi_m3", unitVolumeRaw, "Thể tích phải lớn hơn 0.", "Nhập thể tích lớn hơn 0.");
+                }
+            }
             validateStatus(sheetName, rowIndex + 1, statusRaw, state);
 
             if (!isBlank(sku)) {
@@ -472,19 +476,7 @@ public class ExcelImportValidationService {
         }
     }
 
-    private void validateStockRange(String sheetName, int rowNumber, String minRaw, String maxRaw, ValidationState state) {
-        if (isBlank(minRaw) || isBlank(maxRaw)) {
-            return;
-        }
-        BigDecimal min = parseDecimal(minRaw);
-        BigDecimal max = parseDecimal(maxRaw);
-        if (min == null || max == null) {
-            return;
-        }
-        if (min.compareTo(max) > 0) {
-            state.addRowError(sheetName, rowNumber, "ton_toi_thieu", minRaw, "Tồn tối thiểu phải nhỏ hơn hoặc bằng tồn tối đa.", "Điều chỉnh lại khoảng tồn kho.");
-        }
-    }
+
 
     private boolean hasAnyBusinessRow(Sheet sheet) {
         for (int rowIndex = 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {

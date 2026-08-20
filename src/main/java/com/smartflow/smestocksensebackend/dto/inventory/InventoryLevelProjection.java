@@ -1,6 +1,7 @@
 package com.smartflow.smestocksensebackend.dto.inventory;
 
 import java.time.LocalDateTime;
+import java.math.BigDecimal;
 
 public interface InventoryLevelProjection {
     Long getInventoryId();
@@ -24,6 +25,8 @@ public interface InventoryLevelProjection {
     Integer getMinStock();
 
     Integer getMaxStock();
+
+    BigDecimal getUnitVolumeM3();
 
     String getProductStatus();
 

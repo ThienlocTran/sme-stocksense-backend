@@ -23,6 +23,11 @@ public record CreateWarehouseRequest(
         String diaChi,
 
         // Trạng thái kho hàng: tùy chọn, mặc định là HOAT_DONG ở tầng Service nếu không truyền
-        String trangThai
+        String trangThai,
+
+        java.math.BigDecimal maxCapacityM3
 ) {
+    public CreateWarehouseRequest(String maKho, String tenKho, String diaChi, String trangThai) {
+        this(maKho, tenKho, diaChi, trangThai, null);
+    }
 }

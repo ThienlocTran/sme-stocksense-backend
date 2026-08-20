@@ -11,7 +11,8 @@ public record WarehouseResponse(
         String maKho,
         String tenKho,
         String diaChi,
-        String trangThai
+        String trangThai,
+        java.math.BigDecimal maxCapacityM3
 ) {
     /**
      * Chuyển đổi từ Entity Warehouse sang DTO WarehouseResponse.
@@ -22,7 +23,8 @@ public record WarehouseResponse(
                 warehouse.getCode(),
                 warehouse.getName(),
                 warehouse.getAddress(),
-                warehouse.getStatus().name()
+                warehouse.getStatus().name(),
+                warehouse.getMaxCapacityM3()
         );
     }
 }

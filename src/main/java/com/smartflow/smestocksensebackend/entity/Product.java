@@ -65,11 +65,11 @@ public class Product {
     @JoinColumn(name = "doi_tac_cung_cap_id")
     private Partner partner;
 
-    @Column(name = "ton_toi_thieu", nullable = false)
-    private Integer minStock = 0;
+    @Column(name = "the_tich_don_vi_m3", precision = 12, scale = 6)
+    private BigDecimal unitVolumeM3;
 
-    @Column(name = "ton_toi_da")
-    private Integer maxStock;
+    @Column(name = "ton_toi_thieu_mac_dinh")
+    private Integer defaultMinStock;
 
     @Column(name = "thoi_gian_giao_hang", nullable = false)
     private Integer leadTimeDays = 1;

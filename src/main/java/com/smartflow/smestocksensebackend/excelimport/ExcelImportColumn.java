@@ -10,8 +10,7 @@ public enum ExcelImportColumn {
     UNIT(ExcelImportSheetName.SAN_PHAM, "don_vi_tinh", true),
     CATEGORY_CODE(ExcelImportSheetName.SAN_PHAM, "ma_danh_muc", true),
     SALE_PRICE(ExcelImportSheetName.SAN_PHAM, "gia_ban", false),
-    MIN_STOCK(ExcelImportSheetName.SAN_PHAM, "ton_toi_thieu", false),
-    MAX_STOCK(ExcelImportSheetName.SAN_PHAM, "ton_toi_da", false),
+    UNIT_VOLUME(ExcelImportSheetName.SAN_PHAM, "the_tich_don_vi_m3", false),
     PRODUCT_STATUS(ExcelImportSheetName.SAN_PHAM, "trang_thai", false),
     WAREHOUSE_CODE(ExcelImportSheetName.TON_DAU_KY, "ma_kho", true),
     OPENING_PRODUCT_CODE(ExcelImportSheetName.TON_DAU_KY, "ma_san_pham", true),
@@ -48,8 +47,7 @@ public enum ExcelImportColumn {
                 UNIT,
                 CATEGORY_CODE,
                 SALE_PRICE,
-                MIN_STOCK,
-                MAX_STOCK,
+                UNIT_VOLUME,
                 PRODUCT_STATUS
         );
     }

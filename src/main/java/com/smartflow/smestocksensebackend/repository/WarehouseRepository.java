@@ -1,8 +1,12 @@
 package com.smartflow.smestocksensebackend.repository;
 
 import com.smartflow.smestocksensebackend.entity.Warehouse;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
@@ -25,6 +29,10 @@ public interface WarehouseRepository extends JpaRepository<Warehouse, Long>, Jpa
     boolean existsByCodeIgnoreCase(String code);
 
     Optional<Warehouse> findByCodeIgnoreCase(String code);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select w from Warehouse w where w.id = :id")
+    Optional<Warehouse> findWithLockById(@Param("id") Long id);
 
     long countByStatus(com.smartflow.smestocksensebackend.entity.WarehouseStatus status);
 }

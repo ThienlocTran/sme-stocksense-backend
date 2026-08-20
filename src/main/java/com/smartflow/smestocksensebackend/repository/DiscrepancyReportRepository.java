@@ -18,6 +18,9 @@ public interface DiscrepancyReportRepository extends JpaRepository<DiscrepancyRe
      */
     Optional<DiscrepancyReport> findByImportReceiptId(Long phieuNhapId);
     
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"importReceipt", "createdBy", "approvedBy", "rejectedBy"})
+    Optional<DiscrepancyReport> findWithAllAssociationsById(Long id);
+    
     /**
      * Kiểm tra sự tồn tại của biên bản chênh lệch dựa trên ID của phiếu nhập kho.
      *

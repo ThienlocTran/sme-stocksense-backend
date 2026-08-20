@@ -15,6 +15,9 @@ public interface ImportReceiptRepository extends JpaRepository<ImportReceipt, Lo
 
     Optional<ImportReceipt> findByCodeIgnoreCase(String code);
 
+    @EntityGraph(attributePaths = {"warehouse", "supplier", "createdBy", "submittedBy", "level1ApprovedBy", "level2ApprovedBy", "cancelledBy", "completedBy"})
+    Optional<ImportReceipt> findWithAllAssociationsById(Long id);
+
     boolean existsByCodeIgnoreCase(String code);
 
     long countByStatus(ImportReceiptStatus status);

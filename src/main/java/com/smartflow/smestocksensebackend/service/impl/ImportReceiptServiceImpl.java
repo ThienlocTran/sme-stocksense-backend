@@ -117,6 +117,9 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
 
     private final InventoryService inventoryService;
     private final ImportReceiptHistoryRepository importReceiptHistoryRepository;
+    
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.smartflow.smestocksensebackend.service.EmailService emailService;
 
     /** Ngưỡng tổng tiền để bắt buộc 2 cấp duyệt, mặc định 50 triệu VND */
     @org.springframework.beans.factory.annotation.Value("${app.import-receipt.second-approval-threshold-amount:50000000}")
@@ -332,6 +335,9 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
             // Không đặt level1ApprovedBy ở đây — phải do người khác duyệt
             ImportReceipt savedReceipt = importReceiptRepository.saveAndFlush(receipt);
             saveHistory(savedReceipt, actor, ImportReceiptAction.GUI_DUYET, null);
+            if (emailService != null) {
+                emailService.sendImportReceiptSubmitted(savedReceipt);
+            }
             return ImportReceiptDraftResponse.from(savedReceipt, details);
         } catch (OptimisticLockingFailureException exception) {
             throw new ConflictException("Phieu nhap da duoc cap nhat boi request khac.");
@@ -535,6 +541,11 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
             receipt.setStatus(nextStatus);
             ImportReceipt savedReceipt = importReceiptRepository.saveAndFlush(receipt);
             saveHistory(savedReceipt, actor, action, null);
+            boolean isLevel1 = (action == ImportReceiptAction.DUYET_CAP_1);
+            boolean isFullyApproved = (nextStatus == ImportReceiptStatus.CHO_HANG_VE);
+            if (emailService != null) {
+                emailService.sendImportReceiptApproved(savedReceipt, isLevel1, isFullyApproved);
+            }
             List<ImportReceiptDetail> details = importReceiptDetailRepository.findByDocumentIdOrderByIdAsc(receiptId);
             return ImportReceiptDraftResponse.from(savedReceipt, details);
         } catch (OptimisticLockingFailureException exception) {
@@ -572,6 +583,9 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
             receipt.setRejectionReason(request.reason().trim());
             ImportReceipt savedReceipt = importReceiptRepository.saveAndFlush(receipt);
             saveHistory(savedReceipt, actor, ImportReceiptAction.TU_CHOI, request.reason().trim());
+            if (emailService != null) {
+                emailService.sendImportReceiptRejected(savedReceipt, request.reason().trim());
+            }
             List<ImportReceiptDetail> details = importReceiptDetailRepository.findByDocumentIdOrderByIdAsc(receiptId);
             return ImportReceiptDraftResponse.from(savedReceipt, details);
         } catch (OptimisticLockingFailureException exception) {
@@ -1081,6 +1095,9 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
         DiscrepancyReport savedReport;
         try {
             savedReport = discrepancyReportRepository.saveAndFlush(report);
+            if (emailService != null) {
+                emailService.sendDiscrepancyReportSubmitted(savedReport);
+            }
         } catch (DataIntegrityViolationException e) {
             throw new ConflictException("Bien ban chenh lech cho phieu nhap nay da ton tai.");
         }
@@ -1138,7 +1155,11 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
         report.setRejectedBy(null);
         report.setRejectedAt(null);
         report.setRejectReason(null);
-        return DiscrepancyReportResponse.from(discrepancyReportRepository.saveAndFlush(report));
+        DiscrepancyReport savedReport = discrepancyReportRepository.saveAndFlush(report);
+        if (emailService != null) {
+            emailService.sendDiscrepancyReportApproved(savedReport);
+        }
+        return DiscrepancyReportResponse.from(savedReport);
     }
 
     @Override
@@ -1160,7 +1181,11 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
         report.setRejectReason(reason);
         report.setApprovedBy(null);
         report.setApprovedAt(null);
-        return DiscrepancyReportResponse.from(discrepancyReportRepository.saveAndFlush(report));
+        DiscrepancyReport savedReport = discrepancyReportRepository.saveAndFlush(report);
+        if (emailService != null) {
+            emailService.sendDiscrepancyReportRejected(savedReport, reason);
+        }
+        return DiscrepancyReportResponse.from(savedReport);
     }
 
     private Employee currentActiveDiscrepancyApprover() {
@@ -1242,6 +1267,9 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
 
         try {
             ImportReceipt savedReceipt = importReceiptRepository.saveAndFlush(receipt);
+            if (emailService != null) {
+                emailService.sendImportReceiptCompleted(savedReceipt);
+            }
             return ImportReceiptDraftResponse.from(savedReceipt, details);
         } catch (OptimisticLockingFailureException exception) {
             throw new ConflictException("Phiếu nhập đã được cập nhật bởi một phiên làm việc khác.");

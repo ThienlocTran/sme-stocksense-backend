@@ -46,6 +46,7 @@ import com.smartflow.smestocksensebackend.repository.ImportReceiptRepository;
 import com.smartflow.smestocksensebackend.repository.PartnerRepository;
 import com.smartflow.smestocksensebackend.repository.WarehouseRepository;
 import com.smartflow.smestocksensebackend.repository.DiscrepancyReportRepository;
+import com.smartflow.smestocksensebackend.repository.SystemSettingRepository;
 
 import com.smartflow.smestocksensebackend.entity.DiscrepancyReport;
 import com.smartflow.smestocksensebackend.entity.DiscrepancyReportDetail;
@@ -117,6 +118,7 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
 
     private final InventoryService inventoryService;
     private final ImportReceiptHistoryRepository importReceiptHistoryRepository;
+    private final SystemSettingRepository systemSettingRepository;
     
     @org.springframework.beans.factory.annotation.Autowired
     private com.smartflow.smestocksensebackend.service.EmailService emailService;
@@ -505,7 +507,16 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
         if (current == ImportReceiptStatus.CHO_DUYET_CAP_1) {
             // M7 fix: kiểm tra ngưỡng để quyết định 1 hay 2 cấp duyệt
             BigDecimal totalAmount = receipt.getTotalAmount() != null ? receipt.getTotalAmount() : BigDecimal.ZERO;
-            if (totalAmount.compareTo(secondApprovalThreshold) > 0) {
+            BigDecimal threshold = systemSettingRepository.findById("import_receipt_threshold")
+                    .map(setting -> {
+                        try {
+                            return new BigDecimal(setting.getValue());
+                        } catch (NumberFormatException e) {
+                            return secondApprovalThreshold;
+                        }
+                    })
+                    .orElse(secondApprovalThreshold);
+            if (totalAmount.compareTo(threshold) > 0) {
                 // Phữu vượt ngưỡng: chuyển sang CHO_DUYET_CAP_2
                 nextStatus = ImportReceiptStatus.CHO_DUYET_CAP_2;
                 receipt.setLevel1ApprovedBy(actor);

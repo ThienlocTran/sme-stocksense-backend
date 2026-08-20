@@ -32,6 +32,12 @@ public interface InventoryLevelRepository extends JpaRepository<InventoryLevel, 
 
         List<InventoryLevel> findByWarehouseId(Long warehouseId);
 
+        @Query(value = "SELECT COALESCE(SUM(COALESCE(sp.the_tich_don_vi_m3, 0) * COALESCE(t.so_luong, 0)), 0) "
+                        + "FROM ton_kho t "
+                        + "JOIN san_pham sp ON sp.id = t.san_pham_id "
+                        + "WHERE t.kho_id = :warehouseId", nativeQuery = true)
+        java.math.BigDecimal sumUsedCapacityByWarehouseId(@Param("warehouseId") Long warehouseId);
+
         /**
          * Tìm bản ghi tồn kho với Pessimistic Write Lock để tránh race condition.
          * Dùng trong các luồng cập nhật đồng thời (concurrent inventory increase).
@@ -73,14 +79,15 @@ public interface InventoryLevelRepository extends JpaRepository<InventoryLevel, 
          */
         @Query(value = "SELECT t.id AS \"inventoryId\", sp.id AS \"productId\", sp.ma_san_pham AS \"productCode\", sp.ten_san_pham AS \"productName\", sp.ma_vach AS \"barcode\", "
                         +
-                        "k.id AS \"warehouseId\", k.ma_kho AS \"warehouseCode\", k.ten_kho AS \"warehouse\", t.so_luong AS \"currentQuantity\", sp.ton_toi_thieu AS \"minStock\", sp.ton_toi_da AS \"maxStock\", "
+                        "k.id AS \"warehouseId\", k.ma_kho AS \"warehouseCode\", k.ten_kho AS \"warehouse\", t.so_luong AS \"currentQuantity\", cc.min_stock AS \"minStock\", NULL AS \"maxStock\", "
                         +
                         "sp.trang_thai AS \"productStatus\", k.trang_thai AS \"warehouseStatus\", " +
-                        "CASE WHEN t.so_luong <= 0 THEN 'OUT_OF_STOCK' WHEN sp.ton_toi_thieu IS NOT NULL AND sp.ton_toi_thieu > 0 AND t.so_luong <= sp.ton_toi_thieu THEN 'LOW_STOCK' WHEN sp.ton_toi_da IS NOT NULL AND sp.ton_toi_da > 0 AND t.so_luong > sp.ton_toi_da THEN 'OVER_STOCK' ELSE 'NORMAL' END AS \"status\", t.ngay_cap_nhat AS \"lastUpdatedAt\" "
+                        "CASE WHEN t.so_luong <= 0 THEN 'OUT_OF_STOCK' WHEN cc.min_stock IS NOT NULL AND cc.min_stock > 0 AND t.so_luong <= cc.min_stock THEN 'LOW_STOCK' ELSE 'NORMAL' END AS \"status\", t.ngay_cap_nhat AS \"lastUpdatedAt\" "
                         +
                         "FROM ton_kho t " +
                         "JOIN san_pham sp ON sp.id = t.san_pham_id " +
                         "JOIN kho k ON k.id = t.kho_id " +
+                        "LEFT JOIN cau_hinh_ton_kho cc ON cc.san_pham_id = t.san_pham_id AND cc.kho_id = t.kho_id " +
                         "WHERE (:warehouseId IS NULL OR k.id = :warehouseId) " +
                         "AND (:productId IS NULL OR sp.id = :productId) " +
                         "AND (:keyword IS NULL OR (sp.ma_san_pham::text ILIKE :keyword " +
@@ -88,7 +95,7 @@ public interface InventoryLevelRepository extends JpaRepository<InventoryLevel, 
                         "OR sp.ma_vach::text ILIKE :keyword " +
                         "OR k.ma_kho::text ILIKE :keyword " +
                         "OR k.ten_kho::text ILIKE :keyword)) " +
-                        "AND (:stockStatus IS NULL OR (:stockStatus = 'LOW_STOCK' AND (CASE WHEN t.so_luong <= 0 THEN 'OUT_OF_STOCK' WHEN sp.ton_toi_thieu IS NOT NULL AND sp.ton_toi_thieu > 0 AND t.so_luong <= sp.ton_toi_thieu THEN 'LOW_STOCK' WHEN sp.ton_toi_da IS NOT NULL AND sp.ton_toi_da > 0 AND t.so_luong > sp.ton_toi_da THEN 'OVER_STOCK' ELSE 'NORMAL' END) IN ('LOW_STOCK', 'OUT_OF_STOCK')) OR (:stockStatus != 'LOW_STOCK' AND (CASE WHEN t.so_luong <= 0 THEN 'OUT_OF_STOCK' WHEN sp.ton_toi_thieu IS NOT NULL AND sp.ton_toi_thieu > 0 AND t.so_luong <= sp.ton_toi_thieu THEN 'LOW_STOCK' WHEN sp.ton_toi_da IS NOT NULL AND sp.ton_toi_da > 0 AND t.so_luong > sp.ton_toi_da THEN 'OVER_STOCK' ELSE 'NORMAL' END) = :stockStatus)) "
+                        "AND (:stockStatus IS NULL OR (:stockStatus = 'LOW_STOCK' AND (CASE WHEN t.so_luong <= 0 THEN 'OUT_OF_STOCK' WHEN cc.min_stock IS NOT NULL AND cc.min_stock > 0 AND t.so_luong <= cc.min_stock THEN 'LOW_STOCK' ELSE 'NORMAL' END) IN ('LOW_STOCK', 'OUT_OF_STOCK')) OR (:stockStatus != 'LOW_STOCK' AND (CASE WHEN t.so_luong <= 0 THEN 'OUT_OF_STOCK' WHEN cc.min_stock IS NOT NULL AND cc.min_stock > 0 AND t.so_luong <= cc.min_stock THEN 'LOW_STOCK' ELSE 'NORMAL' END) = :stockStatus)) "
                         +
                         "AND (:warehouseStatus IS NULL OR k.trang_thai::text = :warehouseStatus) " +
                         "AND (:productStatus IS NULL OR sp.trang_thai::text = :productStatus) " +
@@ -96,6 +103,7 @@ public interface InventoryLevelRepository extends JpaRepository<InventoryLevel, 
                                         "FROM ton_kho t " +
                                         "JOIN san_pham sp ON sp.id = t.san_pham_id " +
                                         "JOIN kho k ON k.id = t.kho_id " +
+                                        "LEFT JOIN cau_hinh_ton_kho cc ON cc.san_pham_id = t.san_pham_id AND cc.kho_id = t.kho_id " +
                                         "WHERE (:warehouseId IS NULL OR k.id = :warehouseId) " +
                                         "AND (:productId IS NULL OR sp.id = :productId) " +
                                         "AND (:keyword IS NULL OR (sp.ma_san_pham::text ILIKE :keyword " +
@@ -103,7 +111,7 @@ public interface InventoryLevelRepository extends JpaRepository<InventoryLevel, 
                                         "OR sp.ma_vach::text ILIKE :keyword " +
                                         "OR k.ma_kho::text ILIKE :keyword " +
                                         "OR k.ten_kho::text ILIKE :keyword)) " +
-                                        "AND (:stockStatus IS NULL OR (:stockStatus = 'LOW_STOCK' AND (CASE WHEN t.so_luong <= 0 THEN 'OUT_OF_STOCK' WHEN sp.ton_toi_thieu IS NOT NULL AND sp.ton_toi_thieu > 0 AND t.so_luong <= sp.ton_toi_thieu THEN 'LOW_STOCK' WHEN sp.ton_toi_da IS NOT NULL AND sp.ton_toi_da > 0 AND t.so_luong > sp.ton_toi_da THEN 'OVER_STOCK' ELSE 'NORMAL' END) IN ('LOW_STOCK', 'OUT_OF_STOCK')) OR (:stockStatus != 'LOW_STOCK' AND (CASE WHEN t.so_luong <= 0 THEN 'OUT_OF_STOCK' WHEN sp.ton_toi_thieu IS NOT NULL AND sp.ton_toi_thieu > 0 AND t.so_luong <= sp.ton_toi_thieu THEN 'LOW_STOCK' WHEN sp.ton_toi_da IS NOT NULL AND sp.ton_toi_da > 0 AND t.so_luong > sp.ton_toi_da THEN 'OVER_STOCK' ELSE 'NORMAL' END) = :stockStatus)) "
+                                        "AND (:stockStatus IS NULL OR (:stockStatus = 'LOW_STOCK' AND (CASE WHEN t.so_luong <= 0 THEN 'OUT_OF_STOCK' WHEN cc.min_stock IS NOT NULL AND cc.min_stock > 0 AND t.so_luong <= cc.min_stock THEN 'LOW_STOCK' ELSE 'NORMAL' END) IN ('LOW_STOCK', 'OUT_OF_STOCK')) OR (:stockStatus != 'LOW_STOCK' AND (CASE WHEN t.so_luong <= 0 THEN 'OUT_OF_STOCK' WHEN cc.min_stock IS NOT NULL AND cc.min_stock > 0 AND t.so_luong <= cc.min_stock THEN 'LOW_STOCK' ELSE 'NORMAL' END) = :stockStatus)) "
                                         +
                                         "AND (:warehouseStatus IS NULL OR k.trang_thai::text = :warehouseStatus) " +
                                         "AND (:productStatus IS NULL OR sp.trang_thai::text = :productStatus)", nativeQuery = true)
@@ -117,12 +125,13 @@ public interface InventoryLevelRepository extends JpaRepository<InventoryLevel, 
                         Pageable pageable);
 
         @Query(value = "SELECT "
-                        + "COALESCE(SUM(CASE WHEN t.so_luong > sp.ton_toi_thieu THEN 1 ELSE 0 END), 0) AS \"healthy\", "
-                        + "COALESCE(SUM(CASE WHEN t.so_luong > 0 AND sp.ton_toi_thieu IS NOT NULL AND sp.ton_toi_thieu > 0 AND t.so_luong <= sp.ton_toi_thieu THEN 1 ELSE 0 END), 0) AS \"lowStock\", "
+                        + "COALESCE(SUM(CASE WHEN t.so_luong > COALESCE(cc.min_stock, 0) THEN 1 ELSE 0 END), 0) AS \"healthy\", "
+                        + "COALESCE(SUM(CASE WHEN t.so_luong > 0 AND cc.min_stock IS NOT NULL AND cc.min_stock > 0 AND t.so_luong <= cc.min_stock THEN 1 ELSE 0 END), 0) AS \"lowStock\", "
                         + "COALESCE(SUM(CASE WHEN t.so_luong <= 0 THEN 1 ELSE 0 END), 0) AS \"outOfStock\" "
                         + "FROM ton_kho t "
                         + "JOIN san_pham sp ON sp.id = t.san_pham_id "
                         + "JOIN kho k ON k.id = t.kho_id "
+                        + "LEFT JOIN cau_hinh_ton_kho cc ON cc.san_pham_id = t.san_pham_id AND cc.kho_id = t.kho_id "
                         + "WHERE sp.trang_thai = 'HOAT_DONG' AND k.trang_thai = 'HOAT_DONG'", nativeQuery = true)
         StockHealthProjection countDashboardStockHealth();
 

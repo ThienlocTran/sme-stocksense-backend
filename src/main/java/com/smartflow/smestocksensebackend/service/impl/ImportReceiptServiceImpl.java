@@ -119,13 +119,12 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
     private final InventoryService inventoryService;
     private final ImportReceiptHistoryRepository importReceiptHistoryRepository;
     private final SystemSettingRepository systemSettingRepository;
-    
-    @org.springframework.beans.factory.annotation.Autowired
-    private com.smartflow.smestocksensebackend.service.EmailService emailService;
+    private final com.smartflow.smestocksensebackend.service.WarehouseCapacityService warehouseCapacityService;
+    private final com.smartflow.smestocksensebackend.service.EmailService emailService;
 
     /** Ngưỡng tổng tiền để bắt buộc 2 cấp duyệt, mặc định 50 triệu VND */
     @org.springframework.beans.factory.annotation.Value("${app.import-receipt.second-approval-threshold-amount:50000000}")
-    private java.math.BigDecimal secondApprovalThreshold;
+    private java.math.BigDecimal secondApprovalThreshold = java.math.BigDecimal.valueOf(50000000);
 
     @Override
     @Transactional
@@ -334,6 +333,9 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
             receipt.setRejectionReason(null);
             receipt.setSubmittedBy(actor);
             receipt.setSubmittedAt(submittedAt);
+            BigDecimal threshold = currentSecondApprovalThreshold();
+            receipt.setApprovalThresholdApplied(threshold);
+            receipt.setRequiredApprovalLevels(requiredApprovalLevels(totalAmount, threshold));
             // Không đặt level1ApprovedBy ở đây — phải do người khác duyệt
             ImportReceipt savedReceipt = importReceiptRepository.saveAndFlush(receipt);
             saveHistory(savedReceipt, actor, ImportReceiptAction.GUI_DUYET, null);
@@ -505,18 +507,10 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
         ImportReceiptAction action;
 
         if (current == ImportReceiptStatus.CHO_DUYET_CAP_1) {
-            // M7 fix: kiểm tra ngưỡng để quyết định 1 hay 2 cấp duyệt
-            BigDecimal totalAmount = receipt.getTotalAmount() != null ? receipt.getTotalAmount() : BigDecimal.ZERO;
-            BigDecimal threshold = systemSettingRepository.findById("import_receipt_threshold")
-                    .map(setting -> {
-                        try {
-                            return new BigDecimal(setting.getValue());
-                        } catch (NumberFormatException e) {
-                            return secondApprovalThreshold;
-                        }
-                    })
-                    .orElse(secondApprovalThreshold);
-            if (totalAmount.compareTo(threshold) > 0) {
+            short requiredLevels = receipt.getRequiredApprovalLevels() != null
+                    ? receipt.getRequiredApprovalLevels()
+                    : requiredApprovalLevels(receipt.getTotalAmount(), currentSecondApprovalThreshold());
+            if (requiredLevels == 2) {
                 // Phữu vượt ngưỡng: chuyển sang CHO_DUYET_CAP_2
                 nextStatus = ImportReceiptStatus.CHO_DUYET_CAP_2;
                 receipt.setLevel1ApprovedBy(actor);
@@ -1258,6 +1252,31 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
             }
         }
 
+        // 2.5 Kiểm tra sức chứa vật lý tối đa của kho
+        java.math.BigDecimal incomingVolume = java.math.BigDecimal.ZERO;
+        for (ImportReceiptDetail detail : details) {
+            if (detail.getActualReceivedQuantity() != null && detail.getActualReceivedQuantity() > 0) {
+                java.math.BigDecimal vol = detail.getProduct().getUnitVolumeM3();
+                if (vol == null) {
+                    throw new BadRequestException("Sản phẩm " + detail.getProduct().getCode() + " chưa cấu hình thể tích.");
+                }
+                java.math.BigDecimal qty = new java.math.BigDecimal(detail.getActualReceivedQuantity());
+                incomingVolume = incomingVolume.add(vol.multiply(qty));
+            }
+        }
+        Warehouse lockedWarehouse = warehouseRepository.findWithLockById(receipt.getWarehouse().getId())
+                .orElseThrow(() -> new NotFoundException("Kho hàng không tồn tại."));
+        java.math.BigDecimal currentUsedCapacity = warehouseCapacityService.getUsedCapacity(lockedWarehouse.getId());
+        java.math.BigDecimal maxCapacity = lockedWarehouse.getMaxCapacityM3() != null ? lockedWarehouse.getMaxCapacityM3() : new java.math.BigDecimal("1500.000");
+        java.math.BigDecimal projectedUsedCapacity = currentUsedCapacity.add(incomingVolume);
+        if (projectedUsedCapacity.compareTo(maxCapacity) > 0) {
+            java.math.BigDecimal exceeded = projectedUsedCapacity.subtract(maxCapacity);
+            throw new BadRequestException(String.format(
+                    "Không đủ sức chứa kho. Sức chứa tối đa: %s m³, Đang sử dụng: %s m³, Lô hàng cần thêm: %s m³, Sau nhập dự kiến: %s m³, Vượt sức chứa: %s m³",
+                    maxCapacity, currentUsedCapacity, incomingVolume, projectedUsedCapacity, exceeded
+            ));
+        }
+
         // 3. Đổi status phiếu sang HOAN_THANH trước khi tăng tồn kho để thỏa guard nghiệp vụ
         receipt.setStatus(ImportReceiptStatus.HOAN_THANH);
         receipt.setCompletedBy(actor);
@@ -1296,6 +1315,24 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
         return actualQuantity != null
                 && expectedQuantity != null
                 && !expectedQuantity.equals(actualQuantity);
+    }
+
+    private BigDecimal currentSecondApprovalThreshold() {
+        return systemSettingRepository.findById("IMPORT_RECEIPT_SECOND_APPROVAL_THRESHOLD")
+                .or(() -> systemSettingRepository.findById("import_receipt_threshold"))
+                .map(setting -> {
+                    try {
+                        return new BigDecimal(setting.getValue());
+                    } catch (NumberFormatException exception) {
+                        return secondApprovalThreshold;
+                    }
+                })
+                .orElse(secondApprovalThreshold);
+    }
+
+    private short requiredApprovalLevels(BigDecimal totalAmount, BigDecimal threshold) {
+        BigDecimal amount = totalAmount != null ? totalAmount : BigDecimal.ZERO;
+        return amount.compareTo(threshold) > 0 ? (short) 2 : (short) 1;
     }
 
     private boolean isDiscrepantPhysicalStatus(String physicalStatus) {

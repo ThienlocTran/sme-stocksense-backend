@@ -3,6 +3,8 @@ package com.smartflow.smestocksensebackend.service.impl;
 import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptDraftResponse;
 import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptPageResponse;
 import com.smartflow.smestocksensebackend.dto.inbound.RejectImportReceiptRequest;
+import com.smartflow.smestocksensebackend.domain.inbound.ImportReceiptAmountCalculator;
+import com.smartflow.smestocksensebackend.domain.inbound.ImportReceiptItemValidator;
 import com.smartflow.smestocksensebackend.entity.Employee;
 import com.smartflow.smestocksensebackend.entity.EmployeeStatus;
 import com.smartflow.smestocksensebackend.entity.ImportReceipt;
@@ -17,6 +19,7 @@ import com.smartflow.smestocksensebackend.exception.MissingRoleException;
 import com.smartflow.smestocksensebackend.exception.NotFoundException;
 import com.smartflow.smestocksensebackend.repository.ImportReceiptDetailRepository;
 import com.smartflow.smestocksensebackend.repository.ImportReceiptRepository;
+import com.smartflow.smestocksensebackend.service.ImportReceiptCodeGenerator;
 import com.smartflow.smestocksensebackend.service.InventoryService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -64,7 +67,37 @@ class ImportReceiptApprovalServiceTest {
     private ImportReceiptDetailRepository importReceiptDetailRepository;
 
     @Mock
+    private com.smartflow.smestocksensebackend.repository.WarehouseRepository warehouseRepository;
+
+    @Mock
+    private com.smartflow.smestocksensebackend.repository.PartnerRepository partnerRepository;
+
+    @Mock
+    private ImportReceiptCodeGenerator codeGenerator;
+
+    @Mock
+    private ImportReceiptItemValidator itemValidator;
+
+    @Mock
+    private ImportReceiptAmountCalculator amountCalculator;
+
+    @Mock
+    private com.smartflow.smestocksensebackend.repository.DiscrepancyReportRepository discrepancyReportRepository;
+
+    @Mock
     private InventoryService inventoryService;
+
+    @Mock
+    private com.smartflow.smestocksensebackend.repository.ImportReceiptHistoryRepository importReceiptHistoryRepository;
+
+    @Mock
+    private com.smartflow.smestocksensebackend.repository.SystemSettingRepository systemSettingRepository;
+
+    @Mock
+    private com.smartflow.smestocksensebackend.service.WarehouseCapacityService warehouseCapacityService;
+
+    @Mock
+    private com.smartflow.smestocksensebackend.service.EmailService emailService;
 
     @InjectMocks
     private ImportReceiptServiceImpl importReceiptService;
@@ -88,6 +121,7 @@ class ImportReceiptApprovalServiceTest {
         warehouse.setName("Kho tong");
 
         ReflectionTestUtils.setField(importReceiptService, "secondApprovalThreshold", BigDecimal.valueOf(50000000));
+        org.mockito.Mockito.lenient().when(systemSettingRepository.findById("IMPORT_RECEIPT_SECOND_APPROVAL_THRESHOLD")).thenReturn(java.util.Optional.empty());
         authenticate(manager);
     }
 
@@ -179,6 +213,26 @@ class ImportReceiptApprovalServiceTest {
         ImportReceiptDraftResponse response = importReceiptService.approve(100L);
 
         assertEquals(ImportReceiptStatus.CHO_HANG_VE.name(), response.status());
+    }
+
+    @Test
+    void approve_shouldRespectSnapshotAndMoveToLevel2() {
+        ImportReceipt receipt = receiptWithStatus(ImportReceiptStatus.CHO_DUYET_CAP_1);
+        receipt.setTotalAmount(BigDecimal.valueOf(60000000));
+        receipt.setRequiredApprovalLevels((short) 2);
+        receipt.setApprovalThresholdApplied(BigDecimal.valueOf(30000000));
+        when(importReceiptRepository.findById(100L)).thenReturn(Optional.of(receipt));
+        when(importReceiptRepository.saveAndFlush(any(ImportReceipt.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(importReceiptDetailRepository.findByDocumentIdOrderByIdAsc(100L)).thenReturn(List.of());
+
+        ImportReceiptDraftResponse response = importReceiptService.approve(100L);
+
+        assertEquals(ImportReceiptStatus.CHO_DUYET_CAP_2.name(), response.status());
+        assertEquals(ImportReceiptStatus.CHO_DUYET_CAP_2, receipt.getStatus());
+        assertEquals(manager, receipt.getLevel1ApprovedBy());
+        assertNotNull(receipt.getLevel1ApprovedAt());
+        assertNull(receipt.getLevel2ApprovedBy());
     }
 
     @Test

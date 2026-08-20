@@ -72,6 +72,9 @@ class ImportReceiptSubmitServiceTest {
     @Mock
     private ImportReceiptCodeGenerator codeGenerator;
 
+    @Mock
+    private com.smartflow.smestocksensebackend.repository.SystemSettingRepository systemSettingRepository;
+
     private ImportReceiptServiceImpl importReceiptService;
     private Employee owner;
     private Warehouse warehouse;
@@ -94,8 +97,12 @@ class ImportReceiptSubmitServiceTest {
                 amountCalculator,
                 null,
                 null,
+                null,
+                systemSettingRepository,
+                null,
                 null
         );
+        org.mockito.Mockito.lenient().when(systemSettingRepository.findById(any())).thenReturn(java.util.Optional.empty());
         owner = employee(5L, RoleCode.EMPLOYEE);
         warehouse = warehouse(1L, WarehouseStatus.HOAT_DONG);
         supplier = supplier(10L, PartnerStatus.HOAT_DONG, PartnerType.NHA_CUNG_CAP);
@@ -137,6 +144,28 @@ class ImportReceiptSubmitServiceTest {
         importReceiptService.submitForApproval(123L);
 
         assertEquals(admin, receipt.getSubmittedBy());
+        assertEquals(ImportReceiptStatus.CHO_DUYET_CAP_1, receipt.getStatus());
+    }
+
+    @Test
+    void submitForApproval_shouldSnapshotApprovalThresholdAndLevels() {
+        receipt.setTotalAmount(new BigDecimal("60000000.00"));
+        detail.setExpectedQuantity(2);
+        detail.setExpectedUnitPrice(new BigDecimal("30000000.00"));
+        stubHeaderAndMasterData();
+        when(importReceiptDetailRepository.findByDocumentId(123L)).thenReturn(List.of(detail));
+        when(productRepository.findById(25L)).thenReturn(Optional.of(product));
+        when(systemSettingRepository.findById("IMPORT_RECEIPT_SECOND_APPROVAL_THRESHOLD"))
+                .thenReturn(Optional.of(com.smartflow.smestocksensebackend.entity.SystemSetting.builder()
+                        .key("IMPORT_RECEIPT_SECOND_APPROVAL_THRESHOLD")
+                        .value("30000000")
+                        .build()));
+        when(importReceiptRepository.saveAndFlush(receipt)).thenAnswer(invocation -> invocation.getArgument(0));
+
+        importReceiptService.submitForApproval(123L);
+
+        assertEquals(new BigDecimal("30000000"), receipt.getApprovalThresholdApplied());
+        assertEquals(Short.valueOf((short) 2), receipt.getRequiredApprovalLevels());
         assertEquals(ImportReceiptStatus.CHO_DUYET_CAP_1, receipt.getStatus());
     }
 

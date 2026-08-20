@@ -26,8 +26,7 @@ class ExcelImportTemplateContractTest {
                 "don_vi_tinh",
                 "ma_danh_muc",
                 "gia_ban",
-                "ton_toi_thieu",
-                "ton_toi_da",
+                "the_tich_don_vi_m3",
                 "trang_thai"
         ), ExcelImportTemplateConstants.PRODUCT_HEADERS);
     }

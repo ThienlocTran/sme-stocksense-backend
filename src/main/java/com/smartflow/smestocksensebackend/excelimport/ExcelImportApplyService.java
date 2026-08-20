@@ -149,10 +149,8 @@ public class ExcelImportApplyService {
         product.setUnit(requiredCell(row, 4, "don_vi_tinh").trim());
         product.setCategory(category);
         product.setPrice(parseOptionalDecimal(readCell(row, 6)));
-        Integer minStock = parseOptionalInteger(readCell(row, 7));
-        product.setMinStock(minStock == null ? 0 : minStock);
-        product.setMaxStock(parseOptionalInteger(readCell(row, 8)));
-        product.setStatus(parseStatusOrDefault(readCell(row, 9)));
+        product.setUnitVolumeM3(parseOptionalDecimal(readCell(row, 7)));
+        product.setStatus(parseStatusOrDefault(readCell(row, 8)));
 
         productRepository.saveAndFlush(product);
     }

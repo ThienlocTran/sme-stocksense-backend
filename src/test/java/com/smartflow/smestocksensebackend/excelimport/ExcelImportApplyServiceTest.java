@@ -177,8 +177,7 @@ class ExcelImportApplyServiceTest {
         assertThat(product.getUnit()).isEqualTo("Cai");
         assertThat(product.getCategory()).isSameAs(category);
         assertThat(product.getPrice()).isEqualByComparingTo(new BigDecimal("10"));
-        assertThat(product.getMinStock()).isEqualTo(1);
-        assertThat(product.getMaxStock()).isEqualTo(5);
+        assertThat(product.getUnitVolumeM3()).isEqualByComparingTo(new BigDecimal("1"));
         assertThat(product.getStatus()).isEqualTo(ProductStatus.HOAT_DONG);
         assertThat(response.status()).isEqualTo(ExcelImportStatus.DA_IMPORT.name());
         assertThat(excelImport.getCompletedAt()).isNotNull();
@@ -424,7 +423,7 @@ class ExcelImportApplyServiceTest {
 
     private XSSFWorkbook productWorkbook() {
         return workbook(
-                List.of(List.of("P01", "San pham moi", "SKU01", "BAR01", "Cai", "CAT01", "10", "1", "5", "HOAT_DONG")),
+                List.of(List.of("P01", "San pham moi", "SKU01", "BAR01", "Cai", "CAT01", "10", "1", "HOAT_DONG")),
                 null
         );
     }
@@ -435,7 +434,7 @@ class ExcelImportApplyServiceTest {
 
     private XSSFWorkbook openingWorkbook(String openingQuantity) {
         return workbook(
-                List.of(List.of("P01", "San pham moi", "SKU01", "BAR01", "Cai", "CAT01", "10", "1", "5", "HOAT_DONG")),
+                List.of(List.of("P01", "San pham moi", "SKU01", "BAR01", "Cai", "CAT01", "10", "1", "HOAT_DONG")),
                 List.of(List.of("WH01", "P01", openingQuantity))
         );
     }

@@ -81,6 +81,15 @@ class ImportReceiptServiceImplTest {
     @Mock
     private InventoryService inventoryService;
 
+    @Mock
+    private com.smartflow.smestocksensebackend.repository.SystemSettingRepository systemSettingRepository;
+
+    @Mock
+    private com.smartflow.smestocksensebackend.service.WarehouseCapacityService warehouseCapacityService;
+
+    @Mock
+    private com.smartflow.smestocksensebackend.service.EmailService emailService;
+
     @InjectMocks
     private ImportReceiptServiceImpl importReceiptService;
 
@@ -90,6 +99,7 @@ class ImportReceiptServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        org.mockito.Mockito.lenient().when(systemSettingRepository.findById("IMPORT_RECEIPT_SECOND_APPROVAL_THRESHOLD")).thenReturn(java.util.Optional.empty());
         creator = new Employee();
         creator.setId(5L);
         creator.setFullName("Nguyen Van A");
@@ -256,6 +266,7 @@ class ImportReceiptServiceImplTest {
         receipt.setCode("PNK-20260618-SUCCESS");
         receipt.setStatus(ImportReceiptStatus.CHO_HANG_VE);
         receipt.setVersion(1L);
+        receipt.setCreatedBy(creator); // EMPLOYEE phải là người tạo mới được ghi nhận hàng về
 
         java.time.LocalDateTime arrivalTime = java.time.LocalDateTime.of(2026, 6, 22, 10, 0);
         ImportReceiptArrivalRequest request = new ImportReceiptArrivalRequest(arrivalTime);
@@ -397,6 +408,7 @@ class ImportReceiptServiceImplTest {
         receipt.setCode("PNK-20260618-CONCURRENT");
         receipt.setStatus(ImportReceiptStatus.CHO_HANG_VE);
         receipt.setVersion(1L);
+        receipt.setCreatedBy(creator); // EMPLOYEE phải là người tạo
 
         ImportReceiptArrivalRequest request = new ImportReceiptArrivalRequest(
                 java.time.LocalDateTime.of(2026, 6, 22, 10, 0));

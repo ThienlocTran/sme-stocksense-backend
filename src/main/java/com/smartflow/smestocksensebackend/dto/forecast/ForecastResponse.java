@@ -18,5 +18,12 @@ public record ForecastResponse(
         Integer reorderQty14d,
         Integer reorderQty30d,
         Integer dataDays,
-        LocalDateTime trainedAt) {
+        LocalDateTime trainedAt,
+        Integer capacityAllowedQuantity7d,
+        Integer capacityAllowedQuantity14d,
+        Integer capacityAllowedQuantity30d,
+        Boolean capacityLimited7d,
+        Boolean capacityLimited14d,
+        Boolean capacityLimited30d,
+        String capacityStatus) {
 }

@@ -21,6 +21,11 @@ public record UpdateWarehouseRequest(
         // Trạng thái kho hàng: bắt buộc, chỉ nhận HOAT_DONG hoặc NGUNG_HOAT_DONG
         @NotBlank(message = "Trạng thái không được để trống.")
         @Pattern(regexp = "HOAT_DONG|NGUNG_HOAT_DONG", message = "Trạng thái chỉ nhận HOAT_DONG hoặc NGUNG_HOAT_DONG.")
-        String trangThai
+        String trangThai,
+
+        java.math.BigDecimal maxCapacityM3
 ) {
+    public UpdateWarehouseRequest(String tenKho, String diaChi, String trangThai) {
+        this(tenKho, diaChi, trangThai, null);
+    }
 }

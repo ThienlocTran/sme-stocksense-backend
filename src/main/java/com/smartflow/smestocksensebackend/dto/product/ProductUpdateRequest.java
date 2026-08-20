@@ -3,6 +3,7 @@ package com.smartflow.smestocksensebackend.dto.product;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.PositiveOrZero;
 
 import java.math.BigDecimal;
 
@@ -31,7 +32,9 @@ public record ProductUpdateRequest(
         @NotBlank(message = "Trạng thái không được để trống.")
         String status,
 
-        @Min(value = 0, message = "Ngưỡng tồn phải lớn hơn hoặc bằng 0.")
-        Integer minStock
+        BigDecimal unitVolumeM3,
+
+        @PositiveOrZero(message = "Tồn tối thiểu mặc định phải lớn hơn hoặc bằng 0.")
+        Integer defaultMinStock
 ) {
 }

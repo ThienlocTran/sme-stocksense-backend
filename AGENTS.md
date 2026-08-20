@@ -26,6 +26,8 @@ Do not commit secrets or local profile files.
 - Do not touch unrelated modules.
 - Do not touch production config, secrets, DB, Docker, deploy files, or protected files without confirmation.
 - Do not run build, dev, test, deploy, Maven, Docker, reset, clean, or destructive commands without confirmation.
+- Do not run full-system tests by default. Run only targeted tests/checks for files or flows touched by the task unless the user explicitly requests full validation.
+- After each module change, run only the test classes directly related to that module. Do not run `.\mvnw.cmd test` unless explicitly requested or at final acceptance.
 - Do not modify Java source, migrations, application config, `.env`, or feature code during docs-only rules tasks.
 - Preserve Vietnamese UTF-8. Never create mojibake or replacement characters.
 
@@ -38,6 +40,18 @@ Do not commit secrets or local profile files.
 - `rules/DB_MIGRATION_POLICY.md`
 - `rules/VALIDATION_CHECKLIST.md`
 - `rules/SPRINT_INTEGRATION_CHECKLIST.md` when preparing merges or integration branches
+
+Validation scope:
+- Test only the module(s) touched by the task.
+- Final check: rerun only the test classes for changed modules, then search residual `Product.minStock`, `Product.maxStock`, `getMinStock`, `getMaxStock`, `50000000`, `second-approval-threshold`, `phieu_dieu_chinh`, `discrepancyReason`.
+- Classify each residual as `hợp lệ`, `legacy migration`, `test`, or `bug còn sót`.
+
+Architecture / performance gate:
+- Reuse existing abstraction first; do not duplicate business logic across services.
+- Keep controller thin; put shared business rules in service/policy/component.
+- Prefer lazy relations where suitable; avoid N+1 and `findAll()`-then-filter patterns on large sets.
+- Use aggregate SQL/projection for list or total queries when it reduces entity loading.
+- Protect shared-state operations with transaction/locking/idempotency checks.
 
 Module docs such as `docs/inbound-workflow.md` and task READMEs provide business and implementation context. The `rules/` folder contains operating rules.
 

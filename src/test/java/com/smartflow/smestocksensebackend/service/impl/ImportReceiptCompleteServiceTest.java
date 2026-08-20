@@ -61,6 +61,15 @@ class ImportReceiptCompleteServiceTest {
     @Mock
     private InventoryService inventoryService;
 
+    @Mock
+    private com.smartflow.smestocksensebackend.repository.SystemSettingRepository systemSettingRepository;
+
+    @Mock
+    private com.smartflow.smestocksensebackend.service.WarehouseCapacityService warehouseCapacityService;
+
+    @Mock
+    private com.smartflow.smestocksensebackend.service.EmailService emailService;
+
     private ImportReceiptServiceImpl importReceiptService;
     private Employee employee;
     private Warehouse warehouse;
@@ -84,7 +93,10 @@ class ImportReceiptCompleteServiceTest {
                 amountCalculator,
                 discrepancyReportRepository,
                 inventoryService,
-                null
+                null,
+                systemSettingRepository,
+                warehouseCapacityService,
+                emailService
         );
 
         employee = employee(5L, RoleCode.EMPLOYEE);
@@ -93,6 +105,11 @@ class ImportReceiptCompleteServiceTest {
         product = product(25L, ProductStatus.HOAT_DONG);
         receipt = receipt(123L, employee, ImportReceiptStatus.CHO_KIEM_HANG);
         detail = detail(1001L, receipt, product, 10, new BigDecimal("125000.00"));
+
+        lenient().when(systemSettingRepository.findById("IMPORT_RECEIPT_SECOND_APPROVAL_THRESHOLD")).thenReturn(Optional.empty());
+        lenient().when(warehouseCapacityService.getUsedCapacity(any())).thenReturn(BigDecimal.ZERO);
+        lenient().when(warehouseCapacityService.getRemainingCapacity(any())).thenReturn(BigDecimal.valueOf(10000));
+        lenient().when(warehouseRepository.findWithLockById(any())).thenReturn(Optional.of(warehouse));
 
         authenticate(employee);
     }
@@ -145,6 +162,26 @@ class ImportReceiptCompleteServiceTest {
         assertNotNull(response);
         assertEquals("HOAN_THANH", response.status());
         // Verify inventory service is NEVER called for 0 quantity
+        verify(inventoryService, never()).increaseInventory(anyLong(), anyLong(), anyInt(), any(ImportReceipt.class));
+    }
+
+    @Test
+    void completeImport_error_whenProductMissingVolume_shouldThrowBadRequest() {
+        product.setUnitVolumeM3(null);
+        detail.setExpectedQuantity(12);
+        InspectImportReceiptRequest request = new InspectImportReceiptRequest(
+                List.of(new InspectImportReceiptItemRequest(25L, 12, "Binh thuong", null))
+        );
+
+        when(importReceiptRepository.findById(123L)).thenReturn(Optional.of(receipt));
+        when(importReceiptDetailRepository.findByDocumentId(123L)).thenReturn(List.of(detail));
+        when(importReceiptDetailRepository.findByDocumentIdOrderByIdAsc(123L)).thenReturn(List.of(detail));
+        when(importReceiptRepository.saveAndFlush(any(ImportReceipt.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        BadRequestException exception = assertThrows(BadRequestException.class,
+                () -> importReceiptService.completeImport(123L, request));
+
+        assertEquals("Sản phẩm SP-001 chưa cấu hình thể tích.", exception.getMessage());
         verify(inventoryService, never()).increaseInventory(anyLong(), anyLong(), anyInt(), any(ImportReceipt.class));
     }
 
@@ -355,6 +392,7 @@ class ImportReceiptCompleteServiceTest {
         prod.setCode("SP-001");
         prod.setName("Ca phe rang xay");
         prod.setStatus(status);
+        prod.setUnitVolumeM3(BigDecimal.valueOf(0.1));
         return prod;
     }
 }

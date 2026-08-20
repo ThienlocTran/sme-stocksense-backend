@@ -88,4 +88,42 @@ public class WarehouseController {
     public WarehouseResponse deactivateWarehouse(@PathVariable Long id) {
         return warehouseService.deactivateWarehouse(id);
     }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.smartflow.smestocksensebackend.service.WarehouseCapacityService warehouseCapacityService;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.smartflow.smestocksensebackend.repository.WarehouseRepository warehouseRepository;
+
+    public record WarehouseCapacityResponse(
+            Long id,
+            java.math.BigDecimal maxCapacityM3,
+            java.math.BigDecimal usedCapacityM3,
+            java.math.BigDecimal remainingCapacityM3,
+            java.math.BigDecimal usagePercentage,
+            java.math.BigDecimal minimumSafeVolumeM3,
+            boolean safeStockConfigComplete,
+            long missingConfigurationCount,
+            boolean minStockPolicyConflict
+    ) {}
+
+    @GetMapping("/{id}/capacity")
+    public WarehouseCapacityResponse getWarehouseCapacity(@PathVariable Long id) {
+        com.smartflow.smestocksensebackend.entity.Warehouse warehouse = warehouseRepository.findById(id)
+                .orElseThrow(() -> new com.smartflow.smestocksensebackend.exception.NotFoundException("Kho hàng không tồn tại."));
+        java.math.BigDecimal minimumSafeVolumeM3 = warehouseCapacityService.getMinimumSafeVolume(id);
+        long missingConfigurationCount = warehouseCapacityService.getMissingSafeVolumeConfigCount(id);
+        java.math.BigDecimal maxCapacityM3 = warehouse.getMaxCapacityM3();
+        return new WarehouseCapacityResponse(
+                id,
+                maxCapacityM3,
+                warehouseCapacityService.getUsedCapacity(id),
+                warehouseCapacityService.getRemainingCapacity(id),
+                warehouseCapacityService.getUsagePercentage(id),
+                minimumSafeVolumeM3,
+                missingConfigurationCount == 0,
+                missingConfigurationCount,
+                maxCapacityM3 != null && minimumSafeVolumeM3.compareTo(maxCapacityM3) > 0
+        );
+    }
 }

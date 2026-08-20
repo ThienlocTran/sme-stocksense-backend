@@ -19,6 +19,7 @@ public class InventoryLevelResponse {
         private final String warehouseStatus;
         private final String status;
         private final LocalDateTime lastUpdatedAt;
+        private final java.math.BigDecimal unitVolumeM3;
 
         public InventoryLevelResponse(
                         Long inventoryId,
@@ -36,6 +37,27 @@ public class InventoryLevelResponse {
                         String warehouseStatus,
                         String status,
                         LocalDateTime lastUpdatedAt) {
+                this(inventoryId, productId, productCode, productName, barcode, warehouseId, warehouseCode, warehouse,
+                     currentQuantity, minStock, maxStock, productStatus, warehouseStatus, status, lastUpdatedAt, null);
+        }
+
+        public InventoryLevelResponse(
+                        Long inventoryId,
+                        Long productId,
+                        String productCode,
+                        String productName,
+                        String barcode,
+                        Long warehouseId,
+                        String warehouseCode,
+                        String warehouse,
+                        Integer currentQuantity,
+                        Integer minStock,
+                        Integer maxStock,
+                        String productStatus,
+                        String warehouseStatus,
+                        String status,
+                        LocalDateTime lastUpdatedAt,
+                        java.math.BigDecimal unitVolumeM3) {
                 this.inventoryId = inventoryId;
                 this.productId = productId;
                 this.productCode = productCode;
@@ -51,6 +73,7 @@ public class InventoryLevelResponse {
                 this.warehouseStatus = warehouseStatus;
                 this.status = status;
                 this.lastUpdatedAt = lastUpdatedAt;
+                this.unitVolumeM3 = unitVolumeM3;
         }
 
         public Long getInventoryId() {
@@ -111,5 +134,9 @@ public class InventoryLevelResponse {
 
         public LocalDateTime getLastUpdatedAt() {
                 return lastUpdatedAt;
+        }
+
+        public java.math.BigDecimal getUnitVolumeM3() {
+                return unitVolumeM3;
         }
 }

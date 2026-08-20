@@ -73,6 +73,12 @@ public class ImportReceipt {
     @Column(name = "ngay_gui_duyet")
     private LocalDateTime submittedAt;
 
+    @Column(name = "nguong_duyet_ap_dung", precision = 15, scale = 2)
+    private BigDecimal approvalThresholdApplied;
+
+    @Column(name = "so_cap_duyet_yeu_cau")
+    private Short requiredApprovalLevels;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "nguoi_duyet_cap_1_id")
     private Employee level1ApprovedBy;

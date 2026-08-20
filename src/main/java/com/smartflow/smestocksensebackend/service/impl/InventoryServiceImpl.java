@@ -17,6 +17,7 @@ import com.smartflow.smestocksensebackend.exception.BadRequestException;
 import com.smartflow.smestocksensebackend.exception.ConflictException;
 import com.smartflow.smestocksensebackend.service.InventoryTransactionService;
 import com.smartflow.smestocksensebackend.event.InventoryLevelChangedEvent;
+import com.smartflow.smestocksensebackend.service.EffectiveMinStockResolver;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -42,6 +43,8 @@ public class InventoryServiceImpl implements InventoryService {
     private final InventoryTransactionService inventoryTransactionService;
     // T184: Publisher để bắn sự kiện biến động tồn kho sau khi commit
     private final ApplicationEventPublisher eventPublisher;
+    private final com.smartflow.smestocksensebackend.repository.WarehouseStockConfigRepository warehouseStockConfigRepository;
+    private final EffectiveMinStockResolver effectiveMinStockResolver;
 
     /**
      * Tăng số lượng tồn kho cho một sản phẩm tại một kho hàng cụ thể (Không log
@@ -128,9 +131,11 @@ public class InventoryServiceImpl implements InventoryService {
         }
 
         // T184: Bắn sự kiện biến động tồn kho sau khi InventoryLevel đã cập nhật thành công.
-        // Dùng Integer minStock từ Product entity (đã load ở bước 1).
+        // Dùng Integer minStock từ WarehouseStockConfig.
         // Listener sẽ nhận event này SAU KHI transaction commit (AFTER_COMMIT) để xử lý cảnh báo.
-        Integer minStockValue = product.getMinStock();
+        Integer minStockValue = effectiveMinStockResolver
+                .resolve(product, warehouseStockConfigRepository.findByProductIdAndWarehouseId(productId, warehouseId).orElse(null))
+                .orElse(null);
         eventPublisher.publishEvent(new InventoryLevelChangedEvent(
                 warehouseId, productId, quantityBefore, quantityAfter, minStockValue));
 
@@ -305,6 +310,7 @@ public class InventoryServiceImpl implements InventoryService {
                 projection.getProductStatus(),
                 projection.getWarehouseStatus(),
                 projection.getStatus(),
-                projection.getLastUpdatedAt());
+                projection.getLastUpdatedAt(),
+                projection.getUnitVolumeM3());
     }
 }

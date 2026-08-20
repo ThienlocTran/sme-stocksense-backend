@@ -77,7 +77,7 @@ class ExcelImportValidationServiceTest {
         ExcelImportValidationResponse response = validationService.validate(
                 xlsxFile(workbook(
                         ExcelImportTemplateConstants.PRODUCT_HEADERS,
-                        List.of(List.of("P01", "San pham 1", "SKU01", "BAR01", "Cai", "CAT01", "10", "1", "5", "HOAT_DONG")),
+                        List.of(List.of("P01", "San pham 1", "SKU01", "BAR01", "Cai", "CAT01", "10", "1", "HOAT_DONG")),
                         null,
                         null
                 )),
@@ -102,7 +102,7 @@ class ExcelImportValidationServiceTest {
         ExcelImportValidationResponse response = validationService.validate(
                 xlsxFile(workbook(
                         ExcelImportTemplateConstants.PRODUCT_HEADERS,
-                        List.of(List.of("P01", "San pham 1", "SKU01", "BAR01", "Cai", "CAT01", "12,5", "1", "5", "HOAT_DONG")),
+                        List.of(List.of("P01", "San pham 1", "SKU01", "BAR01", "Cai", "CAT01", "12,5", "1", "HOAT_DONG")),
                         null,
                         null
                 )),
@@ -130,8 +130,8 @@ class ExcelImportValidationServiceTest {
     void validate_wrongProductHeaderReturnsValidationError() throws Exception {
         ExcelImportValidationResponse response = validationService.validate(
                 xlsxFile(workbook(
-                        List.of("sai_cot", "ten_san_pham", "sku", "ma_vach", "don_vi_tinh", "ma_danh_muc", "gia_ban", "ton_toi_thieu", "ton_toi_da", "trang_thai"),
-                        List.of(List.of("P01", "SP", "", "", "Cai", "CAT01", "10", "1", "5", "HOAT_DONG")),
+                        List.of("sai_cot", "ten_san_pham", "sku", "ma_vach", "don_vi_tinh", "ma_danh_muc", "gia_ban", "the_tich_don_vi_m3", "trang_thai"),
+                        List.of(List.of("P01", "SP", "", "", "Cai", "CAT01", "10", "1", "HOAT_DONG")),
                         null,
                         null
                 )),
@@ -171,8 +171,8 @@ class ExcelImportValidationServiceTest {
                 xlsxFile(workbook(
                         ExcelImportTemplateConstants.PRODUCT_HEADERS,
                         List.of(
-                                List.of("P01", "SP1", "", "", "Cai", "CAT01", "10", "1", "5", "HOAT_DONG"),
-                                List.of("P01", "SP2", "", "", "Cai", "CAT01", "10", "1", "5", "HOAT_DONG")
+                                List.of("P01", "SP1", "", "", "Cai", "CAT01", "10", "1", "HOAT_DONG"),
+                                List.of("P01", "SP2", "", "", "Cai", "CAT01", "10", "1", "HOAT_DONG")
                         ),
                         null,
                         null
@@ -190,7 +190,7 @@ class ExcelImportValidationServiceTest {
         ExcelImportValidationResponse response = validationService.validate(
                 xlsxFile(workbook(
                         ExcelImportTemplateConstants.PRODUCT_HEADERS,
-                        List.of(List.of("P01", "SP1", "", "", "Cai", "CAT99", "10", "1", "5", "HOAT_DONG")),
+                        List.of(List.of("P01", "SP1", "", "", "Cai", "CAT99", "10", "1", "HOAT_DONG")),
                         null,
                         null
                 )),
@@ -209,7 +209,7 @@ class ExcelImportValidationServiceTest {
         ExcelImportValidationResponse response = validationService.validate(
                 xlsxFile(workbook(
                         ExcelImportTemplateConstants.PRODUCT_HEADERS,
-                        List.of(List.of("P01", "SP1", "", "", "Cai", "CAT01", "-10", "8", "5", "BOGUS")),
+                        List.of(List.of("P01", "SP1", "", "", "Cai", "CAT01", "-10", "-1", "BOGUS")),
                         null,
                         null
                 )),
@@ -219,7 +219,7 @@ class ExcelImportValidationServiceTest {
 
         assertThat(response.valid()).isFalse();
         assertThat(response.errors()).extracting(ExcelImportValidationErrorResponse::message)
-                .contains("Giá trị không được âm.", "Tồn tối thiểu phải nhỏ hơn hoặc bằng tồn tối đa.", "Trạng thái sản phẩm không hợp lệ.");
+                .contains("Giá trị không được âm.", "Thể tích phải lớn hơn 0.", "Trạng thái sản phẩm không hợp lệ.");
     }
 
     @Test
@@ -232,7 +232,7 @@ class ExcelImportValidationServiceTest {
         ExcelImportValidationResponse response = validationService.validate(
                 xlsxFile(workbook(
                         ExcelImportTemplateConstants.PRODUCT_HEADERS,
-                        List.of(List.of("P01", "SP1", "SKU01", "BAR01", "Cai", "CAT01", "10", "1", "5", "HOAT_DONG")),
+                        List.of(List.of("P01", "SP1", "SKU01", "BAR01", "Cai", "CAT01", "10", "1", "HOAT_DONG")),
                         List.of(List.of("WH01", "P01", "12")),
                         null
                 )),
@@ -251,7 +251,7 @@ class ExcelImportValidationServiceTest {
         ExcelImportValidationResponse response = validationService.validate(
                 xlsxFile(workbook(
                         ExcelImportTemplateConstants.PRODUCT_HEADERS,
-                        List.of(List.of("P01", "SP1", "", "", "Cai", "CAT01", "10", "1", "5", "HOAT_DONG")),
+                        List.of(List.of("P01", "SP1", "", "", "Cai", "CAT01", "10", "1", "HOAT_DONG")),
                         null,
                         null
                 )),
@@ -271,7 +271,7 @@ class ExcelImportValidationServiceTest {
         ExcelImportValidationResponse response = validationService.validate(
                 xlsxFile(workbook(
                         ExcelImportTemplateConstants.PRODUCT_HEADERS,
-                        List.of(List.of("P01", "SP1", "", "", "Cai", "CAT01", "10", "1", "5", "HOAT_DONG")),
+                        List.of(List.of("P01", "SP1", "", "", "Cai", "CAT01", "10", "1", "HOAT_DONG")),
                         List.of(
                                 List.of("WH01", "P01", "12"),
                                 List.of("WH01", "P01", "13")
@@ -293,7 +293,7 @@ class ExcelImportValidationServiceTest {
         ExcelImportValidationResponse response = validationService.validate(
                 xlsxFile(workbook(
                         ExcelImportTemplateConstants.PRODUCT_HEADERS,
-                        List.of(List.of("P01", "SP1", "", "", "Cai", "CAT01", "10", "1", "5", "HOAT_DONG")),
+                        List.of(List.of("P01", "SP1", "", "", "Cai", "CAT01", "10", "1", "HOAT_DONG")),
                         List.of(List.of("WH99", "P01", "12")),
                         null
                 )),
@@ -373,7 +373,7 @@ class ExcelImportValidationServiceTest {
         ExcelImportValidationResponse response = validationService.validate(
                 xlsxFile(workbook(
                         ExcelImportTemplateConstants.PRODUCT_HEADERS,
-                        List.of(List.of("P01", "SP1", "", "", "Cai", "CAT01", "10", "1", "5", "HOAT_DONG")),
+                        List.of(List.of("P01", "SP1", "", "", "Cai", "CAT01", "10", "1", "HOAT_DONG")),
                         List.of(List.of("WH01", "P01", "12")),
                         null
                 )),
@@ -396,7 +396,7 @@ class ExcelImportValidationServiceTest {
                 99L,
                 xlsxFile(workbook(
                         ExcelImportTemplateConstants.PRODUCT_HEADERS,
-                        List.of(List.of("", "San pham loi", "", "", "Cai", "CAT99", "10", "1", "5", "HOAT_DONG")),
+                        List.of(List.of("", "San pham loi", "", "", "Cai", "CAT99", "10", "1", "HOAT_DONG")),
                         null,
                         null
                 )),
@@ -430,7 +430,7 @@ class ExcelImportValidationServiceTest {
                 100L,
                 xlsxFile(workbook(
                         ExcelImportTemplateConstants.PRODUCT_HEADERS,
-                        List.of(List.of("P01", "San pham 1", "", "", "Cai", "CAT01", "10", "1", "5", "HOAT_DONG")),
+                        List.of(List.of("P01", "San pham 1", "", "", "Cai", "CAT01", "10", "1", "HOAT_DONG")),
                         null,
                         null
                 )),
@@ -461,7 +461,7 @@ class ExcelImportValidationServiceTest {
                 101L,
                 xlsxFile(workbook(
                         ExcelImportTemplateConstants.PRODUCT_HEADERS,
-                        List.of(List.of("", "San pham loi", "", "", "Cai", "CAT99", "10", "1", "5", "HOAT_DONG")),
+                        List.of(List.of("", "San pham loi", "", "", "Cai", "CAT99", "10", "1", "HOAT_DONG")),
                         null,
                         null
                 )),

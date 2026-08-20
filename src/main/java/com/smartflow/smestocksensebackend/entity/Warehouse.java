@@ -47,6 +47,9 @@ public class Warehouse {
     @Column(name = "trang_thai", nullable = false, columnDefinition = "trang_thai_kho")
     private WarehouseStatus status = WarehouseStatus.HOAT_DONG;
 
+    @Column(name = "suc_chua_toi_da_m3", nullable = false, precision = 12, scale = 3)
+    private java.math.BigDecimal maxCapacityM3 = new java.math.BigDecimal("1500.000");
+
     @CreationTimestamp
     @Column(name = "ngay_tao", updatable = false)
     private LocalDateTime createdAt;

@@ -13,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class ReplenishmentSuggestionServiceImpl implements ReplenishmentSuggestionService {
     private final InventoryLevelRepository inventoryLevelRepository;
+    private final com.smartflow.smestocksensebackend.service.WarehouseCapacityService warehouseCapacityService;
 
     @Override
     @Transactional(readOnly = true)
@@ -25,26 +26,36 @@ public class ReplenishmentSuggestionServiceImpl implements ReplenishmentSuggesti
     private ReplenishmentSuggestionResponse toSuggestion(InventoryLevelProjection stock) {
         int current = nonNegative(stock.getCurrentQuantity());
         int minimum = nonNegative(stock.getMinStock());
-        Integer maximum = stock.getMaxStock();
         int shortage = Math.max(minimum - current, 0);
+        int suggested = shortage;
         String warning = null;
-        int suggested;
-        if (maximum == null) {
-            suggested = shortage;
-            warning = "MAX_STOCK_NOT_CONFIGURED";
-        } else if (maximum < minimum || maximum < current) {
-            suggested = shortage;
-            warning = "INVALID_STOCK_RANGE";
-        } else {
-            suggested = maximum - current;
+
+        java.math.BigDecimal unitVolumeM3 = null;
+        Integer capacityAllowedQuantity = suggested;
+        Boolean capacityLimited = false;
+
+        unitVolumeM3 = stock.getUnitVolumeM3();
+
+        if (unitVolumeM3 == null) {
+            warning = "UNIT_VOLUME_NOT_CONFIGURED";
+        } else if (unitVolumeM3.compareTo(java.math.BigDecimal.ZERO) > 0) {
+            java.math.BigDecimal remaining = warehouseCapacityService.getRemainingCapacity(stock.getWarehouseId());
+            java.math.BigDecimal limit = remaining.divide(unitVolumeM3, 0, java.math.RoundingMode.DOWN);
+            int maxFit = Math.max(0, limit.intValue());
+            if (suggested > maxFit) {
+                capacityAllowedQuantity = maxFit;
+                capacityLimited = true;
+                warning = String.format("Đề xuất nhập %d đơn vị. Kho hiện chỉ còn đủ sức chứa cho khoảng %d đơn vị.", suggested, maxFit);
+            }
         }
+
         ReplenishmentReason reason = current == 0 ? ReplenishmentReason.OUT_OF_STOCK
                 : current < minimum ? ReplenishmentReason.BELOW_MINIMUM : ReplenishmentReason.AT_MINIMUM;
         ReplenishmentPriority priority = current == 0 ? ReplenishmentPriority.CRITICAL
                 : current < minimum ? ReplenishmentPriority.HIGH : ReplenishmentPriority.MEDIUM;
         return new ReplenishmentSuggestionResponse(stock.getProductId(), stock.getProductCode(), stock.getProductName(),
-                stock.getWarehouseId(), stock.getWarehouseCode(), stock.getWarehouse(), current, minimum, maximum,
-                shortage, suggested, reason, priority, warning);
+                stock.getWarehouseId(), stock.getWarehouseCode(), stock.getWarehouse(), current, minimum, null,
+                shortage, suggested, reason, priority, warning, unitVolumeM3, capacityAllowedQuantity, capacityLimited);
     }
 
     private int nonNegative(Integer value) { return value == null ? 0 : Math.max(value, 0); }

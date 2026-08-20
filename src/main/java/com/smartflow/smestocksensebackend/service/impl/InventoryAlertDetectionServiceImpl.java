@@ -43,6 +43,9 @@ public class InventoryAlertDetectionServiceImpl implements InventoryAlertDetecti
     private final InventoryAlertRepository inventoryAlertRepository;
     private final AlertSeverityCalculator alertSeverityCalculator;
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.smartflow.smestocksensebackend.service.WarehouseCapacityService warehouseCapacityService;
+
     private static final String STATUS_HOAT_DONG = "HOAT_DONG";
     private static final String STOCK_STATUS_LOW_STOCK = "LOW_STOCK";
 
@@ -121,6 +124,14 @@ public class InventoryAlertDetectionServiceImpl implements InventoryAlertDetecti
             return true;
         }
         return false;
+    }
+
+    @Override
+    public void reevaluate(Long productId, Long warehouseId) {
+        if (!checkAndCreateAlert(productId, warehouseId)) {
+            inventoryAlertRepository.findFirstByProductIdAndWarehouseIdAndStatusIn(
+                    productId, warehouseId, ACTIVE_STATUSES).ifPresent(alert -> alert.resolve(SYSTEM_USER));
+        }
     }
 
     /**
@@ -219,14 +230,17 @@ public class InventoryAlertDetectionServiceImpl implements InventoryAlertDetecti
     @Transactional
     public void processInventoryChange(InventoryLevelChangedEvent event) {
         int newQty = event.newQuantity() != null ? event.newQuantity() : 0;
-        int minStock = event.minStock() != null ? event.minStock() : 0;
 
-        if (newQty <= minStock) {
+        if (event.minStock() != null && newQty < event.minStock()) {
             // Khối 1: Tồn kho vẫn ở mức thiếu hụt -> Tạo mới hoặc cập nhật cảnh báo
             handleLowStockFromEvent(event, newQty);
         } else {
             // Khối 2: Tồn kho đã về mức an toàn -> Auto-Resolve nếu có cảnh báo đang mở
             autoResolveAlertFromEvent(event);
+        }
+
+        if (warehouseCapacityService != null) {
+            warehouseCapacityService.evaluateCapacityAlert(event.warehouseId());
         }
     }
 

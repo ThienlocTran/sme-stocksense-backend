@@ -14,7 +14,7 @@ public interface InventoryAlertDetectionService {
 
     /**
      * Quét và tự động sinh phiếu cảnh báo cho các sản phẩm có tồn kho thấp
-     * (so_luong <= ton_toi_thieu)
+     * (so_luong < effectiveMinStock)
      * hoặc hết hàng (so_luong <= 0).
      *
      * @param warehouseId ID kho hàng (null nếu muốn quét toàn bộ hệ thống)
@@ -32,6 +32,8 @@ public interface InventoryAlertDetectionService {
      *         không bị tụt kho hoặc đã bị bỏ qua (trùng lặp).
      */
     boolean checkAndCreateAlert(Long productId, Long warehouseId);
+
+    void reevaluate(Long productId, Long warehouseId);
 
     /**
      * Xử lý biến động tồn kho từ Event (T184).

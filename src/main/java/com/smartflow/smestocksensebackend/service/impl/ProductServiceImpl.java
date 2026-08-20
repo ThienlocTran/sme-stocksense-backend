@@ -14,8 +14,10 @@ import com.smartflow.smestocksensebackend.exception.BadRequestException;
 import com.smartflow.smestocksensebackend.exception.FieldValidationException;
 import com.smartflow.smestocksensebackend.exception.NotFoundException;
 import com.smartflow.smestocksensebackend.repository.CategoryRepository;
+import com.smartflow.smestocksensebackend.repository.InventoryLevelRepository;
 import com.smartflow.smestocksensebackend.repository.PartnerRepository;
 import com.smartflow.smestocksensebackend.repository.ProductRepository;
+import com.smartflow.smestocksensebackend.service.InventoryAlertDetectionService;
 import com.smartflow.smestocksensebackend.service.ProductService;
 import jakarta.persistence.criteria.JoinType;
 import jakarta.persistence.criteria.Predicate;
@@ -39,6 +41,8 @@ public class ProductServiceImpl implements ProductService {
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
     private final PartnerRepository partnerRepository;
+    private final InventoryLevelRepository inventoryLevelRepository;
+    private final InventoryAlertDetectionService inventoryAlertDetectionService;
 
     /**
      * Lấy danh sách sản phẩm có hỗ trợ tìm kiếm theo tên/SKU và lọc theo trạng thái.
@@ -92,9 +96,8 @@ public class ProductServiceImpl implements ProductService {
         product.setCategory(resolveCategory(request.categoryId()));
         product.setPartner(resolvePartner(request.partnerId()));
         product.setStatus(ProductStatus.HOAT_DONG);
-        if (request.minStock() != null) {
-            product.setMinStock(request.minStock());
-        }
+        product.setUnitVolumeM3(request.unitVolumeM3());
+        product.setDefaultMinStock(request.defaultMinStock());
 
         return from(productRepository.saveAndFlush(product));
     }
@@ -123,11 +126,16 @@ public class ProductServiceImpl implements ProductService {
         product.setCategory(resolveCategory(request.categoryId()));
         product.setPartner(resolvePartner(request.partnerId()));
         product.setStatus(parseStatusStrict(request.status()));
-        if (request.minStock() != null) {
-            product.setMinStock(request.minStock());
-        }
+        product.setUnitVolumeM3(request.unitVolumeM3());
+        Integer oldDefaultMinStock = product.getDefaultMinStock();
+        product.setDefaultMinStock(request.defaultMinStock());
 
-        return from(productRepository.saveAndFlush(product));
+        ProductListItemResponse response = from(productRepository.saveAndFlush(product));
+        if (!java.util.Objects.equals(oldDefaultMinStock, product.getDefaultMinStock())) {
+            inventoryLevelRepository.findWarehouseIdsUsingDefaultMin(id)
+                    .forEach(warehouseId -> inventoryAlertDetectionService.reevaluate(product.getId(), warehouseId));
+        }
+        return response;
     }
 
     @Override

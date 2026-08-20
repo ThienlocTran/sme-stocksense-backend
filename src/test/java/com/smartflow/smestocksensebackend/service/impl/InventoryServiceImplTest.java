@@ -59,6 +59,12 @@ class InventoryServiceImplTest {
         @Mock
         private ApplicationEventPublisher eventPublisher;
 
+        @Mock
+        private com.smartflow.smestocksensebackend.repository.WarehouseStockConfigRepository warehouseStockConfigRepository;
+
+        @Mock
+        private com.smartflow.smestocksensebackend.service.EffectiveMinStockResolver effectiveMinStockResolver;
+
         @InjectMocks
         private InventoryServiceImpl inventoryService;
 
@@ -67,6 +73,10 @@ class InventoryServiceImplTest {
 
         @BeforeEach
         void setUp() {
+                org.mockito.Mockito.lenient().when(warehouseStockConfigRepository.findByProductIdAndWarehouseId(any(), any()))
+                                .thenReturn(Optional.empty());
+                org.mockito.Mockito.lenient().when(effectiveMinStockResolver.resolve(any(), any()))
+                                .thenReturn(Optional.empty());
                 product = new Product();
                 product.setId(1L);
                 product.setCode("SP001");
@@ -411,6 +421,11 @@ class InventoryServiceImplTest {
                         @Override
                         public Integer getMaxStock() {
                                 return 20;
+                        }
+
+                        @Override
+                        public java.math.BigDecimal getUnitVolumeM3() {
+                                return java.math.BigDecimal.ONE;
                         }
 
                         @Override

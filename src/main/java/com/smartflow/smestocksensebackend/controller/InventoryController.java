@@ -37,7 +37,7 @@ public class InventoryController {
      * 
      * Trạng thái tồn kho được tính toán theo logic:
      * - OUT_OF_STOCK: so_luong = 0
-     * - LOW_STOCK: so_luong <= min_stock
+     * - LOW_STOCK: so_luong < effectiveMinStock
      * - OVER_STOCK: so_luong >= max_stock
      * - NORMAL: các trường hợp khác
      * 
@@ -76,7 +76,7 @@ public class InventoryController {
     /**
      * Lấy danh sách sản phẩm có tồn kho dưới ngưỡng tối thiểu.
      * 
-     * Điều kiện: current_quantity <= min_stock
+     * Điều kiện: current_quantity < effectiveMinStock
      * 
      * @param warehouseId     ID của kho (optional, dùng để lọc theo kho)
      * @param productId       ID của sản phẩm (optional, dùng để lọc theo sản phẩm)

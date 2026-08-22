@@ -171,6 +171,31 @@ class ForecastServiceImplTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void seedDemoHistory_shouldIgnoreExternalHistoryCount() {
+        InventoryLevel level = new InventoryLevel();
+        level.setProduct(product);
+        level.setWarehouse(warehouse);
+        when(inventoryLevelRepository.findAll()).thenReturn(List.of(level));
+        when(salesHistoryRepository.countByProductIdAndWarehouseIdAndSource(1L, 2L, SalesHistorySource.SEED_DEMO))
+                .thenReturn(0L);
+
+        com.smartflow.smestocksensebackend.dto.forecast.SeedHistoryResponse response = service.seedDemoHistory();
+
+        ArgumentCaptor<List<SalesHistory>> captor = ArgumentCaptor.forClass(List.class);
+        verify(salesHistoryRepository).saveAll(captor.capture());
+        List<SalesHistory> rows = captor.getValue();
+        assertEquals("SEED_DEMO", response.source());
+        assertEquals(1, response.seriesSeeded());
+        assertEquals(180, response.rowsInserted());
+        assertEquals(180, rows.size());
+        assertEquals(SalesHistorySource.SEED_DEMO, rows.get(0).getSource());
+        assertEquals(product.getPrice(), rows.get(0).getAverageSellingPrice());
+        assertEquals(LocalDate.now().minusDays(179), rows.get(0).getNgay());
+        assertEquals(LocalDate.now(), rows.get(179).getNgay());
+    }
+
+    @Test
     void runForecast_shouldUseColdStartAverage_whenNotEnoughHistory() {
         List<SalesHistory> history = buildHistory(10, 5, SalesHistorySource.EXTERNAL_STORE_ITEM);
         when(productRepository.findById(1L)).thenReturn(Optional.of(product));

@@ -3,6 +3,7 @@ package com.smartflow.smestocksensebackend.service;
 import com.smartflow.smestocksensebackend.dto.forecast.DriftResponse;
 import com.smartflow.smestocksensebackend.dto.forecast.ForecastAvailabilityResponse;
 import com.smartflow.smestocksensebackend.dto.forecast.ForecastResponse;
+import com.smartflow.smestocksensebackend.dto.forecast.SeedHistoryResponse;
 import com.smartflow.smestocksensebackend.entity.SalesHistorySource;
 
 public interface ForecastService {
@@ -22,4 +23,6 @@ public interface ForecastService {
     DriftResponse checkDrift(Long productId, Long warehouseId);
 
     ForecastAvailabilityResponse getAvailability(SalesHistorySource source);
+
+    SeedHistoryResponse seedDemoHistory();
 }

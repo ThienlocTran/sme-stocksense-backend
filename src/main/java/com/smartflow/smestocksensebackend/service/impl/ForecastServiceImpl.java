@@ -5,6 +5,7 @@ import com.smartflow.smestocksensebackend.dto.forecast.AiForecastClientResult;
 import com.smartflow.smestocksensebackend.dto.forecast.DriftResponse;
 import com.smartflow.smestocksensebackend.dto.forecast.ForecastAvailabilityResponse;
 import com.smartflow.smestocksensebackend.dto.forecast.ForecastResponse;
+import com.smartflow.smestocksensebackend.dto.forecast.SeedHistoryResponse;
 import com.smartflow.smestocksensebackend.dto.inventory.DailyQuantityProjection;
 import com.smartflow.smestocksensebackend.entity.DailyForecastResult;
 import com.smartflow.smestocksensebackend.entity.ForecastDriftLog;
@@ -42,6 +43,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.TreeMap;
 import java.util.TreeSet;
 
@@ -51,6 +53,7 @@ import java.util.TreeSet;
 public class ForecastServiceImpl implements ForecastService {
 
     private static final int MIN_HISTORY_DAYS = 60;
+    private static final int SEED_HISTORY_DAYS = 180;
     private static final int REAL_SALES_LOOKBACK_DAYS = 730;
     private static final int DRIFT_WINDOW_DAYS = 30;
     private static final int DRIFT_MIN_OVERLAP_DAYS = 7;
@@ -96,6 +99,32 @@ public class ForecastServiceImpl implements ForecastService {
                         row.getHistoryDays(), row.getHistoryStart(), row.getHistoryEnd()))
                 .toList();
         return new ForecastAvailabilityResponse(effectiveSource.name(), combinations);
+    }
+
+    @Override
+    @Transactional
+    public SeedHistoryResponse seedDemoHistory() {
+        LocalDate historyEnd = LocalDate.now();
+        LocalDate historyStart = historyEnd.minusDays(SEED_HISTORY_DAYS - 1L);
+        int seriesSeeded = 0;
+        int rowsInserted = 0;
+
+        for (InventoryLevel level : inventoryLevelRepository.findAll()) {
+            Long productId = level.getProduct().getId();
+            Long warehouseId = level.getWarehouse().getId();
+            if (salesHistoryRepository.countByProductIdAndWarehouseIdAndSource(
+                    productId, warehouseId, SalesHistorySource.SEED_DEMO) >= MIN_HISTORY_DAYS) {
+                continue;
+            }
+            List<SalesHistory> rows = generateSyntheticHistory(level.getProduct(), level.getWarehouse(), historyStart);
+            salesHistoryRepository.saveAll(rows);
+            seriesSeeded++;
+            rowsInserted += rows.size();
+        }
+
+        log.info("[ForecastService] Seed SEED_DEMO history: {} series, {} rows", seriesSeeded, rowsInserted);
+        return new SeedHistoryResponse(SalesHistorySource.SEED_DEMO.name(), seriesSeeded, rowsInserted,
+                historyStart, historyEnd);
     }
 
     @Override
@@ -458,6 +487,30 @@ public class ForecastServiceImpl implements ForecastService {
             count++;
         }
         return count == 0 ? 0.0 : (sum / count) * 100;
+    }
+
+    private List<SalesHistory> generateSyntheticHistory(Product product, Warehouse warehouse, LocalDate start) {
+        Random random = new Random(product.getId() * 31L + warehouse.getId());
+        double base = 5 + random.nextInt(20);
+        double trendPerDay = (random.nextDouble() - 0.3) * 0.05;
+
+        List<SalesHistory> rows = new ArrayList<>(SEED_HISTORY_DAYS);
+        for (int i = 0; i < SEED_HISTORY_DAYS; i++) {
+            LocalDate date = start.plusDays(i);
+            double weekly = 1 + 0.3 * Math.sin(2 * Math.PI * date.getDayOfWeek().getValue() / 7.0);
+            double noise = (random.nextDouble() - 0.5) * base * 0.4;
+            int quantity = (int) Math.max(0, Math.round((base + trendPerDay * i) * weekly + noise));
+
+            SalesHistory row = new SalesHistory();
+            row.setProduct(product);
+            row.setWarehouse(warehouse);
+            row.setNgay(date);
+            row.setQuantity(quantity);
+            row.setAverageSellingPrice(product.getPrice());
+            row.setSource(SalesHistorySource.SEED_DEMO);
+            rows.add(row);
+        }
+        return rows;
     }
 
     private static int firstNonNull(Integer value, int fallback) {

@@ -5,6 +5,7 @@ import com.smartflow.smestocksensebackend.dto.forecast.AiForecastClientResult;
 import com.smartflow.smestocksensebackend.dto.forecast.DriftResponse;
 import com.smartflow.smestocksensebackend.dto.forecast.ForecastResponse;
 import com.smartflow.smestocksensebackend.dto.inventory.DailyQuantityProjection;
+import com.smartflow.smestocksensebackend.entity.DailyForecastResult;
 import com.smartflow.smestocksensebackend.entity.ForecastDriftLog;
 import com.smartflow.smestocksensebackend.entity.ForecastDatasetType;
 import com.smartflow.smestocksensebackend.entity.ForecastMode;
@@ -19,6 +20,7 @@ import com.smartflow.smestocksensebackend.exception.NotFoundException;
 import com.smartflow.smestocksensebackend.repository.ForecastDriftLogRepository;
 import com.smartflow.smestocksensebackend.repository.ForecastModelMetadataRepository;
 import com.smartflow.smestocksensebackend.repository.ForecastResultRepository;
+import com.smartflow.smestocksensebackend.repository.DailyForecastResultRepository;
 import com.smartflow.smestocksensebackend.repository.InventoryLevelRepository;
 import com.smartflow.smestocksensebackend.repository.InventoryTransactionRepository;
 import com.smartflow.smestocksensebackend.repository.ProductRepository;
@@ -60,6 +62,7 @@ public class ForecastServiceImpl implements ForecastService {
     private final InventoryTransactionRepository inventoryTransactionRepository;
     private final SalesHistoryRepository salesHistoryRepository;
     private final ForecastResultRepository forecastResultRepository;
+    private final DailyForecastResultRepository dailyForecastResultRepository;
     private final ForecastModelMetadataRepository forecastModelMetadataRepository;
     private final ForecastDriftLogRepository forecastDriftLogRepository;
     private final RestClient aiServiceRestClient;
@@ -96,6 +99,7 @@ public class ForecastServiceImpl implements ForecastService {
 
         BigDecimal smape;
         Map<Integer, BigDecimal> forecastByHorizon;
+        List<AiForecastClientResult.DailyPrediction> dailyPredictions = List.of();
         ForecastMode mode;
 
         if (dataDays < MIN_HISTORY_DAYS) {
@@ -110,6 +114,9 @@ public class ForecastServiceImpl implements ForecastService {
             for (Integer horizon : HORIZONS) {
                 BigDecimal value = result.forecast() != null ? result.forecast().get(String.valueOf(horizon)) : null;
                 forecastByHorizon.put(horizon, value != null ? value : BigDecimal.ZERO);
+            }
+            if (result.dailyPredictions() != null) {
+                dailyPredictions = result.dailyPredictions();
             }
         }
 
@@ -144,6 +151,7 @@ public class ForecastServiceImpl implements ForecastService {
             forecastResult.setAverageDailyDemand(forecastByHorizon.get(horizon));
             forecastResultRepository.save(forecastResult);
         }
+        persistDailyForecasts(savedMetadata, dailyPredictions);
 
         int currentStock = currentStock(productId, warehouseId);
         Integer minStock = effectiveMinStockResolver
@@ -320,6 +328,17 @@ public class ForecastServiceImpl implements ForecastService {
                 .body(request)
                 .retrieve()
                 .body(AiForecastClientResult.class);
+    }
+
+    private void persistDailyForecasts(ForecastModelMetadata metadata,
+            List<AiForecastClientResult.DailyPrediction> dailyPredictions) {
+        for (AiForecastClientResult.DailyPrediction prediction : dailyPredictions) {
+            DailyForecastResult row = new DailyForecastResult();
+            row.setModelMetadata(metadata);
+            row.setForecastDate(LocalDate.parse(prediction.date()));
+            row.setPredictedQuantity(prediction.predictedQuantity());
+            dailyForecastResultRepository.save(row);
+        }
     }
 
     private List<SalesHistory> normalizeDailySeries(List<SalesHistory> history, SalesHistorySource source) {

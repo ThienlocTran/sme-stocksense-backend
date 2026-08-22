@@ -36,7 +36,7 @@ public class ReplenishmentSuggestionController {
     public ForecastReplenishmentRecommendationResponse recommendation(
             @RequestParam @Positive Long productId,
             @RequestParam @Positive Long warehouseId,
-            @RequestParam @Min(7) @Max(30) Short horizonDays) {
-        return recommendationService.getRecommendation(productId, warehouseId, horizonDays);
+            @RequestParam @Pattern(regexp = "7|14|30", message = "horizonDays chỉ hỗ trợ 7, 14 hoặc 30.") String horizonDays) {
+        return recommendationService.getRecommendation(productId, warehouseId, Short.valueOf(horizonDays));
     }
 }

@@ -574,7 +574,7 @@ class ForecastServiceImplTest {
         ForecastModelMetadata metadata = metadata(ForecastDatasetType.EXTERNAL, SalesHistorySource.EXTERNAL_RETAIL);
         stubLatestForecast(metadata, SalesHistorySource.EXTERNAL_RETAIL);
 
-        ForecastResponse response = service.getLatestForecast(1L, 2L);
+        ForecastResponse response = service.getLatestForecast(1L, 2L, SalesHistorySource.EXTERNAL_RETAIL);
 
         assertEquals("EXTERNAL", response.datasetType());
         assertEquals("EXTERNAL_RETAIL", response.source());
@@ -685,7 +685,7 @@ class ForecastServiceImplTest {
                 .thenReturn(List.of(forecastResult(7), forecastResult(14), forecastResult(30)));
         when(inventoryLevelRepository.findByProductIdAndWarehouseId(1L, 2L)).thenReturn(Optional.empty());
         when(dailyForecastResultRepository.findByModelMetadataIdOrderByForecastDateAsc(10L)).thenReturn(List.of());
-        if (source != null) {
+        if (metadata.getHistorySource() != null) {
             when(salesHistoryRepository.findByProductIdAndWarehouseIdAndSourceOrderByNgayAsc(1L, 2L, source))
                     .thenReturn(buildHistory(90, 5, source));
         }

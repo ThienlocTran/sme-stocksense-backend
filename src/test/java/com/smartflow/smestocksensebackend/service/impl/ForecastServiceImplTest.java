@@ -1,10 +1,12 @@
 package com.smartflow.smestocksensebackend.service.impl;
 
+import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.smartflow.smestocksensebackend.dto.forecast.AiForecastClientRequest;
 import com.smartflow.smestocksensebackend.dto.forecast.AiForecastClientResult;
 import com.smartflow.smestocksensebackend.dto.forecast.DriftResponse;
 import com.smartflow.smestocksensebackend.dto.forecast.ForecastResponse;
 import com.smartflow.smestocksensebackend.dto.inventory.DailyQuantityProjection;
+import com.smartflow.smestocksensebackend.entity.DailyForecastResult;
 import com.smartflow.smestocksensebackend.entity.ForecastDatasetType;
 import com.smartflow.smestocksensebackend.entity.ForecastMode;
 import com.smartflow.smestocksensebackend.entity.ForecastModelMetadata;
@@ -18,6 +20,7 @@ import com.smartflow.smestocksensebackend.exception.NotFoundException;
 import com.smartflow.smestocksensebackend.repository.ForecastDriftLogRepository;
 import com.smartflow.smestocksensebackend.repository.ForecastModelMetadataRepository;
 import com.smartflow.smestocksensebackend.repository.ForecastResultRepository;
+import com.smartflow.smestocksensebackend.repository.DailyForecastResultRepository;
 import com.smartflow.smestocksensebackend.repository.InventoryLevelRepository;
 import com.smartflow.smestocksensebackend.repository.InventoryTransactionRepository;
 import com.smartflow.smestocksensebackend.repository.ProductRepository;
@@ -37,6 +40,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -64,6 +68,8 @@ class ForecastServiceImplTest {
     @Mock
     ForecastResultRepository forecastResultRepository;
     @Mock
+    DailyForecastResultRepository dailyForecastResultRepository;
+    @Mock
     ForecastModelMetadataRepository forecastModelMetadataRepository;
     @Mock
     ForecastDriftLogRepository forecastDriftLogRepository;
@@ -84,7 +90,8 @@ class ForecastServiceImplTest {
     void setUp() {
         service = new ForecastServiceImpl(productRepository, warehouseRepository, inventoryLevelRepository,
                 inventoryTransactionRepository, salesHistoryRepository, forecastResultRepository,
-                forecastModelMetadataRepository, forecastDriftLogRepository, aiServiceRestClient);
+                dailyForecastResultRepository, forecastModelMetadataRepository, forecastDriftLogRepository,
+                aiServiceRestClient);
         service.warehouseStockConfigRepository = warehouseStockConfigRepository;
         service.warehouseCapacityService = warehouseCapacityService;
         service.effectiveMinStockResolver = effectiveMinStockResolver = new com.smartflow.smestocksensebackend.service.EffectiveMinStockResolver();
@@ -106,6 +113,13 @@ class ForecastServiceImplTest {
                 .thenReturn(Optional.of(config));
         org.mockito.Mockito.lenient().when(warehouseCapacityService.getRemainingCapacity(2L))
                 .thenReturn(new BigDecimal("1000.000"));
+        AtomicLong metadataIds = new AtomicLong(10);
+        org.mockito.Mockito.lenient().when(forecastModelMetadataRepository.save(any(ForecastModelMetadata.class)))
+                .thenAnswer(invocation -> {
+                    ForecastModelMetadata metadata = invocation.getArgument(0);
+                    metadata.setId(metadataIds.getAndIncrement());
+                    return metadata;
+                });
     }
 
     private List<SalesHistory> buildHistory(int days, int dailyQuantity) {
@@ -170,8 +184,9 @@ class ForecastServiceImplTest {
         when(bodySpec.body(any(AiForecastClientRequest.class))).thenReturn(bodySpec);
         when(bodySpec.retrieve()).thenReturn(responseSpec);
         when(responseSpec.body(eq(AiForecastClientResult.class))).thenReturn(new AiForecastClientResult(
-                new BigDecimal("8.5"), 72, 18,
-                Map.of("7", new BigDecimal("6"), "14", new BigDecimal("6"), "30", new BigDecimal("6"))));
+                new BigDecimal("8.5"), new BigDecimal("1.25"), new BigDecimal("2.50"), 72, 18,
+                Map.of("7", new BigDecimal("6"), "14", new BigDecimal("6"), "30", new BigDecimal("6")),
+                List.of()));
 
         ForecastResponse response = service.runForecast(1L, 2L);
 
@@ -213,8 +228,9 @@ class ForecastServiceImplTest {
         when(bodySpec.body(any(AiForecastClientRequest.class))).thenReturn(bodySpec);
         when(bodySpec.retrieve()).thenReturn(responseSpec);
         when(responseSpec.body(eq(AiForecastClientResult.class))).thenReturn(new AiForecastClientResult(
-                new BigDecimal("5"), 70, 20,
-                Map.of("7", new BigDecimal("5"), "14", new BigDecimal("5"), "30", new BigDecimal("5"))));
+                new BigDecimal("5"), new BigDecimal("1.25"), new BigDecimal("2.50"), 70, 20,
+                Map.of("7", new BigDecimal("5"), "14", new BigDecimal("5"), "30", new BigDecimal("5")),
+                List.of()));
 
         service.runForecast(1L, 2L);
 
@@ -361,6 +377,95 @@ class ForecastServiceImplTest {
     }
 
     @Test
+    void aiForecastClientResult_shouldDeserializeDailyPredictions() throws Exception {
+        String json = """
+                {
+                  "smape": 8.5,
+                  "mae": 1.25,
+                  "rmse": 2.5,
+                  "train_size": 72,
+                  "test_size": 18,
+                  "forecast": {"7": 6.1, "14": 6.2, "30": 6.3},
+                  "daily_predictions": [
+                    {"date": "2026-03-12", "predicted_quantity": 4.25}
+                  ]
+                }
+                """;
+
+        AiForecastClientResult result = JsonMapper.builder()
+                .build()
+                .readValue(json, AiForecastClientResult.class);
+
+        assertEquals("2026-03-12", result.dailyPredictions().get(0).date());
+        assertEquals(new BigDecimal("4.25"), result.dailyPredictions().get(0).predictedQuantity());
+        assertEquals(new BigDecimal("1.25"), result.mae());
+        assertEquals(new BigDecimal("2.5"), result.rmse());
+    }
+
+    @Test
+    void runForecast_shouldPersistRealDailyPredictionsFromPythonResponse() {
+        List<SalesHistory> history = buildHistory(90, 5, SalesHistorySource.THUC_TE);
+        when(productRepository.findById(1L)).thenReturn(Optional.of(product));
+        when(warehouseRepository.findById(2L)).thenReturn(Optional.of(warehouse));
+        when(salesHistoryRepository.findByProductIdAndWarehouseIdAndSourceOrderByNgayAsc(1L, 2L,
+                SalesHistorySource.THUC_TE)).thenReturn(history);
+        when(forecastResultRepository.findMaxVersion(1L, 2L)).thenReturn(null, 1);
+        when(productRepository.getReferenceById(1L)).thenReturn(product);
+        when(warehouseRepository.getReferenceById(2L)).thenReturn(warehouse);
+        when(inventoryLevelRepository.findByProductIdAndWarehouseId(1L, 2L)).thenReturn(Optional.empty());
+        stubAiForecast(null, dailyPredictions(LocalDate.parse("2026-03-12"), 30));
+
+        service.runForecast(1L, 2L);
+        service.runForecast(1L, 2L);
+
+        ArgumentCaptor<DailyForecastResult> dailyCaptor = ArgumentCaptor.forClass(DailyForecastResult.class);
+        verify(dailyForecastResultRepository, org.mockito.Mockito.times(60)).save(dailyCaptor.capture());
+        List<DailyForecastResult> rows = dailyCaptor.getAllValues();
+        assertEquals(30, rows.subList(0, 30).size());
+        assertEquals(LocalDate.parse("2026-03-12"), rows.get(0).getForecastDate());
+        assertEquals(LocalDate.parse("2026-04-10"), rows.get(29).getForecastDate());
+        assertEquals(new BigDecimal("1"), rows.get(0).getPredictedQuantity());
+        assertEquals(new BigDecimal("30"), rows.get(29).getPredictedQuantity());
+        assertEquals(10L, rows.get(0).getModelMetadata().getId());
+        assertEquals(11L, rows.get(30).getModelMetadata().getId());
+
+        ArgumentCaptor<ForecastResult> summaryCaptor = ArgumentCaptor.forClass(ForecastResult.class);
+        verify(forecastResultRepository, org.mockito.Mockito.times(6)).save(summaryCaptor.capture());
+        assertEquals(3, summaryCaptor.getAllValues().stream()
+                .filter(row -> row.getModelMetadata().getId().equals(10L))
+                .count());
+    }
+
+    @Test
+    void runForecast_shouldPersistEvaluationMetrics() {
+        List<SalesHistory> history = buildHistory(90, 5, SalesHistorySource.THUC_TE);
+        when(productRepository.findById(1L)).thenReturn(Optional.of(product));
+        when(warehouseRepository.findById(2L)).thenReturn(Optional.of(warehouse));
+        when(salesHistoryRepository.findByProductIdAndWarehouseIdAndSourceOrderByNgayAsc(1L, 2L,
+                SalesHistorySource.THUC_TE)).thenReturn(history);
+        when(forecastResultRepository.findMaxVersion(1L, 2L)).thenReturn(null);
+        when(productRepository.getReferenceById(1L)).thenReturn(product);
+        when(warehouseRepository.getReferenceById(2L)).thenReturn(warehouse);
+        when(inventoryLevelRepository.findByProductIdAndWarehouseId(1L, 2L)).thenReturn(Optional.empty());
+        stubAiForecast(null, List.of(), new BigDecimal("3.25"), new BigDecimal("4.50"));
+
+        service.runForecast(1L, 2L);
+
+        ArgumentCaptor<ForecastModelMetadata> captor = ArgumentCaptor.forClass(ForecastModelMetadata.class);
+        verify(forecastModelMetadataRepository).save(captor.capture());
+        assertEquals(new BigDecimal("3.25"), captor.getValue().getMae());
+        assertEquals(new BigDecimal("4.50"), captor.getValue().getRmse());
+    }
+
+    @Test
+    void forecastModelMetadata_shouldAllowNullableLegacyMetrics() {
+        ForecastModelMetadata metadata = new ForecastModelMetadata();
+
+        assertNull(metadata.getMae());
+        assertNull(metadata.getRmse());
+    }
+
+    @Test
     void runForecast_shouldThrowNotFound_whenProductMissing() {
         when(productRepository.findById(99L)).thenReturn(Optional.empty());
         assertThrows(NotFoundException.class, () -> service.runForecast(99L, 2L));
@@ -441,6 +546,16 @@ class ForecastServiceImplTest {
     }
 
     private void stubAiForecast(ArgumentCaptor<AiForecastClientRequest> requestCaptor) {
+        stubAiForecast(requestCaptor, List.of());
+    }
+
+    private void stubAiForecast(ArgumentCaptor<AiForecastClientRequest> requestCaptor,
+            List<AiForecastClientResult.DailyPrediction> dailyPredictions) {
+        stubAiForecast(requestCaptor, dailyPredictions, new BigDecimal("1.25"), new BigDecimal("2.50"));
+    }
+
+    private void stubAiForecast(ArgumentCaptor<AiForecastClientRequest> requestCaptor,
+            List<AiForecastClientResult.DailyPrediction> dailyPredictions, BigDecimal mae, BigDecimal rmse) {
         RestClient.RequestBodyUriSpec bodyUriSpec = mock(RestClient.RequestBodyUriSpec.class);
         RestClient.RequestBodySpec bodySpec = mock(RestClient.RequestBodySpec.class);
         RestClient.ResponseSpec responseSpec = mock(RestClient.ResponseSpec.class);
@@ -453,7 +568,17 @@ class ForecastServiceImplTest {
         }
         when(bodySpec.retrieve()).thenReturn(responseSpec);
         when(responseSpec.body(eq(AiForecastClientResult.class))).thenReturn(new AiForecastClientResult(
-                new BigDecimal("5"), 70, 20,
-                Map.of("7", new BigDecimal("5"), "14", new BigDecimal("5"), "30", new BigDecimal("5"))));
+                new BigDecimal("5"), mae, rmse, 70, 20,
+                Map.of("7", new BigDecimal("5"), "14", new BigDecimal("5"), "30", new BigDecimal("5")),
+                dailyPredictions));
+    }
+
+    private List<AiForecastClientResult.DailyPrediction> dailyPredictions(LocalDate start, int days) {
+        List<AiForecastClientResult.DailyPrediction> predictions = new ArrayList<>();
+        for (int i = 0; i < days; i++) {
+            predictions.add(new AiForecastClientResult.DailyPrediction(start.plusDays(i).toString(),
+                    BigDecimal.valueOf(i + 1)));
+        }
+        return predictions;
     }
 }

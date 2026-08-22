@@ -14,6 +14,9 @@ public interface SalesHistoryRepository extends JpaRepository<SalesHistory, Long
 
     List<SalesHistory> findByProductIdAndWarehouseIdOrderByNgayAsc(Long productId, Long warehouseId);
 
+    List<SalesHistory> findByProductIdAndWarehouseIdAndSourceOrderByNgayAsc(Long productId, Long warehouseId,
+            SalesHistorySource source);
+
     long countByProductIdAndWarehouseId(Long productId, Long warehouseId);
 
     void deleteByProductIdAndWarehouseId(Long productId, Long warehouseId);

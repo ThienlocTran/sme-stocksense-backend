@@ -75,15 +75,21 @@ public class ForecastServiceImpl implements ForecastService {
     @Override
     @Transactional
     public ForecastResponse runForecast(Long productId, Long warehouseId) {
+        return runForecast(productId, warehouseId, SalesHistorySource.THUC_TE);
+    }
+
+    ForecastResponse runForecast(Long productId, Long warehouseId, SalesHistorySource source) {
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new NotFoundException("Không tìm thấy sản phẩm với id " + productId));
         Warehouse warehouse = warehouseRepository.findById(warehouseId)
                 .orElseThrow(() -> new NotFoundException("Không tìm thấy kho với id " + warehouseId));
 
-        syncRealSalesHistory(productId, warehouseId);
+        if (source == SalesHistorySource.THUC_TE) {
+            syncRealSalesHistory(productId, warehouseId);
+        }
 
         List<SalesHistory> history = salesHistoryRepository
-                .findByProductIdAndWarehouseIdOrderByNgayAsc(productId, warehouseId);
+                .findByProductIdAndWarehouseIdAndSourceOrderByNgayAsc(productId, warehouseId, source);
         int dataDays = history.size();
 
         BigDecimal smape;
@@ -115,7 +121,7 @@ public class ForecastServiceImpl implements ForecastService {
         metadata.setVersion(version);
         metadata.setDataDays(dataDays);
         metadata.setMode(mode);
-        metadata.setDatasetType(datasetType(history, mode));
+        metadata.setDatasetType(datasetType(source, mode));
         if (!history.isEmpty()) {
             metadata.setHistoryStartDate(history.get(0).getNgay());
             metadata.setHistoryEndDate(history.get(history.size() - 1).getNgay());
@@ -376,24 +382,17 @@ public class ForecastServiceImpl implements ForecastService {
         return value != null ? value : fallback;
     }
 
-    private ForecastDatasetType datasetType(List<SalesHistory> history, ForecastMode mode) {
+    private ForecastDatasetType datasetType(SalesHistorySource source, ForecastMode mode) {
         if (mode == ForecastMode.COLD_START_AVG) {
             return ForecastDatasetType.COLD_START;
         }
-        long realRows = history.stream().filter(row -> row.getSource() == SalesHistorySource.THUC_TE).count();
-        long externalRows = history.stream()
-                .filter(row -> row.getSource() == SalesHistorySource.EXTERNAL_RETAIL
-                        || row.getSource() == SalesHistorySource.EXTERNAL_M5
-                        || row.getSource() == SalesHistorySource.EXTERNAL_STORE_ITEM)
-                .count();
-        if (realRows == history.size()) {
+        if (source == SalesHistorySource.THUC_TE) {
             return ForecastDatasetType.THUC_TE;
         }
-        if (externalRows == history.size()) {
+        if (source == SalesHistorySource.EXTERNAL_RETAIL
+                || source == SalesHistorySource.EXTERNAL_M5
+                || source == SalesHistorySource.EXTERNAL_STORE_ITEM) {
             return ForecastDatasetType.EXTERNAL;
-        }
-        if (realRows > 0 || externalRows > 0) {
-            return ForecastDatasetType.HON_HOP;
         }
         return ForecastDatasetType.LEGACY_UNKNOWN;
     }

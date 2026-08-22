@@ -5,6 +5,7 @@ import com.smartflow.smestocksensebackend.dto.forecast.AiForecastClientResult;
 import com.smartflow.smestocksensebackend.dto.forecast.DriftResponse;
 import com.smartflow.smestocksensebackend.dto.forecast.ForecastResponse;
 import com.smartflow.smestocksensebackend.dto.inventory.DailyQuantityProjection;
+import com.smartflow.smestocksensebackend.entity.ForecastDatasetType;
 import com.smartflow.smestocksensebackend.entity.ForecastMode;
 import com.smartflow.smestocksensebackend.entity.ForecastModelMetadata;
 import com.smartflow.smestocksensebackend.entity.ForecastResult;
@@ -107,6 +108,10 @@ class ForecastServiceImplTest {
     }
 
     private List<SalesHistory> buildHistory(int days, int dailyQuantity) {
+        return buildHistory(days, dailyQuantity, SalesHistorySource.THUC_TE);
+    }
+
+    private List<SalesHistory> buildHistory(int days, int dailyQuantity, SalesHistorySource source) {
         List<SalesHistory> rows = new ArrayList<>();
         LocalDate start = LocalDate.now().minusDays(days);
         for (int i = 0; i < days; i++) {
@@ -115,6 +120,7 @@ class ForecastServiceImplTest {
             row.setWarehouse(warehouse);
             row.setNgay(start.plusDays(i));
             row.setQuantity(dailyQuantity);
+            row.setSource(source);
             rows.add(row);
         }
         return rows;
@@ -125,7 +131,8 @@ class ForecastServiceImplTest {
         List<SalesHistory> history = buildHistory(10, 5);
         when(productRepository.findById(1L)).thenReturn(Optional.of(product));
         when(warehouseRepository.findById(2L)).thenReturn(Optional.of(warehouse));
-        when(salesHistoryRepository.findByProductIdAndWarehouseIdOrderByNgayAsc(1L, 2L)).thenReturn(history);
+        when(salesHistoryRepository.findByProductIdAndWarehouseIdAndSourceOrderByNgayAsc(1L, 2L,
+                SalesHistorySource.THUC_TE)).thenReturn(history);
         when(forecastResultRepository.findMaxVersion(1L, 2L)).thenReturn(null);
         when(productRepository.getReferenceById(1L)).thenReturn(product);
         when(warehouseRepository.getReferenceById(2L)).thenReturn(warehouse);
@@ -144,7 +151,8 @@ class ForecastServiceImplTest {
         List<SalesHistory> history = buildHistory(90, 5);
         when(productRepository.findById(1L)).thenReturn(Optional.of(product));
         when(warehouseRepository.findById(2L)).thenReturn(Optional.of(warehouse));
-        when(salesHistoryRepository.findByProductIdAndWarehouseIdOrderByNgayAsc(1L, 2L)).thenReturn(history);
+        when(salesHistoryRepository.findByProductIdAndWarehouseIdAndSourceOrderByNgayAsc(1L, 2L,
+                SalesHistorySource.THUC_TE)).thenReturn(history);
         when(forecastResultRepository.findMaxVersion(1L, 2L)).thenReturn(3);
         when(productRepository.getReferenceById(1L)).thenReturn(product);
         when(warehouseRepository.getReferenceById(2L)).thenReturn(warehouse);
@@ -182,7 +190,8 @@ class ForecastServiceImplTest {
         List<SalesHistory> history = buildHistory(90, 5);
         when(productRepository.findById(1L)).thenReturn(Optional.of(product));
         when(warehouseRepository.findById(2L)).thenReturn(Optional.of(warehouse));
-        when(salesHistoryRepository.findByProductIdAndWarehouseIdOrderByNgayAsc(1L, 2L)).thenReturn(history);
+        when(salesHistoryRepository.findByProductIdAndWarehouseIdAndSourceOrderByNgayAsc(1L, 2L,
+                SalesHistorySource.THUC_TE)).thenReturn(history);
         when(forecastResultRepository.findMaxVersion(1L, 2L)).thenReturn(null);
         when(productRepository.getReferenceById(1L)).thenReturn(product);
         when(warehouseRepository.getReferenceById(2L)).thenReturn(warehouse);
@@ -214,6 +223,81 @@ class ForecastServiceImplTest {
         assertEquals(realDate, saved.getNgay());
         assertEquals(99, saved.getQuantity());
         assertEquals(SalesHistorySource.THUC_TE, saved.getSource());
+    }
+
+    @Test
+    void runForecast_shouldQueryOnlySelectedThucTeSource() {
+        List<SalesHistory> history = buildHistory(90, 5, SalesHistorySource.THUC_TE);
+        when(productRepository.findById(1L)).thenReturn(Optional.of(product));
+        when(warehouseRepository.findById(2L)).thenReturn(Optional.of(warehouse));
+        when(salesHistoryRepository.findByProductIdAndWarehouseIdAndSourceOrderByNgayAsc(1L, 2L,
+                SalesHistorySource.THUC_TE)).thenReturn(history);
+        when(forecastResultRepository.findMaxVersion(1L, 2L)).thenReturn(null);
+        when(productRepository.getReferenceById(1L)).thenReturn(product);
+        when(warehouseRepository.getReferenceById(2L)).thenReturn(warehouse);
+        when(inventoryLevelRepository.findByProductIdAndWarehouseId(1L, 2L)).thenReturn(Optional.empty());
+        stubAiForecast();
+
+        service.runForecast(1L, 2L);
+
+        verify(salesHistoryRepository).findByProductIdAndWarehouseIdAndSourceOrderByNgayAsc(1L, 2L,
+                SalesHistorySource.THUC_TE);
+    }
+
+    @Test
+    void runForecast_shouldQueryOnlySelectedExternalRetailSource() {
+        List<SalesHistory> history = buildHistory(90, 7, SalesHistorySource.EXTERNAL_RETAIL);
+        when(productRepository.findById(1L)).thenReturn(Optional.of(product));
+        when(warehouseRepository.findById(2L)).thenReturn(Optional.of(warehouse));
+        when(salesHistoryRepository.findByProductIdAndWarehouseIdAndSourceOrderByNgayAsc(1L, 2L,
+                SalesHistorySource.EXTERNAL_RETAIL)).thenReturn(history);
+        when(forecastResultRepository.findMaxVersion(1L, 2L)).thenReturn(null);
+        when(productRepository.getReferenceById(1L)).thenReturn(product);
+        when(warehouseRepository.getReferenceById(2L)).thenReturn(warehouse);
+        when(inventoryLevelRepository.findByProductIdAndWarehouseId(1L, 2L)).thenReturn(Optional.empty());
+        stubAiForecast();
+
+        service.runForecast(1L, 2L, SalesHistorySource.EXTERNAL_RETAIL);
+
+        verify(salesHistoryRepository).findByProductIdAndWarehouseIdAndSourceOrderByNgayAsc(1L, 2L,
+                SalesHistorySource.EXTERNAL_RETAIL);
+    }
+
+    @Test
+    void runForecast_shouldNotDoubleDemandForSameCalendarDateAcrossSources() {
+        SalesHistory real = salesHistory(LocalDate.now().minusDays(1), 5, SalesHistorySource.THUC_TE);
+        when(productRepository.findById(1L)).thenReturn(Optional.of(product));
+        when(warehouseRepository.findById(2L)).thenReturn(Optional.of(warehouse));
+        when(salesHistoryRepository.findByProductIdAndWarehouseIdAndSourceOrderByNgayAsc(1L, 2L,
+                SalesHistorySource.THUC_TE)).thenReturn(List.of(real));
+        when(forecastResultRepository.findMaxVersion(1L, 2L)).thenReturn(null);
+        when(productRepository.getReferenceById(1L)).thenReturn(product);
+        when(warehouseRepository.getReferenceById(2L)).thenReturn(warehouse);
+        when(inventoryLevelRepository.findByProductIdAndWarehouseId(1L, 2L)).thenReturn(Optional.empty());
+
+        ForecastResponse response = service.runForecast(1L, 2L);
+
+        assertEquals(new BigDecimal("5.00"), response.forecast7d());
+    }
+
+    @Test
+    void runForecast_shouldStoreDatasetTypeFromSelectedSource() {
+        List<SalesHistory> history = buildHistory(90, 7, SalesHistorySource.EXTERNAL_RETAIL);
+        when(productRepository.findById(1L)).thenReturn(Optional.of(product));
+        when(warehouseRepository.findById(2L)).thenReturn(Optional.of(warehouse));
+        when(salesHistoryRepository.findByProductIdAndWarehouseIdAndSourceOrderByNgayAsc(1L, 2L,
+                SalesHistorySource.EXTERNAL_RETAIL)).thenReturn(history);
+        when(forecastResultRepository.findMaxVersion(1L, 2L)).thenReturn(null);
+        when(productRepository.getReferenceById(1L)).thenReturn(product);
+        when(warehouseRepository.getReferenceById(2L)).thenReturn(warehouse);
+        when(inventoryLevelRepository.findByProductIdAndWarehouseId(1L, 2L)).thenReturn(Optional.empty());
+        stubAiForecast();
+
+        service.runForecast(1L, 2L, SalesHistorySource.EXTERNAL_RETAIL);
+
+        ArgumentCaptor<ForecastModelMetadata> captor = ArgumentCaptor.forClass(ForecastModelMetadata.class);
+        verify(forecastModelMetadataRepository).save(captor.capture());
+        assertEquals(ForecastDatasetType.EXTERNAL, captor.getValue().getDatasetType());
     }
 
     @Test
@@ -280,5 +364,28 @@ class ForecastServiceImplTest {
                 return total;
             }
         };
+    }
+
+    private SalesHistory salesHistory(LocalDate date, int quantity, SalesHistorySource source) {
+        SalesHistory row = new SalesHistory();
+        row.setProduct(product);
+        row.setWarehouse(warehouse);
+        row.setNgay(date);
+        row.setQuantity(quantity);
+        row.setSource(source);
+        return row;
+    }
+
+    private void stubAiForecast() {
+        RestClient.RequestBodyUriSpec bodyUriSpec = mock(RestClient.RequestBodyUriSpec.class);
+        RestClient.RequestBodySpec bodySpec = mock(RestClient.RequestBodySpec.class);
+        RestClient.ResponseSpec responseSpec = mock(RestClient.ResponseSpec.class);
+        when(aiServiceRestClient.post()).thenReturn(bodyUriSpec);
+        when(bodyUriSpec.uri(anyString())).thenReturn(bodySpec);
+        when(bodySpec.body(any(AiForecastClientRequest.class))).thenReturn(bodySpec);
+        when(bodySpec.retrieve()).thenReturn(responseSpec);
+        when(responseSpec.body(eq(AiForecastClientResult.class))).thenReturn(new AiForecastClientResult(
+                new BigDecimal("5"), 70, 20,
+                Map.of("7", new BigDecimal("5"), "14", new BigDecimal("5"), "30", new BigDecimal("5"))));
     }
 }

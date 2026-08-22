@@ -138,7 +138,7 @@ public class SecurityConfig {
                                                 .requestMatchers(HttpMethod.POST, "/api/excel-imports/validate")
                                                 .hasAnyRole("ADMIN", "MANAGER", "EMPLOYEE")
                                                 .requestMatchers(HttpMethod.POST, "/api/excel-imports")
-                                                .hasAnyRole("ADMIN", "EMPLOYEE")
+                                                .hasAnyRole("ADMIN", "MANAGER")
                                                 .requestMatchers(HttpMethod.GET, "/api/partners")
                                                 .hasAnyRole("ADMIN", "MANAGER", "EMPLOYEE")
                                                 .requestMatchers(HttpMethod.POST, "/api/partners")

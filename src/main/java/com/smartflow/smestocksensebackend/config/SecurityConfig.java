@@ -252,6 +252,8 @@ public class SecurityConfig {
                                                 .hasAnyRole("ADMIN", "MANAGER")
                                                 .requestMatchers(HttpMethod.POST, "/api/forecast/*/*")
                                                 .hasAnyRole("ADMIN", "MANAGER")
+                                                .requestMatchers(HttpMethod.GET, "/api/forecasts/availability")
+                                                .hasAnyRole("ADMIN", "MANAGER", "EMPLOYEE")
                                                 .requestMatchers(HttpMethod.GET, "/api/forecast/*/*")
                                                 .hasAnyRole("ADMIN", "MANAGER", "EMPLOYEE")
                                                 .anyRequest().authenticated())

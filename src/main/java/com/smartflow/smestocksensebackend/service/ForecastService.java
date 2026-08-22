@@ -1,6 +1,7 @@
 package com.smartflow.smestocksensebackend.service;
 
 import com.smartflow.smestocksensebackend.dto.forecast.DriftResponse;
+import com.smartflow.smestocksensebackend.dto.forecast.ForecastAvailabilityResponse;
 import com.smartflow.smestocksensebackend.dto.forecast.ForecastResponse;
 import com.smartflow.smestocksensebackend.entity.SalesHistorySource;
 
@@ -19,4 +20,6 @@ public interface ForecastService {
 
     /** So sánh dự báo đã lưu (horizon 7 ngày) với thực tế xuất kho 30 ngày gần nhất. */
     DriftResponse checkDrift(Long productId, Long warehouseId);
+
+    ForecastAvailabilityResponse getAvailability(SalesHistorySource source);
 }

@@ -3,6 +3,7 @@ package com.smartflow.smestocksensebackend.service.impl;
 import com.smartflow.smestocksensebackend.dto.forecast.AiForecastClientRequest;
 import com.smartflow.smestocksensebackend.dto.forecast.AiForecastClientResult;
 import com.smartflow.smestocksensebackend.dto.forecast.DriftResponse;
+import com.smartflow.smestocksensebackend.dto.forecast.ForecastAvailabilityResponse;
 import com.smartflow.smestocksensebackend.dto.forecast.ForecastResponse;
 import com.smartflow.smestocksensebackend.dto.inventory.DailyQuantityProjection;
 import com.smartflow.smestocksensebackend.entity.DailyForecastResult;
@@ -80,6 +81,21 @@ public class ForecastServiceImpl implements ForecastService {
     @Transactional
     public ForecastResponse runForecast(Long productId, Long warehouseId) {
         return runForecast(productId, warehouseId, SalesHistorySource.EXTERNAL_STORE_ITEM);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ForecastAvailabilityResponse getAvailability(SalesHistorySource source) {
+        SalesHistorySource effectiveSource = source == null ? SalesHistorySource.EXTERNAL_STORE_ITEM : source;
+        List<ForecastAvailabilityResponse.Combination> combinations = salesHistoryRepository
+                .findForecastAvailability(effectiveSource, MIN_HISTORY_DAYS)
+                .stream()
+                .map(row -> new ForecastAvailabilityResponse.Combination(
+                        row.getProductId(), row.getProductCode(), row.getProductName(),
+                        row.getWarehouseId(), row.getWarehouseCode(), row.getWarehouseName(),
+                        row.getHistoryDays(), row.getHistoryStart(), row.getHistoryEnd()))
+                .toList();
+        return new ForecastAvailabilityResponse(effectiveSource.name(), combinations);
     }
 
     @Override

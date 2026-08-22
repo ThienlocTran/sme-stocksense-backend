@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.smartflow.smestocksensebackend.dto.forecast.AiForecastClientRequest;
 import com.smartflow.smestocksensebackend.dto.forecast.AiForecastClientResult;
 import com.smartflow.smestocksensebackend.dto.forecast.DriftResponse;
+import com.smartflow.smestocksensebackend.dto.forecast.ForecastAvailabilityResponse;
 import com.smartflow.smestocksensebackend.dto.forecast.ForecastResponse;
 import com.smartflow.smestocksensebackend.dto.inventory.DailyQuantityProjection;
 import com.smartflow.smestocksensebackend.entity.DailyForecastResult;
@@ -139,6 +140,34 @@ class ForecastServiceImplTest {
             rows.add(row);
         }
         return rows;
+    }
+
+    @Test
+    void getAvailability_shouldDefaultToExternalStoreItemSource() {
+        LocalDate start = LocalDate.parse("2019-01-01");
+        when(salesHistoryRepository.findForecastAvailability(SalesHistorySource.EXTERNAL_STORE_ITEM, 60))
+                .thenReturn(List.of(row(1L, "SP001", 2L, "K001", 1826L, start, LocalDate.parse("2023-12-31"))));
+
+        ForecastAvailabilityResponse response = service.getAvailability(null);
+
+        assertEquals("EXTERNAL_STORE_ITEM", response.source());
+        assertEquals(1, response.combinations().size());
+        assertEquals("SP001", response.combinations().get(0).productCode());
+        assertEquals("K001", response.combinations().get(0).warehouseCode());
+        assertEquals(1826L, response.combinations().get(0).historyDays());
+    }
+
+    @Test
+    void getAvailability_shouldUseExplicitSource() {
+        when(salesHistoryRepository.findForecastAvailability(SalesHistorySource.EXTERNAL_RETAIL, 60))
+                .thenReturn(List.of(row(98L, "SP098", 2L, "K002", 362L,
+                        LocalDate.parse("2022-01-01"), LocalDate.parse("2022-12-28"))));
+
+        ForecastAvailabilityResponse response = service.getAvailability(SalesHistorySource.EXTERNAL_RETAIL);
+
+        assertEquals("EXTERNAL_RETAIL", response.source());
+        assertEquals("SP098", response.combinations().get(0).productCode());
+        assertEquals("K002", response.combinations().get(0).warehouseCode());
     }
 
     @Test
@@ -628,6 +657,69 @@ class ForecastServiceImplTest {
         result.setHorizonDays(horizon);
         result.setPredictedQuantity(new BigDecimal("5"));
         return result;
+    }
+
+    private SalesHistoryRepository.ForecastAvailabilityRow row(Long productId, String productCode, Long warehouseId,
+            String warehouseCode, Long historyDays, LocalDate historyStart, LocalDate historyEnd) {
+        return new AvailabilityRow(productId, productCode, "Product " + productCode, warehouseId, warehouseCode,
+                "Warehouse " + warehouseCode, historyDays, historyStart, historyEnd);
+    }
+
+    private record AvailabilityRow(
+            Long productId,
+            String productCode,
+            String productName,
+            Long warehouseId,
+            String warehouseCode,
+            String warehouseName,
+            Long historyDays,
+            LocalDate historyStart,
+            LocalDate historyEnd) implements SalesHistoryRepository.ForecastAvailabilityRow {
+
+        @Override
+        public Long getProductId() {
+            return productId;
+        }
+
+        @Override
+        public String getProductCode() {
+            return productCode;
+        }
+
+        @Override
+        public String getProductName() {
+            return productName;
+        }
+
+        @Override
+        public Long getWarehouseId() {
+            return warehouseId;
+        }
+
+        @Override
+        public String getWarehouseCode() {
+            return warehouseCode;
+        }
+
+        @Override
+        public String getWarehouseName() {
+            return warehouseName;
+        }
+
+        @Override
+        public Long getHistoryDays() {
+            return historyDays;
+        }
+
+        @Override
+        public LocalDate getHistoryStart() {
+            return historyStart;
+        }
+
+        @Override
+        public LocalDate getHistoryEnd() {
+            return historyEnd;
+        }
     }
 
     private void stubAiForecast() {

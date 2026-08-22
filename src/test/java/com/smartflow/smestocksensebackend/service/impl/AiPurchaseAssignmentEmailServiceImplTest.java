@@ -37,6 +37,7 @@ class AiPurchaseAssignmentEmailServiceImplTest {
     void setUp() {
         service = new AiPurchaseAssignmentEmailServiceImpl(mailSender);
         ReflectionTestUtils.setField(service, "fromEmail", "stocksense@example.com");
+        ReflectionTestUtils.setField(service, "frontendUrl", "http://localhost:5173");
     }
 
     @Test
@@ -57,6 +58,7 @@ class AiPurchaseAssignmentEmailServiceImplTest {
         assertTrue(content.contains("50"));
         assertTrue(content.contains("Mo StockSense va tao phieu nhap."));
         assertTrue(content.contains("tạo phiếu nhập kho thủ công"));
+        assertTrue(content.contains("http://localhost:5173/stock-in/create?aiPurchaseRequestId="));
         assertFalse(content.contains("app password"));
     }
 

@@ -20,6 +20,9 @@ public class AiPurchaseAssignmentEmailServiceImpl implements AiPurchaseAssignmen
     @Value("${spring.mail.username}")
     private String fromEmail;
 
+    @Value("${app.frontend-url:http://localhost:5173}")
+    private String frontendUrl;
+
     @Override
     public void sendAssignmentNotification(AiPurchaseRequest assignment) {
         Employee receiver = assignment.getReceiver();
@@ -68,10 +71,12 @@ public class AiPurchaseAssignmentEmailServiceImpl implements AiPurchaseAssignmen
                 value(assignment.getContent())
         );
 
-        return buildEmailTemplate(title, subtitle, detailsCardHtml);
+        String createReceiptUrl = frontendUrl + "/stock-in/create?aiPurchaseRequestId=" + assignment.getId();
+
+        return buildEmailTemplate(title, subtitle, detailsCardHtml, createReceiptUrl);
     }
 
-    private String buildEmailTemplate(String title, String subtitle, String detailsCardHtml) {
+    private String buildEmailTemplate(String title, String subtitle, String detailsCardHtml, String createReceiptUrl) {
         return "<!DOCTYPE html>"
                 + "<html>"
                 + "<head>"
@@ -101,8 +106,13 @@ public class AiPurchaseAssignmentEmailServiceImpl implements AiPurchaseAssignmen
                 + "        <div class=\"content\">"
                 + "            <div class=\"subtitle\">" + subtitle + "</div>"
                 + "            " + detailsCardHtml
+                + "            <div style=\"text-align: center; margin: 30px 0 20px 0;\">"
+                + "                <a href=\"" + createReceiptUrl + "\" style=\"display: inline-block; padding: 12px 24px; background-color: #1f5c54; color: #ffffff; text-decoration: none; font-weight: bold; border-radius: 4px; font-size: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);\">"
+                + "                    Tạo phiếu nhập kho ngay"
+                + "                </a>"
+                + "            </div>"
                 + "            <p style=\"font-size: 14px; color: #5b6259; margin-top: 25px;\">"
-                + "                Vui lòng mở <strong>SME StockSense</strong> và tạo phiếu nhập kho thủ công theo quy trình nhập kho hiện tại.<br>"
+                + "                Vui lòng click nút phía trên hoặc mở <strong>SME StockSense</strong> để tạo phiếu nhập kho thủ công theo quy trình nhập kho hiện tại.<br>"
                 + "                Email này chỉ là thông báo. Bản ghi nhiệm vụ trong StockSense là nguồn dữ liệu chính."
                 + "            </p>"
                 + "        </div>"

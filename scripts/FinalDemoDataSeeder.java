@@ -53,7 +53,6 @@ public class FinalDemoDataSeeder {
                 checkIds(inventory, products, warehouses);
 
                 cleanup(c);
-                copyHistory(c, products, warehouses);
                 seedInventory(c, inventory, products, warehouses, manager);
                 Map<String, Long> modelIds = seedForecast(c, models, forecasts, daily, products, warehouses);
                 seedDocuments(c, inventory, products, warehouses, manager, supplier, customer);
@@ -93,34 +92,6 @@ public class FinalDemoDataSeeder {
         exec(c, "DELETE FROM ton_kho");
     }
 
-    private static void copyHistory(Connection c, Map<String, Long> products, Map<String, Long> warehouses) throws Exception {
-        Path src = OUT.resolve("external-retail-history.csv");
-        StringBuilder tsv = new StringBuilder();
-        try (BufferedReader r = Files.newBufferedReader(src)) {
-            r.readLine();
-            for (String line; (line = r.readLine()) != null; ) {
-                String[] v = line.split(",", -1);
-                tsv.append(products.get(v[0])).append('\t')
-                        .append(warehouses.get(v[1])).append('\t')
-                        .append(v[2]).append('\t')
-                        .append(v[3]).append('\t')
-                        .append(v[4].isBlank() ? "\\N" : v[4]).append('\t')
-                        .append("EXTERNAL_RETAIL").append('\t')
-                        .append(v[5]).append('\t')
-                        .append(NOW).append('\t')
-                        .append(NOW).append('\n');
-            }
-        }
-        CopyManager copy = new CopyManager(c.unwrap(BaseConnection.class));
-        try (Reader reader = new java.io.StringReader(tsv.toString())) {
-            copy.copyIn("""
-                    COPY ai.lich_su_ban_hang
-                    (san_pham_id,kho_id,ngay,so_luong,gia_ban_binh_quan,nguon_du_lieu,tham_chieu_nguon,ngay_tao,ngay_cap_nhat)
-                    FROM STDIN WITH (FORMAT text)
-                    """, reader);
-        }
-    }
-
     private static void seedInventory(Connection c, List<Inv> rows, Map<String, Long> products,
                                       Map<String, Long> warehouses, long actor) throws Exception {
         try (PreparedStatement stock = c.prepareStatement("""
@@ -151,8 +122,8 @@ public class FinalDemoDataSeeder {
         Map<String, Long> modelIds = new HashMap<>();
         try (PreparedStatement m = c.prepareStatement("""
                 INSERT INTO ai.thong_tin_mo_hinh(san_pham_id,kho_id,smape,phien_ban,so_ngay_du_lieu,che_do,kieu_tap_du_lieu,
-                ngay_bat_dau_du_lieu,ngay_ket_thuc_du_lieu,mae,rmse,tham_so_mo_hinh,dac_trung_su_dung,ngay_huan_luyen)
-                VALUES(?,?,?,?,?,?,?,?,?,?,?,'{"source":"final-demo"}'::jsonb,'["lag","rolling","calendar"]'::jsonb,?)
+                ngay_bat_dau_du_lieu,ngay_ket_thuc_du_lieu,mae,rmse,nguon_du_lieu,tham_so_mo_hinh,dac_trung_su_dung,ngay_huan_luyen)
+                VALUES(?,?,?,?,?,?,?,?,?,?,?,'EXTERNAL_STORE_ITEM','{"source":"final-demo"}'::jsonb,'["lag","rolling","calendar"]'::jsonb,?)
                 RETURNING id
                 """)) {
             for (Model r : models) {
@@ -254,9 +225,10 @@ public class FinalDemoDataSeeder {
     }
 
     private static void validate(Connection c) throws Exception {
-        assertCount(c, "SELECT count(*) FROM ai.lich_su_ban_hang WHERE nguon_du_lieu='EXTERNAL_RETAIL'", 108600);
-        assertCount(c, "SELECT count(*) FROM ton_kho", 300);
-        assertCount(c, "SELECT count(*) FROM cau_hinh_ton_kho", 300);
+        assertCount(c, "SELECT count(*) FROM ai.lich_su_ban_hang WHERE nguon_du_lieu='EXTERNAL_STORE_ITEM'", 273900);
+        assertCount(c, "SELECT count(*) FROM ai.lich_su_ban_hang WHERE nguon_du_lieu='EXTERNAL_RETAIL'", 0);
+        assertCount(c, "SELECT count(*) FROM ton_kho", 150);
+        assertCount(c, "SELECT count(*) FROM cau_hinh_ton_kho", 150);
         assertCount(c, "SELECT count(*) FROM ai.thong_tin_mo_hinh WHERE kieu_tap_du_lieu='EXTERNAL'", 3);
         assertCount(c, "SELECT count(*) FROM ai.ket_qua_du_bao_hang_ngay d JOIN ai.thong_tin_mo_hinh m ON m.id=d.thong_tin_mo_hinh_id WHERE m.kieu_tap_du_lieu='EXTERNAL'", 90);
         assertCount(c, "SELECT count(*) FROM ai.ket_qua_du_bao f JOIN ai.thong_tin_mo_hinh m ON m.id=f.thong_tin_mo_hinh_id WHERE m.kieu_tap_du_lieu='EXTERNAL'", 9);
@@ -266,7 +238,7 @@ public class FinalDemoDataSeeder {
         long dup = scalarLong(c, """
                 SELECT count(*) FROM (
                   SELECT san_pham_id,kho_id,ngay,nguon_du_lieu,count(*) c
-                  FROM ai.lich_su_ban_hang WHERE nguon_du_lieu='EXTERNAL_RETAIL'
+                  FROM ai.lich_su_ban_hang WHERE nguon_du_lieu='EXTERNAL_STORE_ITEM'
                   GROUP BY 1,2,3,4 HAVING count(*)>1
                 ) d
                 """);

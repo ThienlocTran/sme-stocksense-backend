@@ -82,7 +82,9 @@ public class ForecastServiceImpl implements ForecastService {
         return runForecast(productId, warehouseId, SalesHistorySource.THUC_TE);
     }
 
-    ForecastResponse runForecast(Long productId, Long warehouseId, SalesHistorySource source) {
+    @Override
+    @Transactional
+    public ForecastResponse runForecast(Long productId, Long warehouseId, SalesHistorySource source) {
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new NotFoundException("Không tìm thấy sản phẩm với id " + productId));
         Warehouse warehouse = warehouseRepository.findById(warehouseId)

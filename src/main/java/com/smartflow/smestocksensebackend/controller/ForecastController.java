@@ -2,6 +2,7 @@ package com.smartflow.smestocksensebackend.controller;
 
 import com.smartflow.smestocksensebackend.dto.forecast.DriftResponse;
 import com.smartflow.smestocksensebackend.dto.forecast.ForecastResponse;
+import com.smartflow.smestocksensebackend.entity.SalesHistorySource;
 import com.smartflow.smestocksensebackend.exception.NotFoundException;
 import com.smartflow.smestocksensebackend.service.ForecastService;
 import lombok.RequiredArgsConstructor;
@@ -11,6 +12,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -27,8 +29,9 @@ public class ForecastController {
     @PostMapping("/{productId}/{warehouseId}")
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<ForecastResponse> runForecast(@PathVariable Long productId,
-            @PathVariable Long warehouseId) {
-        return ResponseEntity.ok(forecastService.runForecast(productId, warehouseId));
+            @PathVariable Long warehouseId,
+            @RequestParam(defaultValue = "EXTERNAL_RETAIL") SalesHistorySource source) {
+        return ResponseEntity.ok(forecastService.runForecast(productId, warehouseId, source));
     }
 
     /**

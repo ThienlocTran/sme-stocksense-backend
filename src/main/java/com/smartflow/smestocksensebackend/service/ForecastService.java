@@ -2,6 +2,7 @@ package com.smartflow.smestocksensebackend.service;
 
 import com.smartflow.smestocksensebackend.dto.forecast.DriftResponse;
 import com.smartflow.smestocksensebackend.dto.forecast.ForecastResponse;
+import com.smartflow.smestocksensebackend.entity.SalesHistorySource;
 
 public interface ForecastService {
 
@@ -10,6 +11,8 @@ public interface ForecastService {
      * thiếu dữ liệu -> cold-start (trung bình động). Lưu kết quả mới (tăng version).
      */
     ForecastResponse runForecast(Long productId, Long warehouseId);
+
+    ForecastResponse runForecast(Long productId, Long warehouseId, SalesHistorySource source);
 
     /** Lấy kết quả dự báo mới nhất đã lưu, không train lại. */
     ForecastResponse getLatestForecast(Long productId, Long warehouseId);

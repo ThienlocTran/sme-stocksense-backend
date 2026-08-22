@@ -17,7 +17,9 @@ import com.smartflow.smestocksensebackend.repository.EmployeeRepository;
 import com.smartflow.smestocksensebackend.repository.ForecastModelMetadataRepository;
 import com.smartflow.smestocksensebackend.repository.ProductRepository;
 import com.smartflow.smestocksensebackend.repository.WarehouseRepository;
+import com.smartflow.smestocksensebackend.service.AiPurchaseAssignmentEmailService;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -27,19 +29,26 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.SimpleTransactionStatus;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.mail.MailSendException;
 
 @ExtendWith(MockitoExtension.class)
 class AiPurchaseAssignmentServiceImplTest {
@@ -49,8 +58,15 @@ class AiPurchaseAssignmentServiceImplTest {
     @Mock ProductRepository productRepository;
     @Mock WarehouseRepository warehouseRepository;
     @Mock ForecastModelMetadataRepository forecastModelMetadataRepository;
+    @Mock AiPurchaseAssignmentEmailService aiPurchaseAssignmentEmailService;
+    @Mock PlatformTransactionManager transactionManager;
 
     @InjectMocks AiPurchaseAssignmentServiceImpl service;
+
+    @BeforeEach
+    void setUpTransactionManager() {
+        lenient().when(transactionManager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
+    }
 
     @AfterEach
     void clearSecurity() {
@@ -63,7 +79,7 @@ class AiPurchaseAssignmentServiceImplTest {
 
         service.createAssignment(request());
 
-        verify(aiPurchaseRequestRepository).saveAndFlush(any(AiPurchaseRequest.class));
+        verify(aiPurchaseRequestRepository, times(2)).saveAndFlush(any(AiPurchaseRequest.class));
     }
 
     @Test
@@ -72,7 +88,7 @@ class AiPurchaseAssignmentServiceImplTest {
 
         service.createAssignment(request());
 
-        verify(aiPurchaseRequestRepository).saveAndFlush(any(AiPurchaseRequest.class));
+        verify(aiPurchaseRequestRepository, times(2)).saveAndFlush(any(AiPurchaseRequest.class));
     }
 
     @Test
@@ -119,7 +135,6 @@ class AiPurchaseAssignmentServiceImplTest {
         assertEquals(20L, saved.getWarehouse().getId());
         assertEquals((short) 7, saved.getHorizonDays());
         assertNull(saved.getImportReceipt());
-        assertEquals(AiPurchaseRequestEmailStatus.CHO_GUI, saved.getEmailStatus());
     }
 
     @Test
@@ -203,10 +218,42 @@ class AiPurchaseAssignmentServiceImplTest {
         assertEquals("Kho chinh", response.warehouseName());
     }
 
+    @Test
+    void successfulMailMarksEmailSent() {
+        stubHappyPath(RoleCode.MANAGER);
+
+        var response = service.createAssignment(request());
+
+        assertEquals(AiPurchaseRequestEmailStatus.DA_GUI, response.emailStatus());
+        verify(aiPurchaseAssignmentEmailService).sendAssignmentNotification(any(AiPurchaseRequest.class));
+    }
+
+    @Test
+    void failedMailKeepsAssignmentAndMarksFailedWithoutDuplicate() {
+        stubHappyPath(RoleCode.MANAGER);
+        org.mockito.Mockito.doThrow(new MailSendException("smtp down"))
+                .when(aiPurchaseAssignmentEmailService).sendAssignmentNotification(any(AiPurchaseRequest.class));
+
+        var response = service.createAssignment(request());
+
+        assertEquals(AiPurchaseRequestEmailStatus.THAT_BAI, response.emailStatus());
+        assertEquals(99L, response.id());
+        verify(aiPurchaseRequestRepository, times(2)).saveAndFlush(any(AiPurchaseRequest.class));
+    }
+
     private void stubHappyPath(RoleCode senderRole) {
         stubRefs(senderRole, RoleCode.EMPLOYEE);
+        AtomicReference<AiPurchaseRequest> saved = new AtomicReference<>();
         when(aiPurchaseRequestRepository.saveAndFlush(any(AiPurchaseRequest.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+                .thenAnswer(invocation -> {
+                    AiPurchaseRequest assignment = invocation.getArgument(0);
+                    if (assignment.getId() == null) {
+                        ReflectionTestUtils.setField(assignment, "id", 99L);
+                    }
+                    saved.set(assignment);
+                    return assignment;
+                });
+        when(aiPurchaseRequestRepository.findById(99L)).thenAnswer(invocation -> Optional.of(saved.get()));
     }
 
     private void stubRefs(RoleCode senderRole, RoleCode receiverRole) {
@@ -226,8 +273,8 @@ class AiPurchaseAssignmentServiceImplTest {
 
     private AiPurchaseRequest savedAssignment() {
         ArgumentCaptor<AiPurchaseRequest> captor = ArgumentCaptor.forClass(AiPurchaseRequest.class);
-        verify(aiPurchaseRequestRepository).saveAndFlush(captor.capture());
-        return captor.getValue();
+        verify(aiPurchaseRequestRepository, atLeastOnce()).saveAndFlush(captor.capture());
+        return captor.getAllValues().getFirst();
     }
 
     private CreateAiPurchaseAssignmentRequest request() {

@@ -19,15 +19,19 @@ import com.smartflow.smestocksensebackend.repository.EmployeeRepository;
 import com.smartflow.smestocksensebackend.repository.ForecastModelMetadataRepository;
 import com.smartflow.smestocksensebackend.repository.ProductRepository;
 import com.smartflow.smestocksensebackend.repository.WarehouseRepository;
+import com.smartflow.smestocksensebackend.service.AiPurchaseAssignmentEmailService;
 import com.smartflow.smestocksensebackend.service.AiPurchaseAssignmentService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.mail.MailException;
 import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -44,10 +48,27 @@ public class AiPurchaseAssignmentServiceImpl implements AiPurchaseAssignmentServ
     private final ProductRepository productRepository;
     private final WarehouseRepository warehouseRepository;
     private final ForecastModelMetadataRepository forecastModelMetadataRepository;
+    private final AiPurchaseAssignmentEmailService aiPurchaseAssignmentEmailService;
+    private final PlatformTransactionManager transactionManager;
 
     @Override
-    @Transactional
     public AiPurchaseAssignmentResponse createAssignment(CreateAiPurchaseAssignmentRequest request) {
+        TransactionTemplate tx = new TransactionTemplate(transactionManager);
+        AiPurchaseRequest assignment = tx.execute(status -> persistAssignment(request));
+        Long assignmentId = assignment.getId();
+
+        try {
+            aiPurchaseAssignmentEmailService.sendAssignmentNotification(assignment);
+            assignment = tx.execute(status -> updateEmailStatus(assignmentId,
+                    AiPurchaseRequestEmailStatus.DA_GUI, null));
+        } catch (MailException | BadRequestException ex) {
+            assignment = tx.execute(status -> updateEmailStatus(assignmentId,
+                    AiPurchaseRequestEmailStatus.THAT_BAI, ex.getMessage()));
+        }
+        return AiPurchaseAssignmentResponse.from(assignment);
+    }
+
+    private AiPurchaseRequest persistAssignment(CreateAiPurchaseAssignmentRequest request) {
         Employee sender = currentEmployee();
         ensureSenderCanAssign(sender);
 
@@ -77,7 +98,23 @@ public class AiPurchaseAssignmentServiceImpl implements AiPurchaseAssignmentServ
         assignment.setStatus(AiPurchaseRequestStatus.DA_GUI);
         assignment.setEmailStatus(AiPurchaseRequestEmailStatus.CHO_GUI);
 
-        return AiPurchaseAssignmentResponse.from(aiPurchaseRequestRepository.saveAndFlush(assignment));
+        return aiPurchaseRequestRepository.saveAndFlush(assignment);
+    }
+
+    private AiPurchaseRequest updateEmailStatus(Long id, AiPurchaseRequestEmailStatus emailStatus, String error) {
+        AiPurchaseRequest assignment = aiPurchaseRequestRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException("Yêu cầu nhập hàng AI không tồn tại."));
+        assignment.setEmailStatus(emailStatus);
+        assignment.setEmailError(truncate(error));
+        assignment.setEmailSentAt(emailStatus == AiPurchaseRequestEmailStatus.DA_GUI ? LocalDateTime.now() : null);
+        return aiPurchaseRequestRepository.saveAndFlush(assignment);
+    }
+
+    private String truncate(String error) {
+        if (error == null) {
+            return null;
+        }
+        return error.length() <= 500 ? error : error.substring(0, 500);
     }
 
     @Override

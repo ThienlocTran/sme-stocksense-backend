@@ -11,6 +11,7 @@ import com.smartflow.smestocksensebackend.entity.Product;
 import com.smartflow.smestocksensebackend.entity.RoleCode;
 import com.smartflow.smestocksensebackend.entity.Warehouse;
 import com.smartflow.smestocksensebackend.exception.BadRequestException;
+import com.smartflow.smestocksensebackend.exception.ConflictException;
 import com.smartflow.smestocksensebackend.exception.MissingRoleException;
 import com.smartflow.smestocksensebackend.exception.NotFoundException;
 import com.smartflow.smestocksensebackend.repository.AiPurchaseRequestRepository;
@@ -20,6 +21,8 @@ import com.smartflow.smestocksensebackend.repository.ProductRepository;
 import com.smartflow.smestocksensebackend.repository.WarehouseRepository;
 import com.smartflow.smestocksensebackend.service.AiPurchaseAssignmentService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -77,6 +80,27 @@ public class AiPurchaseAssignmentServiceImpl implements AiPurchaseAssignmentServ
         return AiPurchaseAssignmentResponse.from(aiPurchaseRequestRepository.saveAndFlush(assignment));
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public Page<AiPurchaseAssignmentResponse> listMyAssignments(Pageable pageable) {
+        Employee actor = currentEmployee();
+        RoleCode role = roleOf(actor);
+        Page<AiPurchaseRequest> page = role == RoleCode.ADMIN || role == RoleCode.MANAGER
+                ? aiPurchaseRequestRepository.findAll(pageable)
+                : aiPurchaseRequestRepository.findByReceiverId(actor.getId(), pageable);
+        return page.map(AiPurchaseAssignmentResponse::from);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public AiPurchaseAssignmentResponse getAssignment(Long id) {
+        Employee actor = currentEmployee();
+        AiPurchaseRequest assignment = aiPurchaseRequestRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException("Yêu cầu nhập hàng AI không tồn tại."));
+        ensureCanRead(actor, assignment);
+        return AiPurchaseAssignmentResponse.from(assignment);
+    }
+
     private Employee currentEmployee() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !(authentication.getPrincipal() instanceof Employee principal)
@@ -88,10 +112,26 @@ public class AiPurchaseAssignmentServiceImpl implements AiPurchaseAssignmentServ
     }
 
     private void ensureSenderCanAssign(Employee sender) {
-        RoleCode role = sender.getRole() != null ? sender.getRole().getCode() : null;
+        RoleCode role = roleOf(sender);
         if (role != RoleCode.ADMIN && role != RoleCode.MANAGER) {
             throw new MissingRoleException("Chỉ ADMIN hoặc MANAGER được giao yêu cầu nhập hàng AI.");
         }
+    }
+
+    private void ensureCanRead(Employee actor, AiPurchaseRequest assignment) {
+        RoleCode role = roleOf(actor);
+        if (role == RoleCode.ADMIN || role == RoleCode.MANAGER) {
+            return;
+        }
+        Long receiverId = assignment.getReceiver() != null ? assignment.getReceiver().getId() : null;
+        if (role == RoleCode.EMPLOYEE && actor.getId().equals(receiverId)) {
+            return;
+        }
+        throw new ConflictException("Không có quyền xem yêu cầu nhập hàng AI này.");
+    }
+
+    private RoleCode roleOf(Employee employee) {
+        return employee.getRole() != null ? employee.getRole().getCode() : null;
     }
 
     private ForecastModelMetadata resolveModelMetadata(CreateAiPurchaseAssignmentRequest request, Product product,

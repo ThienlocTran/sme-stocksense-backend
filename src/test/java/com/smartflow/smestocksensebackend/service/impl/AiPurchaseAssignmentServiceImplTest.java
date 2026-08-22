@@ -10,6 +10,7 @@ import com.smartflow.smestocksensebackend.entity.Role;
 import com.smartflow.smestocksensebackend.entity.RoleCode;
 import com.smartflow.smestocksensebackend.entity.Warehouse;
 import com.smartflow.smestocksensebackend.exception.BadRequestException;
+import com.smartflow.smestocksensebackend.exception.ConflictException;
 import com.smartflow.smestocksensebackend.exception.MissingRoleException;
 import com.smartflow.smestocksensebackend.repository.AiPurchaseRequestRepository;
 import com.smartflow.smestocksensebackend.repository.EmployeeRepository;
@@ -27,6 +28,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -36,6 +38,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 
 @ExtendWith(MockitoExtension.class)
 class AiPurchaseAssignmentServiceImplTest {
@@ -146,6 +150,59 @@ class AiPurchaseAssignmentServiceImplTest {
         verify(aiPurchaseRequestRepository, never()).saveAndFlush(any());
     }
 
+    @Test
+    void employeeSeesOwnAssignments() {
+        Employee actor = employee(2L, RoleCode.EMPLOYEE);
+        authenticate(actor);
+        when(employeeRepository.findById(2L)).thenReturn(Optional.of(actor));
+        when(aiPurchaseRequestRepository.findByReceiverId(2L, PageRequest.of(0, 10)))
+                .thenReturn(new PageImpl<>(List.of(assignment(actor))));
+
+        var page = service.listMyAssignments(PageRequest.of(0, 10));
+
+        assertEquals(1, page.getTotalElements());
+        verify(aiPurchaseRequestRepository).findByReceiverId(2L, PageRequest.of(0, 10));
+    }
+
+    @Test
+    void employeeCannotReadAnotherEmployeesAssignment() {
+        Employee actor = employee(3L, RoleCode.EMPLOYEE);
+        authenticate(actor);
+        when(employeeRepository.findById(3L)).thenReturn(Optional.of(actor));
+        when(aiPurchaseRequestRepository.findById(99L)).thenReturn(Optional.of(assignment(employee(2L, RoleCode.EMPLOYEE))));
+
+        assertThrows(ConflictException.class, () -> service.getAssignment(99L));
+    }
+
+    @Test
+    void managerCanReadAssignments() {
+        Employee actor = employee(1L, RoleCode.MANAGER);
+        authenticate(actor);
+        when(employeeRepository.findById(1L)).thenReturn(Optional.of(actor));
+        when(aiPurchaseRequestRepository.findAll(PageRequest.of(0, 10)))
+                .thenReturn(new PageImpl<>(List.of(assignment(employee(2L, RoleCode.EMPLOYEE)))));
+
+        var page = service.listMyAssignments(PageRequest.of(0, 10));
+
+        assertEquals(1, page.getTotalElements());
+        verify(aiPurchaseRequestRepository).findAll(PageRequest.of(0, 10));
+    }
+
+    @Test
+    void detailResponseShowsBothQuantitiesAndNoSensitiveData() {
+        Employee actor = employee(1L, RoleCode.ADMIN);
+        authenticate(actor);
+        when(employeeRepository.findById(1L)).thenReturn(Optional.of(actor));
+        when(aiPurchaseRequestRepository.findById(99L)).thenReturn(Optional.of(assignment(employee(2L, RoleCode.EMPLOYEE))));
+
+        var response = service.getAssignment(99L);
+
+        assertEquals(70, response.aiSuggestedQuantity());
+        assertEquals(50, response.requestedQuantity());
+        assertEquals("SP001", response.productCode());
+        assertEquals("Kho chinh", response.warehouseName());
+    }
+
     private void stubHappyPath(RoleCode senderRole) {
         stubRefs(senderRole, RoleCode.EMPLOYEE);
         when(aiPurchaseRequestRepository.saveAndFlush(any(AiPurchaseRequest.class)))
@@ -188,6 +245,9 @@ class AiPurchaseAssignmentServiceImplTest {
         role.setCode(roleCode);
         Employee employee = new Employee();
         ReflectionTestUtils.setField(employee, "id", id);
+        employee.setFullName("User " + id);
+        employee.setEmail("user" + id + "@example.com");
+        employee.setPasswordHash("secret");
         employee.setRole(role);
         return employee;
     }
@@ -195,12 +255,16 @@ class AiPurchaseAssignmentServiceImplTest {
     private Product product(Long id) {
         Product product = new Product();
         ReflectionTestUtils.setField(product, "id", id);
+        product.setCode("SP001");
+        product.setName("Laptop");
         return product;
     }
 
     private Warehouse warehouse(Long id) {
         Warehouse warehouse = new Warehouse();
         ReflectionTestUtils.setField(warehouse, "id", id);
+        warehouse.setCode("K001");
+        warehouse.setName("Kho chinh");
         return warehouse;
     }
 
@@ -210,5 +274,23 @@ class AiPurchaseAssignmentServiceImplTest {
         metadata.setProduct(product);
         metadata.setWarehouse(warehouse);
         return metadata;
+    }
+
+    private AiPurchaseRequest assignment(Employee receiver) {
+        Product product = product(10L);
+        Warehouse warehouse = warehouse(20L);
+        AiPurchaseRequest assignment = new AiPurchaseRequest();
+        ReflectionTestUtils.setField(assignment, "id", 99L);
+        assignment.setCode("YCAI-1");
+        assignment.setProduct(product);
+        assignment.setWarehouse(warehouse);
+        assignment.setModelMetadata(metadata(30L, product, warehouse));
+        assignment.setHorizonDays((short) 7);
+        assignment.setAiSuggestedQuantity(70);
+        assignment.setRequestedQuantity(50);
+        assignment.setSender(employee(1L, RoleCode.MANAGER));
+        assignment.setReceiver(receiver);
+        assignment.setContent("Mo StockSense va tao phieu nhap.");
+        return assignment;
     }
 }

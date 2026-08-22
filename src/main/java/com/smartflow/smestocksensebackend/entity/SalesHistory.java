@@ -16,7 +16,9 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
@@ -51,11 +53,21 @@ public class SalesHistory {
     @Column(name = "so_luong", nullable = false)
     private Integer quantity;
 
+    @Column(name = "gia_ban_binh_quan", precision = 15, scale = 2)
+    private BigDecimal averageSellingPrice;
+
     @Enumerated(EnumType.STRING)
-    @Column(name = "nguon", nullable = false, length = 20)
-    private SalesHistorySource source = SalesHistorySource.SEED;
+    @Column(name = "nguon_du_lieu", nullable = false, length = 50)
+    private SalesHistorySource source = SalesHistorySource.SEED_DEMO;
+
+    @Column(name = "tham_chieu_nguon", length = 255)
+    private String sourceReference;
 
     @CreationTimestamp
     @Column(name = "ngay_tao", updatable = false)
     private LocalDateTime createdAt;
+
+    @UpdateTimestamp
+    @Column(name = "ngay_cap_nhat")
+    private LocalDateTime updatedAt;
 }

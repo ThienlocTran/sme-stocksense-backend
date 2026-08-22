@@ -6,6 +6,7 @@ import com.smartflow.smestocksensebackend.dto.forecast.DriftResponse;
 import com.smartflow.smestocksensebackend.dto.forecast.ForecastResponse;
 import com.smartflow.smestocksensebackend.dto.inventory.DailyQuantityProjection;
 import com.smartflow.smestocksensebackend.entity.ForecastDriftLog;
+import com.smartflow.smestocksensebackend.entity.ForecastDatasetType;
 import com.smartflow.smestocksensebackend.entity.ForecastMode;
 import com.smartflow.smestocksensebackend.entity.ForecastModelMetadata;
 import com.smartflow.smestocksensebackend.entity.ForecastResult;
@@ -114,16 +115,25 @@ public class ForecastServiceImpl implements ForecastService {
         metadata.setVersion(version);
         metadata.setDataDays(dataDays);
         metadata.setMode(mode);
-        forecastModelMetadataRepository.save(metadata);
+        metadata.setDatasetType(datasetType(history, mode));
+        if (!history.isEmpty()) {
+            metadata.setHistoryStartDate(history.get(0).getNgay());
+            metadata.setHistoryEndDate(history.get(history.size() - 1).getNgay());
+        }
+        ForecastModelMetadata savedMetadata = forecastModelMetadataRepository.save(metadata);
 
         for (Integer horizon : HORIZONS) {
             ForecastResult forecastResult = new ForecastResult();
+            forecastResult.setModelMetadata(savedMetadata);
             forecastResult.setProduct(productRepository.getReferenceById(productId));
             forecastResult.setWarehouse(warehouseRepository.getReferenceById(warehouseId));
             forecastResult.setForecastDate(baseDate.plusDays(horizon));
             forecastResult.setHorizonDays(horizon);
             forecastResult.setPredictedQuantity(forecastByHorizon.get(horizon));
             forecastResult.setVersion(version);
+            forecastResult.setTargetHorizonDays(horizon.shortValue());
+            forecastResult.setForecastBaseDate(baseDate);
+            forecastResult.setAverageDailyDemand(forecastByHorizon.get(horizon));
             forecastResultRepository.save(forecastResult);
         }
 
@@ -184,7 +194,7 @@ public class ForecastServiceImpl implements ForecastService {
         return new ForecastResponse(productId, warehouseId, metadata.getVersion(), metadata.getMode().name(),
                 metadata.getSmape(), forecastByHorizon.get(7), forecastByHorizon.get(14), forecastByHorizon.get(30),
                 currentStock, minStock, reorder7, reorder14, reorder30,
-                metadata.getDataDays(), metadata.getCreatedAt(),
+                metadata.getDataDays(), metadata.getTrainedAt() != null ? metadata.getTrainedAt() : metadata.getCreatedAt(),
                 capInfo.allowed7d(), capInfo.allowed14d(), capInfo.allowed30d(),
                 capInfo.limited7d(), capInfo.limited14d(), capInfo.limited30d(),
                 capInfo.capacityStatus());
@@ -242,8 +252,11 @@ public class ForecastServiceImpl implements ForecastService {
             log.setProduct(productRepository.getReferenceById(productId));
             log.setWarehouse(warehouseRepository.getReferenceById(warehouseId));
             log.setActualSmape(rollingSmape);
+            log.setRollingSmape(rollingSmape);
             log.setThresholdSmape(DRIFT_THRESHOLD_SMAPE);
             log.setRetrainNeeded(true);
+            log.setTargetRetrainNeeded(true);
+            log.setComparedDays(commonDates.size());
             forecastDriftLogRepository.save(log);
         }
 
@@ -290,8 +303,9 @@ public class ForecastServiceImpl implements ForecastService {
         BigDecimal effectivePrice = price != null ? price : BigDecimal.ZERO;
         List<AiForecastClientRequest.SalesPoint> points = new ArrayList<>(history.size());
         for (SalesHistory row : history) {
+            BigDecimal rowPrice = row.getAverageSellingPrice() != null ? row.getAverageSellingPrice() : effectivePrice;
             points.add(new AiForecastClientRequest.SalesPoint(row.getNgay().toString(),
-                    BigDecimal.valueOf(row.getQuantity()), effectivePrice));
+                    BigDecimal.valueOf(row.getQuantity()), rowPrice));
         }
         AiForecastClientRequest request = new AiForecastClientRequest(points, HORIZONS);
         return aiServiceRestClient.post()
@@ -359,6 +373,28 @@ public class ForecastServiceImpl implements ForecastService {
 
     private static int firstNonNull(Integer value, int fallback) {
         return value != null ? value : fallback;
+    }
+
+    private ForecastDatasetType datasetType(List<SalesHistory> history, ForecastMode mode) {
+        if (mode == ForecastMode.COLD_START_AVG) {
+            return ForecastDatasetType.COLD_START;
+        }
+        long realRows = history.stream().filter(row -> row.getSource() == SalesHistorySource.THUC_TE).count();
+        long externalRows = history.stream()
+                .filter(row -> row.getSource() == SalesHistorySource.EXTERNAL_RETAIL
+                        || row.getSource() == SalesHistorySource.EXTERNAL_M5
+                        || row.getSource() == SalesHistorySource.EXTERNAL_STORE_ITEM)
+                .count();
+        if (realRows == history.size()) {
+            return ForecastDatasetType.THUC_TE;
+        }
+        if (externalRows == history.size()) {
+            return ForecastDatasetType.EXTERNAL;
+        }
+        if (realRows > 0 || externalRows > 0) {
+            return ForecastDatasetType.HON_HOP;
+        }
+        return ForecastDatasetType.LEGACY_UNKNOWN;
     }
 
     private static record CapacityLimitInfo(

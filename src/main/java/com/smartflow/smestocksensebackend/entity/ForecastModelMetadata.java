@@ -15,8 +15,11 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 /**
@@ -42,7 +45,7 @@ public class ForecastModelMetadata {
     @JoinColumn(name = "kho_id", nullable = false)
     private Warehouse warehouse;
 
-    @Column(name = "smape", nullable = false)
+    @Column(name = "smape")
     private BigDecimal smape;
 
     @Column(name = "phien_ban", nullable = false)
@@ -55,7 +58,34 @@ public class ForecastModelMetadata {
     @Column(name = "che_do", nullable = false, length = 20)
     private ForecastMode mode = ForecastMode.XGBOOST;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "kieu_tap_du_lieu", nullable = false, length = 30)
+    private ForecastDatasetType datasetType = ForecastDatasetType.LEGACY_UNKNOWN;
+
+    @Column(name = "ngay_bat_dau_du_lieu")
+    private LocalDate historyStartDate;
+
+    @Column(name = "ngay_ket_thuc_du_lieu")
+    private LocalDate historyEndDate;
+
+    @Column(name = "mae", precision = 18, scale = 4)
+    private BigDecimal mae;
+
+    @Column(name = "rmse", precision = 18, scale = 4)
+    private BigDecimal rmse;
+
+    @Column(name = "tham_so_mo_hinh", columnDefinition = "jsonb")
+    @JdbcTypeCode(SqlTypes.JSON)
+    private String modelParamsSnapshot;
+
+    @Column(name = "dac_trung_su_dung", columnDefinition = "jsonb")
+    @JdbcTypeCode(SqlTypes.JSON)
+    private String featureSnapshot;
+
     @CreationTimestamp
-    @Column(name = "ngay_tao", updatable = false)
+    @Column(name = "ngay_huan_luyen", updatable = false)
+    private LocalDateTime trainedAt;
+
+    @Column(name = "ngay_tao", insertable = false, updatable = false)
     private LocalDateTime createdAt;
 }

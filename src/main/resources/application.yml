@@ -41,6 +41,7 @@ server:
       force-response: true
 
 app:
+  frontend-url: ${APP_FRONTEND_URL:http://localhost:5173}
   import-receipt:
     # Ngưỡng tổng tiền để bắt buộc 2 cấp duyệt (mặc định 50.000.000đ)
     second-approval-threshold-amount: 50000000

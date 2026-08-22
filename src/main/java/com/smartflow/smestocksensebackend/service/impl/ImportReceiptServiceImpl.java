@@ -21,6 +21,8 @@ import com.smartflow.smestocksensebackend.dto.inbound.CreateDiscrepancyReportReq
 import com.smartflow.smestocksensebackend.dto.inbound.CreateDiscrepancyReportItemRequest;
 import com.smartflow.smestocksensebackend.dto.inbound.DiscrepancyReportResponse;
 import com.smartflow.smestocksensebackend.dto.inbound.RejectImportReceiptRequest;
+import com.smartflow.smestocksensebackend.entity.AiPurchaseRequest;
+import com.smartflow.smestocksensebackend.entity.AiPurchaseRequestStatus;
 import com.smartflow.smestocksensebackend.entity.Employee;
 import com.smartflow.smestocksensebackend.entity.EmployeeStatus;
 import com.smartflow.smestocksensebackend.entity.ImportReceipt;
@@ -43,6 +45,7 @@ import com.smartflow.smestocksensebackend.exception.NotFoundException;
 import com.smartflow.smestocksensebackend.repository.ImportReceiptDetailRepository;
 import com.smartflow.smestocksensebackend.repository.ImportReceiptHistoryRepository;
 import com.smartflow.smestocksensebackend.repository.ImportReceiptRepository;
+import com.smartflow.smestocksensebackend.repository.AiPurchaseRequestRepository;
 import com.smartflow.smestocksensebackend.repository.PartnerRepository;
 import com.smartflow.smestocksensebackend.repository.WarehouseRepository;
 import com.smartflow.smestocksensebackend.repository.DiscrepancyReportRepository;
@@ -55,6 +58,7 @@ import com.smartflow.smestocksensebackend.service.ImportReceiptCodeGenerator;
 import com.smartflow.smestocksensebackend.service.ImportReceiptService;
 import com.smartflow.smestocksensebackend.service.InventoryService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.data.domain.Pageable;
@@ -122,6 +126,9 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
     private final com.smartflow.smestocksensebackend.service.WarehouseCapacityService warehouseCapacityService;
     private final com.smartflow.smestocksensebackend.service.EmailService emailService;
 
+    @Autowired
+    private AiPurchaseRequestRepository aiPurchaseRequestRepository;
+
     /** Ngưỡng tổng tiền để bắt buộc 2 cấp duyệt, mặc định 50 triệu VND */
     @org.springframework.beans.factory.annotation.Value("${app.import-receipt.second-approval-threshold-amount:50000000}")
     private java.math.BigDecimal secondApprovalThreshold = java.math.BigDecimal.valueOf(50000000);
@@ -165,7 +172,9 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
             receipt.setNote(normalizeOptional(request.note()));
 
             try {
-                return ImportReceiptResponse.from(importReceiptRepository.saveAndFlush(receipt));
+                ImportReceipt savedReceipt = importReceiptRepository.saveAndFlush(receipt);
+                linkAiAssignmentIfPresent(request.aiPurchaseRequestId(), savedReceipt, creator, warehouse);
+                return ImportReceiptResponse.from(savedReceipt);
             } catch (DataIntegrityViolationException exception) {
                 if (attempt == MAX_CODE_ATTEMPTS - 1) {
                     throw new ConflictException("Không thể tạo mã phiếu nhập duy nhất.");
@@ -174,6 +183,29 @@ public class ImportReceiptServiceImpl implements ImportReceiptService {
         }
 
         throw new ConflictException("Không thể tạo mã phiếu nhập duy nhất.");
+    }
+
+    private void linkAiAssignmentIfPresent(Long aiPurchaseRequestId, ImportReceipt receipt, Employee creator,
+            Warehouse warehouse) {
+        if (aiPurchaseRequestId == null) {
+            return;
+        }
+        AiPurchaseRequest assignment = aiPurchaseRequestRepository.findById(aiPurchaseRequestId)
+                .orElseThrow(() -> new NotFoundException("Yêu cầu nhập hàng AI không tồn tại."));
+        Long receiverId = assignment.getReceiver() != null ? assignment.getReceiver().getId() : null;
+        if (!creator.getId().equals(receiverId)) {
+            throw new MissingRoleException("Không có quyền dùng yêu cầu nhập hàng AI này.");
+        }
+        Long assignmentWarehouseId = assignment.getWarehouse() != null ? assignment.getWarehouse().getId() : null;
+        if (!warehouse.getId().equals(assignmentWarehouseId)) {
+            throw new BadRequestException("Kho của phiếu nhập không khớp yêu cầu nhập hàng AI.");
+        }
+        if (assignment.getImportReceipt() != null) {
+            throw new ConflictException("Yêu cầu nhập hàng AI đã liên kết phiếu nhập.");
+        }
+        assignment.setImportReceipt(receipt);
+        assignment.setStatus(AiPurchaseRequestStatus.DA_TAO_PHIEU);
+        aiPurchaseRequestRepository.saveAndFlush(assignment);
     }
 
     /**

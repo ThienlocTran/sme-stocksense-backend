@@ -19,6 +19,8 @@ public interface ForecastService {
     /** Lấy kết quả dự báo mới nhất đã lưu, không train lại. */
     ForecastResponse getLatestForecast(Long productId, Long warehouseId);
 
+    ForecastResponse getLatestForecast(Long productId, Long warehouseId, SalesHistorySource source);
+
     /** So sánh dự báo đã lưu (horizon 7 ngày) với thực tế xuất kho 30 ngày gần nhất. */
     DriftResponse checkDrift(Long productId, Long warehouseId);
 

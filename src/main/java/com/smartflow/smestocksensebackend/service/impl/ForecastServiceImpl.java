@@ -233,15 +233,23 @@ public class ForecastServiceImpl implements ForecastService {
     @Override
     @Transactional(readOnly = true)
     public ForecastResponse getLatestForecast(Long productId, Long warehouseId) {
+        return getLatestForecast(productId, warehouseId, SalesHistorySource.EXTERNAL_STORE_ITEM);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ForecastResponse getLatestForecast(Long productId, Long warehouseId, SalesHistorySource source) {
         productRepository.findById(productId)
                 .orElseThrow(() -> new NotFoundException("Không tìm thấy sản phẩm với id " + productId));
         warehouseRepository.findById(warehouseId)
                 .orElseThrow(() -> new NotFoundException("Không tìm thấy kho với id " + warehouseId));
+        SalesHistorySource effectiveSource = source == null ? SalesHistorySource.EXTERNAL_STORE_ITEM : source;
 
         ForecastModelMetadata metadata = forecastModelMetadataRepository
-                .findFirstByProductIdAndWarehouseIdOrderByVersionDesc(productId, warehouseId)
+                .findFirstByProductIdAndWarehouseIdAndHistorySourceOrderByVersionDesc(
+                        productId, warehouseId, effectiveSource)
                 .orElseThrow(() -> new NotFoundException(
-                        "Chưa có dự báo nào cho sản phẩm/kho này, hãy chạy dự báo trước."));
+                        "Chưa có dự báo nào cho sản phẩm/kho/nguồn dữ liệu này, hãy chạy dự báo trước."));
 
         List<ForecastResult> results = forecastResultRepository
                 .findByProductIdAndWarehouseIdAndVersion(productId, warehouseId, metadata.getVersion());

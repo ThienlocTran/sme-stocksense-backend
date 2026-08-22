@@ -551,7 +551,8 @@ class ForecastServiceImplTest {
     void getLatestForecast_shouldThrowNotFound_whenNoForecastYet() {
         when(productRepository.findById(1L)).thenReturn(Optional.of(product));
         when(warehouseRepository.findById(2L)).thenReturn(Optional.of(warehouse));
-        when(forecastModelMetadataRepository.findFirstByProductIdAndWarehouseIdOrderByVersionDesc(1L, 2L))
+        when(forecastModelMetadataRepository.findFirstByProductIdAndWarehouseIdAndHistorySourceOrderByVersionDesc(
+                1L, 2L, SalesHistorySource.EXTERNAL_STORE_ITEM))
                 .thenReturn(Optional.empty());
 
         assertThrows(NotFoundException.class, () -> service.getLatestForecast(1L, 2L));
@@ -582,12 +583,24 @@ class ForecastServiceImplTest {
     @Test
     void getLatestForecast_shouldNotInventSourceForLegacyExternalMetadata() {
         ForecastModelMetadata metadata = metadata(ForecastDatasetType.EXTERNAL, null);
-        stubLatestForecast(metadata, null);
+        stubLatestForecast(metadata, SalesHistorySource.EXTERNAL_STORE_ITEM);
 
         ForecastResponse response = service.getLatestForecast(1L, 2L);
 
         assertEquals("EXTERNAL", response.datasetType());
         assertNull(response.source());
+    }
+
+    @Test
+    void getLatestForecast_shouldUseExplicitSeedDemoSource() {
+        ForecastModelMetadata metadata = metadata(ForecastDatasetType.LEGACY_UNKNOWN, SalesHistorySource.SEED_DEMO);
+        stubLatestForecast(metadata, SalesHistorySource.SEED_DEMO);
+
+        ForecastResponse response = service.getLatestForecast(1L, 2L, SalesHistorySource.SEED_DEMO);
+
+        assertEquals("SEED_DEMO", response.source());
+        verify(forecastModelMetadataRepository).findFirstByProductIdAndWarehouseIdAndHistorySourceOrderByVersionDesc(
+                1L, 2L, SalesHistorySource.SEED_DEMO);
     }
 
     @Test
@@ -665,7 +678,8 @@ class ForecastServiceImplTest {
     private void stubLatestForecast(ForecastModelMetadata metadata, SalesHistorySource source) {
         when(productRepository.findById(1L)).thenReturn(Optional.of(product));
         when(warehouseRepository.findById(2L)).thenReturn(Optional.of(warehouse));
-        when(forecastModelMetadataRepository.findFirstByProductIdAndWarehouseIdOrderByVersionDesc(1L, 2L))
+        when(forecastModelMetadataRepository.findFirstByProductIdAndWarehouseIdAndHistorySourceOrderByVersionDesc(
+                1L, 2L, source))
                 .thenReturn(Optional.of(metadata));
         when(forecastResultRepository.findByProductIdAndWarehouseIdAndVersion(1L, 2L, 1))
                 .thenReturn(List.of(forecastResult(7), forecastResult(14), forecastResult(30)));

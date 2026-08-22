@@ -42,9 +42,10 @@ public class ForecastController {
     @GetMapping("/{productId}/{warehouseId}")
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'EMPLOYEE')")
     public ResponseEntity<ForecastResponse> getLatestForecast(@PathVariable Long productId,
-            @PathVariable Long warehouseId) {
+            @PathVariable Long warehouseId,
+            @RequestParam(defaultValue = "EXTERNAL_STORE_ITEM") SalesHistorySource source) {
         try {
-            return ResponseEntity.ok(forecastService.getLatestForecast(productId, warehouseId));
+            return ResponseEntity.ok(forecastService.getLatestForecast(productId, warehouseId, source));
         } catch (NotFoundException e) {
             return ResponseEntity.noContent().build();
         }

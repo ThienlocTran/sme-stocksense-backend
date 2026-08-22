@@ -2,7 +2,7 @@ package com.smartflow.smestocksensebackend.controller;
 
 import com.smartflow.smestocksensebackend.dto.forecast.DriftResponse;
 import com.smartflow.smestocksensebackend.dto.forecast.ForecastResponse;
-import com.smartflow.smestocksensebackend.dto.forecast.SeedHistoryResponse;
+import com.smartflow.smestocksensebackend.exception.NotFoundException;
 import com.smartflow.smestocksensebackend.service.ForecastService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -31,11 +31,19 @@ public class ForecastController {
         return ResponseEntity.ok(forecastService.runForecast(productId, warehouseId));
     }
 
+    /**
+     * Trả 200 + body khi đã có kết quả dự báo lưu sẵn.
+     * Trả 204 No Content khi SP/Kho hợp lệ nhưng chưa từng chạy dự báo – không phải lỗi.
+     */
     @GetMapping("/{productId}/{warehouseId}")
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'EMPLOYEE')")
     public ResponseEntity<ForecastResponse> getLatestForecast(@PathVariable Long productId,
             @PathVariable Long warehouseId) {
-        return ResponseEntity.ok(forecastService.getLatestForecast(productId, warehouseId));
+        try {
+            return ResponseEntity.ok(forecastService.getLatestForecast(productId, warehouseId));
+        } catch (NotFoundException e) {
+            return ResponseEntity.noContent().build();
+        }
     }
 
     @GetMapping("/{productId}/{warehouseId}/drift")
@@ -45,10 +53,4 @@ public class ForecastController {
         return ResponseEntity.ok(forecastService.checkDrift(productId, warehouseId));
     }
 
-    /** Công cụ demo: sinh dữ liệu lịch sử bán hàng giả lập. Chỉ ADMIN được gọi. */
-    @PostMapping("/seed-history")
-    @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<SeedHistoryResponse> seedHistory() {
-        return ResponseEntity.ok(forecastService.seedHistory());
-    }
 }

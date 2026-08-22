@@ -4,7 +4,6 @@ import com.smartflow.smestocksensebackend.dto.forecast.AiForecastClientRequest;
 import com.smartflow.smestocksensebackend.dto.forecast.AiForecastClientResult;
 import com.smartflow.smestocksensebackend.dto.forecast.DriftResponse;
 import com.smartflow.smestocksensebackend.dto.forecast.ForecastResponse;
-import com.smartflow.smestocksensebackend.dto.forecast.SeedHistoryResponse;
 import com.smartflow.smestocksensebackend.dto.inventory.DailyQuantityProjection;
 import com.smartflow.smestocksensebackend.entity.ForecastDriftLog;
 import com.smartflow.smestocksensebackend.entity.ForecastMode;
@@ -39,7 +38,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Random;
 import java.util.TreeSet;
 
 @Service
@@ -48,7 +46,6 @@ import java.util.TreeSet;
 public class ForecastServiceImpl implements ForecastService {
 
     private static final int MIN_HISTORY_DAYS = 60;
-    private static final int SEED_HISTORY_DAYS = 180;
     private static final int REAL_SALES_LOOKBACK_DAYS = 730;
     private static final int DRIFT_WINDOW_DAYS = 30;
     private static final int DRIFT_MIN_OVERLAP_DAYS = 7;
@@ -254,28 +251,6 @@ public class ForecastServiceImpl implements ForecastService {
                 DRIFT_THRESHOLD_SMAPE, drift, commonDates.size());
     }
 
-    @Override
-    @Transactional
-    public SeedHistoryResponse seedHistory() {
-        List<InventoryLevel> levels = inventoryLevelRepository.findAll();
-        int productsSeeded = 0;
-        int rowsInserted = 0;
-
-        for (InventoryLevel level : levels) {
-            Long productId = level.getProduct().getId();
-            Long warehouseId = level.getWarehouse().getId();
-            if (salesHistoryRepository.countByProductIdAndWarehouseId(productId, warehouseId) >= MIN_HISTORY_DAYS) {
-                continue;
-            }
-            List<SalesHistory> rows = generateSyntheticHistory(productId, warehouseId);
-            salesHistoryRepository.saveAll(rows);
-            productsSeeded++;
-            rowsInserted += rows.size();
-        }
-        log.info("[ForecastService] Seed du lieu demo: {} san pham/kho, {} dong lich su", productsSeeded, rowsInserted);
-        return new SeedHistoryResponse(productsSeeded, rowsInserted);
-    }
-
     // --- Helpers ---
 
     /**
@@ -368,30 +343,6 @@ public class ForecastServiceImpl implements ForecastService {
         return (int) Math.round(Math.max(0.0, minStock + demandOverHorizon - currentStock));
     }
 
-    private List<SalesHistory> generateSyntheticHistory(Long productId, Long warehouseId) {
-        Random random = new Random(productId * 31L + warehouseId);
-        double base = 5 + random.nextInt(20);
-        double trendPerDay = (random.nextDouble() - 0.3) * 0.05;
-        LocalDate start = LocalDate.now().minusDays(SEED_HISTORY_DAYS);
-
-        List<SalesHistory> rows = new ArrayList<>(SEED_HISTORY_DAYS);
-        for (int i = 0; i < SEED_HISTORY_DAYS; i++) {
-            LocalDate date = start.plusDays(i);
-            double weekly = 1 + 0.3 * Math.sin(2 * Math.PI * date.getDayOfWeek().getValue() / 7.0);
-            double noise = (random.nextDouble() - 0.5) * base * 0.4;
-            double value = (base + trendPerDay * i) * weekly + noise;
-            int quantity = (int) Math.max(0, Math.round(value));
-
-            SalesHistory row = new SalesHistory();
-            row.setProduct(productRepository.getReferenceById(productId));
-            row.setWarehouse(warehouseRepository.getReferenceById(warehouseId));
-            row.setNgay(date);
-            row.setQuantity(quantity);
-            row.setSource(SalesHistorySource.SEED);
-            rows.add(row);
-        }
-        return rows;
-    }
 
     private double computeSmape(double[] actual, double[] predicted) {
         double sum = 0;

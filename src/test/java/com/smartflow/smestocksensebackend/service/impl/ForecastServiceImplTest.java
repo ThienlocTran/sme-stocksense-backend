@@ -184,7 +184,7 @@ class ForecastServiceImplTest {
         when(bodySpec.body(any(AiForecastClientRequest.class))).thenReturn(bodySpec);
         when(bodySpec.retrieve()).thenReturn(responseSpec);
         when(responseSpec.body(eq(AiForecastClientResult.class))).thenReturn(new AiForecastClientResult(
-                new BigDecimal("8.5"), 72, 18,
+                new BigDecimal("8.5"), new BigDecimal("1.25"), new BigDecimal("2.50"), 72, 18,
                 Map.of("7", new BigDecimal("6"), "14", new BigDecimal("6"), "30", new BigDecimal("6")),
                 List.of()));
 
@@ -228,7 +228,7 @@ class ForecastServiceImplTest {
         when(bodySpec.body(any(AiForecastClientRequest.class))).thenReturn(bodySpec);
         when(bodySpec.retrieve()).thenReturn(responseSpec);
         when(responseSpec.body(eq(AiForecastClientResult.class))).thenReturn(new AiForecastClientResult(
-                new BigDecimal("5"), 70, 20,
+                new BigDecimal("5"), new BigDecimal("1.25"), new BigDecimal("2.50"), 70, 20,
                 Map.of("7", new BigDecimal("5"), "14", new BigDecimal("5"), "30", new BigDecimal("5")),
                 List.of()));
 
@@ -381,6 +381,8 @@ class ForecastServiceImplTest {
         String json = """
                 {
                   "smape": 8.5,
+                  "mae": 1.25,
+                  "rmse": 2.5,
                   "train_size": 72,
                   "test_size": 18,
                   "forecast": {"7": 6.1, "14": 6.2, "30": 6.3},
@@ -396,6 +398,8 @@ class ForecastServiceImplTest {
 
         assertEquals("2026-03-12", result.dailyPredictions().get(0).date());
         assertEquals(new BigDecimal("4.25"), result.dailyPredictions().get(0).predictedQuantity());
+        assertEquals(new BigDecimal("1.25"), result.mae());
+        assertEquals(new BigDecimal("2.5"), result.rmse());
     }
 
     @Test
@@ -430,6 +434,35 @@ class ForecastServiceImplTest {
         assertEquals(3, summaryCaptor.getAllValues().stream()
                 .filter(row -> row.getModelMetadata().getId().equals(10L))
                 .count());
+    }
+
+    @Test
+    void runForecast_shouldPersistEvaluationMetrics() {
+        List<SalesHistory> history = buildHistory(90, 5, SalesHistorySource.THUC_TE);
+        when(productRepository.findById(1L)).thenReturn(Optional.of(product));
+        when(warehouseRepository.findById(2L)).thenReturn(Optional.of(warehouse));
+        when(salesHistoryRepository.findByProductIdAndWarehouseIdAndSourceOrderByNgayAsc(1L, 2L,
+                SalesHistorySource.THUC_TE)).thenReturn(history);
+        when(forecastResultRepository.findMaxVersion(1L, 2L)).thenReturn(null);
+        when(productRepository.getReferenceById(1L)).thenReturn(product);
+        when(warehouseRepository.getReferenceById(2L)).thenReturn(warehouse);
+        when(inventoryLevelRepository.findByProductIdAndWarehouseId(1L, 2L)).thenReturn(Optional.empty());
+        stubAiForecast(null, List.of(), new BigDecimal("3.25"), new BigDecimal("4.50"));
+
+        service.runForecast(1L, 2L);
+
+        ArgumentCaptor<ForecastModelMetadata> captor = ArgumentCaptor.forClass(ForecastModelMetadata.class);
+        verify(forecastModelMetadataRepository).save(captor.capture());
+        assertEquals(new BigDecimal("3.25"), captor.getValue().getMae());
+        assertEquals(new BigDecimal("4.50"), captor.getValue().getRmse());
+    }
+
+    @Test
+    void forecastModelMetadata_shouldAllowNullableLegacyMetrics() {
+        ForecastModelMetadata metadata = new ForecastModelMetadata();
+
+        assertNull(metadata.getMae());
+        assertNull(metadata.getRmse());
     }
 
     @Test
@@ -518,6 +551,11 @@ class ForecastServiceImplTest {
 
     private void stubAiForecast(ArgumentCaptor<AiForecastClientRequest> requestCaptor,
             List<AiForecastClientResult.DailyPrediction> dailyPredictions) {
+        stubAiForecast(requestCaptor, dailyPredictions, new BigDecimal("1.25"), new BigDecimal("2.50"));
+    }
+
+    private void stubAiForecast(ArgumentCaptor<AiForecastClientRequest> requestCaptor,
+            List<AiForecastClientResult.DailyPrediction> dailyPredictions, BigDecimal mae, BigDecimal rmse) {
         RestClient.RequestBodyUriSpec bodyUriSpec = mock(RestClient.RequestBodyUriSpec.class);
         RestClient.RequestBodySpec bodySpec = mock(RestClient.RequestBodySpec.class);
         RestClient.ResponseSpec responseSpec = mock(RestClient.ResponseSpec.class);
@@ -530,7 +568,7 @@ class ForecastServiceImplTest {
         }
         when(bodySpec.retrieve()).thenReturn(responseSpec);
         when(responseSpec.body(eq(AiForecastClientResult.class))).thenReturn(new AiForecastClientResult(
-                new BigDecimal("5"), 70, 20,
+                new BigDecimal("5"), mae, rmse, 70, 20,
                 Map.of("7", new BigDecimal("5"), "14", new BigDecimal("5"), "30", new BigDecimal("5")),
                 dailyPredictions));
     }

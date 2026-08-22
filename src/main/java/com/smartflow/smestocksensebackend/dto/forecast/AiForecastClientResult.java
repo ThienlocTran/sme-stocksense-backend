@@ -12,6 +12,8 @@ import java.util.Map;
  */
 public record AiForecastClientResult(
         BigDecimal smape,
+        BigDecimal mae,
+        BigDecimal rmse,
         @JsonProperty("train_size") Integer trainSize,
         @JsonProperty("test_size") Integer testSize,
         Map<String, BigDecimal> forecast,

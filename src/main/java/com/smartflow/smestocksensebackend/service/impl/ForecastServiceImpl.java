@@ -98,6 +98,8 @@ public class ForecastServiceImpl implements ForecastService {
         int dataDays = history.size();
 
         BigDecimal smape;
+        BigDecimal mae = null;
+        BigDecimal rmse = null;
         Map<Integer, BigDecimal> forecastByHorizon;
         List<AiForecastClientResult.DailyPrediction> dailyPredictions = List.of();
         ForecastMode mode;
@@ -110,6 +112,8 @@ public class ForecastServiceImpl implements ForecastService {
             mode = ForecastMode.XGBOOST;
             AiForecastClientResult result = callAiService(history);
             smape = result.smape() != null ? result.smape() : BigDecimal.ZERO;
+            mae = result.mae();
+            rmse = result.rmse();
             forecastByHorizon = new HashMap<>();
             for (Integer horizon : HORIZONS) {
                 BigDecimal value = result.forecast() != null ? result.forecast().get(String.valueOf(horizon)) : null;
@@ -127,6 +131,8 @@ public class ForecastServiceImpl implements ForecastService {
         metadata.setProduct(productRepository.getReferenceById(productId));
         metadata.setWarehouse(warehouseRepository.getReferenceById(warehouseId));
         metadata.setSmape(smape);
+        metadata.setMae(mae);
+        metadata.setRmse(rmse);
         metadata.setVersion(version);
         metadata.setDataDays(dataDays);
         metadata.setMode(mode);

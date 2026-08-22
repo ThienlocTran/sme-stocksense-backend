@@ -12,4 +12,6 @@ public interface AiPurchaseAssignmentService {
     Page<AiPurchaseAssignmentResponse> listMyAssignments(Pageable pageable);
 
     AiPurchaseAssignmentResponse getAssignment(Long id);
+
+    AiPurchaseAssignmentResponse retryEmail(Long id);
 }

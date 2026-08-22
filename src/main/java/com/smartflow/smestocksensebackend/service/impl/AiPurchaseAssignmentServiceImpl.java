@@ -138,6 +138,26 @@ public class AiPurchaseAssignmentServiceImpl implements AiPurchaseAssignmentServ
         return AiPurchaseAssignmentResponse.from(assignment);
     }
 
+    @Override
+    public AiPurchaseAssignmentResponse retryEmail(Long id) {
+        Employee actor = currentEmployee();
+        ensureSenderCanAssign(actor);
+        TransactionTemplate tx = new TransactionTemplate(transactionManager);
+        AiPurchaseRequest assignment = aiPurchaseRequestRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException("Yêu cầu nhập hàng AI không tồn tại."));
+        if (assignment.getEmailStatus() != AiPurchaseRequestEmailStatus.THAT_BAI) {
+            throw new BadRequestException("Chỉ retry email ở trạng thái gửi thất bại.");
+        }
+
+        try {
+            aiPurchaseAssignmentEmailService.sendAssignmentNotification(assignment);
+            assignment = tx.execute(status -> updateEmailStatus(id, AiPurchaseRequestEmailStatus.DA_GUI, null));
+        } catch (MailException | BadRequestException ex) {
+            assignment = tx.execute(status -> updateEmailStatus(id, AiPurchaseRequestEmailStatus.THAT_BAI, ex.getMessage()));
+        }
+        return AiPurchaseAssignmentResponse.from(assignment);
+    }
+
     private Employee currentEmployee() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !(authentication.getPrincipal() instanceof Employee principal)

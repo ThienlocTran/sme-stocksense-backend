@@ -241,6 +241,55 @@ class AiPurchaseAssignmentServiceImplTest {
         verify(aiPurchaseRequestRepository, times(2)).saveAndFlush(any(AiPurchaseRequest.class));
     }
 
+    @Test
+    void failedAssignmentCanRetryAndUsesSameEmployee() {
+        AiPurchaseRequest assignment = assignment(employee(2L, RoleCode.EMPLOYEE));
+        assignment.setEmailStatus(AiPurchaseRequestEmailStatus.THAT_BAI);
+        Employee actor = employee(1L, RoleCode.MANAGER);
+        authenticate(actor);
+        when(employeeRepository.findById(1L)).thenReturn(Optional.of(actor));
+        when(aiPurchaseRequestRepository.findById(99L)).thenReturn(Optional.of(assignment));
+        when(aiPurchaseRequestRepository.saveAndFlush(any(AiPurchaseRequest.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        var response = service.retryEmail(99L);
+
+        assertEquals(AiPurchaseRequestEmailStatus.DA_GUI, response.emailStatus());
+        assertEquals(2L, response.receiverId());
+        verify(aiPurchaseAssignmentEmailService).sendAssignmentNotification(assignment);
+        verify(aiPurchaseRequestRepository, times(1)).saveAndFlush(any(AiPurchaseRequest.class));
+    }
+
+    @Test
+    void retryFailureKeepsFailedAndDoesNotDuplicateAssignment() {
+        AiPurchaseRequest assignment = assignment(employee(2L, RoleCode.EMPLOYEE));
+        assignment.setEmailStatus(AiPurchaseRequestEmailStatus.THAT_BAI);
+        Employee actor = employee(1L, RoleCode.ADMIN);
+        authenticate(actor);
+        when(employeeRepository.findById(1L)).thenReturn(Optional.of(actor));
+        when(aiPurchaseRequestRepository.findById(99L)).thenReturn(Optional.of(assignment));
+        when(aiPurchaseRequestRepository.saveAndFlush(any(AiPurchaseRequest.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        org.mockito.Mockito.doThrow(new MailSendException("smtp down"))
+                .when(aiPurchaseAssignmentEmailService).sendAssignmentNotification(assignment);
+
+        var response = service.retryEmail(99L);
+
+        assertEquals(AiPurchaseRequestEmailStatus.THAT_BAI, response.emailStatus());
+        verify(aiPurchaseRequestRepository, times(1)).saveAndFlush(any(AiPurchaseRequest.class));
+    }
+
+    @Test
+    void employeeCannotRetryArbitraryAssignment() {
+        Employee actor = employee(2L, RoleCode.EMPLOYEE);
+        authenticate(actor);
+        when(employeeRepository.findById(2L)).thenReturn(Optional.of(actor));
+
+        assertThrows(MissingRoleException.class, () -> service.retryEmail(99L));
+
+        verify(aiPurchaseAssignmentEmailService, never()).sendAssignmentNotification(any());
+    }
+
     private void stubHappyPath(RoleCode senderRole) {
         stubRefs(senderRole, RoleCode.EMPLOYEE);
         AtomicReference<AiPurchaseRequest> saved = new AtomicReference<>();

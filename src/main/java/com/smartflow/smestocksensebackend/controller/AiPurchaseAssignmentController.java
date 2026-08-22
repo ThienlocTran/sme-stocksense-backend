@@ -48,4 +48,10 @@ public class AiPurchaseAssignmentController {
     public AiPurchaseAssignmentResponse getAssignment(@PathVariable Long id) {
         return aiPurchaseAssignmentService.getAssignment(id);
     }
+
+    @PostMapping("/{id}/retry-email")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
+    public AiPurchaseAssignmentResponse retryEmail(@PathVariable Long id) {
+        return aiPurchaseAssignmentService.retryEmail(id);
+    }
 }

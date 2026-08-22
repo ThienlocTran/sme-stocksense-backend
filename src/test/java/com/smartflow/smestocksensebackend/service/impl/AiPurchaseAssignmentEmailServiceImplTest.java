@@ -5,6 +5,8 @@ import com.smartflow.smestocksensebackend.entity.Employee;
 import com.smartflow.smestocksensebackend.entity.Product;
 import com.smartflow.smestocksensebackend.entity.Warehouse;
 import com.smartflow.smestocksensebackend.exception.BadRequestException;
+import jakarta.mail.Message;
+import jakarta.mail.internet.MimeMessage;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -12,7 +14,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mail.MailSendException;
-import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -23,6 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class AiPurchaseAssignmentEmailServiceImplTest {
@@ -38,17 +40,24 @@ class AiPurchaseAssignmentEmailServiceImplTest {
     }
 
     @Test
-    void sendsToSelectedEmployeeWithBusinessContent() {
+    void sendsToSelectedEmployeeWithBusinessContent() throws Exception {
+        MimeMessage mimeMessage = new MimeMessage((jakarta.mail.Session) null);
+        when(mailSender.createMimeMessage()).thenReturn(mimeMessage);
+
         service.sendAssignmentNotification(assignment());
 
-        SimpleMailMessage sent = sentMessage();
-        assertEquals("employee@example.com", sent.getTo()[0]);
+        MimeMessage sent = sentMessage();
+        assertEquals("employee@example.com", sent.getRecipients(Message.RecipientType.TO)[0].toString());
         assertTrue(sent.getSubject().contains("SME StockSense"));
-        assertTrue(sent.getText().contains("Số lượng AI gợi ý: 70"));
-        assertTrue(sent.getText().contains("Số lượng yêu cầu: 50"));
-        assertTrue(sent.getText().contains("Mo StockSense va tao phieu nhap."));
-        assertTrue(sent.getText().contains("tạo phiếu nhập kho thủ công"));
-        assertFalse(sent.getText().contains("app password"));
+        
+        String content = sent.getContent().toString();
+        assertTrue(content.contains("Số lượng AI gợi ý"));
+        assertTrue(content.contains("70"));
+        assertTrue(content.contains("Số lượng yêu cầu"));
+        assertTrue(content.contains("50"));
+        assertTrue(content.contains("Mo StockSense va tao phieu nhap."));
+        assertTrue(content.contains("tạo phiếu nhập kho thủ công"));
+        assertFalse(content.contains("app password"));
     }
 
     @Test
@@ -61,13 +70,15 @@ class AiPurchaseAssignmentEmailServiceImplTest {
 
     @Test
     void mailFailurePropagatesForCallerToTrackStatus() {
-        doThrow(new MailSendException("smtp down")).when(mailSender).send(any(SimpleMailMessage.class));
+        MimeMessage mimeMessage = new MimeMessage((jakarta.mail.Session) null);
+        when(mailSender.createMimeMessage()).thenReturn(mimeMessage);
+        doThrow(new MailSendException("smtp down")).when(mailSender).send(any(MimeMessage.class));
 
         assertThrows(MailSendException.class, () -> service.sendAssignmentNotification(assignment()));
     }
 
-    private SimpleMailMessage sentMessage() {
-        ArgumentCaptor<SimpleMailMessage> captor = ArgumentCaptor.forClass(SimpleMailMessage.class);
+    private MimeMessage sentMessage() {
+        ArgumentCaptor<MimeMessage> captor = ArgumentCaptor.forClass(MimeMessage.class);
         verify(mailSender).send(captor.capture());
         return captor.getValue();
     }

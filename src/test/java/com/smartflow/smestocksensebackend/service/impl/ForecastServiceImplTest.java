@@ -143,11 +143,11 @@ class ForecastServiceImplTest {
 
     @Test
     void runForecast_shouldUseColdStartAverage_whenNotEnoughHistory() {
-        List<SalesHistory> history = buildHistory(10, 5);
+        List<SalesHistory> history = buildHistory(10, 5, SalesHistorySource.EXTERNAL_STORE_ITEM);
         when(productRepository.findById(1L)).thenReturn(Optional.of(product));
         when(warehouseRepository.findById(2L)).thenReturn(Optional.of(warehouse));
         when(salesHistoryRepository.findByProductIdAndWarehouseIdAndSourceOrderByNgayAsc(1L, 2L,
-                SalesHistorySource.THUC_TE)).thenReturn(history);
+                SalesHistorySource.EXTERNAL_STORE_ITEM)).thenReturn(history);
         when(forecastResultRepository.findMaxVersion(1L, 2L)).thenReturn(null);
         when(productRepository.getReferenceById(1L)).thenReturn(product);
         when(warehouseRepository.getReferenceById(2L)).thenReturn(warehouse);
@@ -163,11 +163,11 @@ class ForecastServiceImplTest {
 
     @Test
     void runForecast_shouldCallAiServiceAndComputeRecommendedOrderQty_whenEnoughHistory() {
-        List<SalesHistory> history = buildHistory(90, 5);
+        List<SalesHistory> history = buildHistory(90, 5, SalesHistorySource.EXTERNAL_STORE_ITEM);
         when(productRepository.findById(1L)).thenReturn(Optional.of(product));
         when(warehouseRepository.findById(2L)).thenReturn(Optional.of(warehouse));
         when(salesHistoryRepository.findByProductIdAndWarehouseIdAndSourceOrderByNgayAsc(1L, 2L,
-                SalesHistorySource.THUC_TE)).thenReturn(history);
+                SalesHistorySource.EXTERNAL_STORE_ITEM)).thenReturn(history);
         when(forecastResultRepository.findMaxVersion(1L, 2L)).thenReturn(3);
         when(productRepository.getReferenceById(1L)).thenReturn(product);
         when(warehouseRepository.getReferenceById(2L)).thenReturn(warehouse);
@@ -232,7 +232,7 @@ class ForecastServiceImplTest {
                 Map.of("7", new BigDecimal("5"), "14", new BigDecimal("5"), "30", new BigDecimal("5")),
                 List.of()));
 
-        service.runForecast(1L, 2L);
+        service.runForecast(1L, 2L, SalesHistorySource.THUC_TE);
 
         ArgumentCaptor<SalesHistory> captor = ArgumentCaptor.forClass(SalesHistory.class);
         verify(salesHistoryRepository).save(captor.capture());
@@ -243,12 +243,12 @@ class ForecastServiceImplTest {
     }
 
     @Test
-    void runForecast_shouldQueryOnlySelectedThucTeSource() {
-        List<SalesHistory> history = buildHistory(90, 5, SalesHistorySource.THUC_TE);
+    void runForecast_shouldDefaultToExternalStoreItemSource() {
+        List<SalesHistory> history = buildHistory(90, 5, SalesHistorySource.EXTERNAL_STORE_ITEM);
         when(productRepository.findById(1L)).thenReturn(Optional.of(product));
         when(warehouseRepository.findById(2L)).thenReturn(Optional.of(warehouse));
         when(salesHistoryRepository.findByProductIdAndWarehouseIdAndSourceOrderByNgayAsc(1L, 2L,
-                SalesHistorySource.THUC_TE)).thenReturn(history);
+                SalesHistorySource.EXTERNAL_STORE_ITEM)).thenReturn(history);
         when(forecastResultRepository.findMaxVersion(1L, 2L)).thenReturn(null);
         when(productRepository.getReferenceById(1L)).thenReturn(product);
         when(warehouseRepository.getReferenceById(2L)).thenReturn(warehouse);
@@ -258,7 +258,7 @@ class ForecastServiceImplTest {
         service.runForecast(1L, 2L);
 
         verify(salesHistoryRepository).findByProductIdAndWarehouseIdAndSourceOrderByNgayAsc(1L, 2L,
-                SalesHistorySource.THUC_TE);
+                SalesHistorySource.EXTERNAL_STORE_ITEM);
     }
 
     @Test
@@ -282,11 +282,11 @@ class ForecastServiceImplTest {
 
     @Test
     void runForecast_shouldNotDoubleDemandForSameCalendarDateAcrossSources() {
-        SalesHistory real = salesHistory(LocalDate.now().minusDays(1), 5, SalesHistorySource.THUC_TE);
+        SalesHistory real = salesHistory(LocalDate.now().minusDays(1), 5, SalesHistorySource.EXTERNAL_STORE_ITEM);
         when(productRepository.findById(1L)).thenReturn(Optional.of(product));
         when(warehouseRepository.findById(2L)).thenReturn(Optional.of(warehouse));
         when(salesHistoryRepository.findByProductIdAndWarehouseIdAndSourceOrderByNgayAsc(1L, 2L,
-                SalesHistorySource.THUC_TE)).thenReturn(List.of(real));
+                SalesHistorySource.EXTERNAL_STORE_ITEM)).thenReturn(List.of(real));
         when(forecastResultRepository.findMaxVersion(1L, 2L)).thenReturn(null);
         when(productRepository.getReferenceById(1L)).thenReturn(product);
         when(warehouseRepository.getReferenceById(2L)).thenReturn(warehouse);
@@ -325,15 +325,15 @@ class ForecastServiceImplTest {
             if (i == 2) {
                 continue;
             }
-            SalesHistory row = salesHistory(start.plusDays(i), i == 3 ? 0 : 5, SalesHistorySource.THUC_TE);
+            SalesHistory row = salesHistory(start.plusDays(i), i == 3 ? 0 : 5, SalesHistorySource.EXTERNAL_STORE_ITEM);
             row.setAverageSellingPrice(new BigDecimal("12000"));
             history.add(row);
         }
-        history.add(salesHistory(start.plusDays(4), 2, SalesHistorySource.THUC_TE));
+        history.add(salesHistory(start.plusDays(4), 2, SalesHistorySource.EXTERNAL_STORE_ITEM));
         when(productRepository.findById(1L)).thenReturn(Optional.of(product));
         when(warehouseRepository.findById(2L)).thenReturn(Optional.of(warehouse));
         when(salesHistoryRepository.findByProductIdAndWarehouseIdAndSourceOrderByNgayAsc(1L, 2L,
-                SalesHistorySource.THUC_TE)).thenReturn(history);
+                SalesHistorySource.EXTERNAL_STORE_ITEM)).thenReturn(history);
         when(forecastResultRepository.findMaxVersion(1L, 2L)).thenReturn(null);
         when(productRepository.getReferenceById(1L)).thenReturn(product);
         when(warehouseRepository.getReferenceById(2L)).thenReturn(warehouse);
@@ -356,12 +356,12 @@ class ForecastServiceImplTest {
 
     @Test
     void runForecast_shouldUseOnlyActualHistoricalPricesInForecastInput() {
-        List<SalesHistory> history = buildHistory(90, 5, SalesHistorySource.THUC_TE);
+        List<SalesHistory> history = buildHistory(90, 5, SalesHistorySource.EXTERNAL_STORE_ITEM);
         history.get(0).setAverageSellingPrice(new BigDecimal("12345"));
         when(productRepository.findById(1L)).thenReturn(Optional.of(product));
         when(warehouseRepository.findById(2L)).thenReturn(Optional.of(warehouse));
         when(salesHistoryRepository.findByProductIdAndWarehouseIdAndSourceOrderByNgayAsc(1L, 2L,
-                SalesHistorySource.THUC_TE)).thenReturn(history);
+                SalesHistorySource.EXTERNAL_STORE_ITEM)).thenReturn(history);
         when(forecastResultRepository.findMaxVersion(1L, 2L)).thenReturn(null);
         when(productRepository.getReferenceById(1L)).thenReturn(product);
         when(warehouseRepository.getReferenceById(2L)).thenReturn(warehouse);
@@ -404,11 +404,11 @@ class ForecastServiceImplTest {
 
     @Test
     void runForecast_shouldPersistRealDailyPredictionsFromPythonResponse() {
-        List<SalesHistory> history = buildHistory(90, 5, SalesHistorySource.THUC_TE);
+        List<SalesHistory> history = buildHistory(90, 5, SalesHistorySource.EXTERNAL_STORE_ITEM);
         when(productRepository.findById(1L)).thenReturn(Optional.of(product));
         when(warehouseRepository.findById(2L)).thenReturn(Optional.of(warehouse));
         when(salesHistoryRepository.findByProductIdAndWarehouseIdAndSourceOrderByNgayAsc(1L, 2L,
-                SalesHistorySource.THUC_TE)).thenReturn(history);
+                SalesHistorySource.EXTERNAL_STORE_ITEM)).thenReturn(history);
         when(forecastResultRepository.findMaxVersion(1L, 2L)).thenReturn(null, 1);
         when(productRepository.getReferenceById(1L)).thenReturn(product);
         when(warehouseRepository.getReferenceById(2L)).thenReturn(warehouse);
@@ -438,11 +438,11 @@ class ForecastServiceImplTest {
 
     @Test
     void runForecast_shouldPersistEvaluationMetrics() {
-        List<SalesHistory> history = buildHistory(90, 5, SalesHistorySource.THUC_TE);
+        List<SalesHistory> history = buildHistory(90, 5, SalesHistorySource.EXTERNAL_STORE_ITEM);
         when(productRepository.findById(1L)).thenReturn(Optional.of(product));
         when(warehouseRepository.findById(2L)).thenReturn(Optional.of(warehouse));
         when(salesHistoryRepository.findByProductIdAndWarehouseIdAndSourceOrderByNgayAsc(1L, 2L,
-                SalesHistorySource.THUC_TE)).thenReturn(history);
+                SalesHistorySource.EXTERNAL_STORE_ITEM)).thenReturn(history);
         when(forecastResultRepository.findMaxVersion(1L, 2L)).thenReturn(null);
         when(productRepository.getReferenceById(1L)).thenReturn(product);
         when(warehouseRepository.getReferenceById(2L)).thenReturn(warehouse);

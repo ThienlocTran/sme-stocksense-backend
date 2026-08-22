@@ -30,7 +30,7 @@ public class ForecastController {
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<ForecastResponse> runForecast(@PathVariable Long productId,
             @PathVariable Long warehouseId,
-            @RequestParam(defaultValue = "EXTERNAL_RETAIL") SalesHistorySource source) {
+            @RequestParam(defaultValue = "EXTERNAL_STORE_ITEM") SalesHistorySource source) {
         return ResponseEntity.ok(forecastService.runForecast(productId, warehouseId, source));
     }
 

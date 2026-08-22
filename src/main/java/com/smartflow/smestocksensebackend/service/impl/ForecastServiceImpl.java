@@ -79,7 +79,7 @@ public class ForecastServiceImpl implements ForecastService {
     @Override
     @Transactional
     public ForecastResponse runForecast(Long productId, Long warehouseId) {
-        return runForecast(productId, warehouseId, SalesHistorySource.THUC_TE);
+        return runForecast(productId, warehouseId, SalesHistorySource.EXTERNAL_STORE_ITEM);
     }
 
     @Override

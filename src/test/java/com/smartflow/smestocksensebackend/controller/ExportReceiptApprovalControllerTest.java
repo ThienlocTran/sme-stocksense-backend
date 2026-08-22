@@ -157,7 +157,7 @@ class ExportReceiptApprovalControllerTest {
         void approve_conflictShouldReturn409() throws Exception {
                 when(exportReceiptService.approve(eq(100L)))
                                 .thenThrow(new ConflictException(
-                                                "Chi duoc duyet phieu xuat o trang thai CHO_DUYET_CAP_1."));
+                                                "Chi duoc duyet phieu xuat o trang thai CHO_DUYET."));
 
                 mockMvc.perform(put("/api/export-receipts/100/approve")
                                 .with(user("manager@example.com").roles("MANAGER")))

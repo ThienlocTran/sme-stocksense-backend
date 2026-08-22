@@ -154,6 +154,20 @@ class ExportReceiptApprovalServiceTest {
     }
 
     @Test
+    void submitForApproval_withoutRequestShouldThrowBadRequest() {
+        assertThrows(BadRequestException.class, () -> exportReceiptService.submitForApproval(100L, null));
+        verify(exportReceiptRepository, never()).findById(any());
+    }
+
+    @Test
+    void submitForApproval_withoutVersionShouldThrowBadRequest() {
+        ExportReceiptSubmitRequest request = new ExportReceiptSubmitRequest();
+
+        assertThrows(BadRequestException.class, () -> exportReceiptService.submitForApproval(100L, request));
+        verify(exportReceiptRepository, never()).findById(any());
+    }
+
+    @Test
     void reject_pendingReceiptShouldMoveToRejectedAndStoreMetadata() {
         ExportReceipt receipt = receiptWithStatus(ExportReceiptStatus.CHO_DUYET);
         when(exportReceiptRepository.findById(100L)).thenReturn(Optional.of(receipt));
@@ -371,6 +385,15 @@ class ExportReceiptApprovalServiceTest {
     void approve_withWrongStatusShouldThrowConflict() {
         ExportReceipt receipt = receiptWithStatus(ExportReceiptStatus.HOAN_THANH);
         when(exportReceiptRepository.findById(100L)).thenReturn(Optional.of(receipt));
+
+        assertThrows(ConflictException.class, () -> exportReceiptService.approve(100L));
+        verify(exportReceiptRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void approve_withLegacyTwoLevelStatusShouldThrowConflict() {
+        ExportReceipt level1Receipt = receiptWithStatus(ExportReceiptStatus.CHO_DUYET_CAP_1);
+        when(exportReceiptRepository.findById(100L)).thenReturn(Optional.of(level1Receipt));
 
         assertThrows(ConflictException.class, () -> exportReceiptService.approve(100L));
         verify(exportReceiptRepository, never()).saveAndFlush(any());

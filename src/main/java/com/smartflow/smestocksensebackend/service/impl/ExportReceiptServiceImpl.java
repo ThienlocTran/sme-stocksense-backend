@@ -183,7 +183,7 @@ public class ExportReceiptServiceImpl implements ExportReceiptService {
             receipt.setApprovedBy(actor);
             receipt.setApprovedAt(now);
             ExportReceipt savedReceipt = exportReceiptRepository.saveAndFlush(receipt);
-            saveHistory(savedReceipt, actor, ExportReceiptAction.DUYET_CAP_1, null);
+            saveHistory(savedReceipt, actor, ExportReceiptAction.DUYET, null);
             if (emailService != null) {
                 emailService.sendExportReceiptApproved(savedReceipt);
             }
@@ -399,6 +399,10 @@ public class ExportReceiptServiceImpl implements ExportReceiptService {
     @Override
     @Transactional
     public ExportReceiptResponse submitForApproval(Long id, ExportReceiptSubmitRequest request) {
+        if (request == null || request.getVersion() == null) {
+            throw new BadRequestException("Phien ban (version) khong duoc de trong.");
+        }
+
         // 1. Xác thực người dùng đang thực hiện
         Employee actor = currentEmployee();
         if (actor.getStatus() != EmployeeStatus.HOAT_DONG) {
@@ -420,7 +424,7 @@ public class ExportReceiptServiceImpl implements ExportReceiptService {
         }
 
         // 5. Optimistic Locking: Kiểm tra version để tránh xung đột đồng thời
-        if (!receipt.getVersion().equals(request.getVersion())) {
+        if (!Objects.equals(receipt.getVersion(), request.getVersion())) {
             throw new ConflictException("Phiếu xuất đã được cập nhật bởi người khác. Vui lòng tải lại trang.");
         }
 
@@ -445,7 +449,7 @@ public class ExportReceiptServiceImpl implements ExportReceiptService {
             }
         }
 
-        // 7. Người tạo gửi phiếu đồng nghĩa đã duyệt cấp 1, chuyển thẳng sang chờ cấp 2.
+        // 7. Người tạo gửi phiếu sang trạng thái chờ duyệt một cấp.
         LocalDateTime submittedAt = LocalDateTime.now();
         receipt.setStatus(ExportReceiptStatus.CHO_DUYET);
         receipt.setSubmittedBy(actor);

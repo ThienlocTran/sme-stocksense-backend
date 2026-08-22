@@ -17,6 +17,7 @@ import com.smartflow.smestocksensebackend.entity.Product;
 import com.smartflow.smestocksensebackend.entity.SalesHistory;
 import com.smartflow.smestocksensebackend.entity.SalesHistorySource;
 import com.smartflow.smestocksensebackend.entity.Warehouse;
+import com.smartflow.smestocksensebackend.exception.ConflictException;
 import com.smartflow.smestocksensebackend.exception.NotFoundException;
 import com.smartflow.smestocksensebackend.repository.ForecastDriftLogRepository;
 import com.smartflow.smestocksensebackend.repository.ForecastModelMetadataRepository;
@@ -34,6 +35,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.web.client.RestClient;
+import org.springframework.transaction.support.TransactionCallback;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -50,6 +53,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -173,12 +177,12 @@ class ForecastServiceImplTest {
     @Test
     @SuppressWarnings("unchecked")
     void seedDemoHistory_shouldIgnoreExternalHistoryCount() {
-        InventoryLevel level = new InventoryLevel();
-        level.setProduct(product);
-        level.setWarehouse(warehouse);
-        when(inventoryLevelRepository.findAll()).thenReturn(List.of(level));
-        when(salesHistoryRepository.countByProductIdAndWarehouseIdAndSource(1L, 2L, SalesHistorySource.SEED_DEMO))
-                .thenReturn(0L);
+        when(inventoryLevelRepository.findSeedDemoSeriesTargets()).thenReturn(List.of(seedTarget()));
+        when(salesHistoryRepository.findByProductIdAndWarehouseIdAndSourceAndNgayBetweenOrderByNgayAsc(
+                eq(1L), eq(2L), eq(SalesHistorySource.SEED_DEMO), any(), any()))
+                .thenReturn(List.of());
+        when(productRepository.getReferenceById(1L)).thenReturn(product);
+        when(warehouseRepository.getReferenceById(2L)).thenReturn(warehouse);
 
         com.smartflow.smestocksensebackend.dto.forecast.SeedHistoryResponse response = service.seedDemoHistory();
 
@@ -193,6 +197,56 @@ class ForecastServiceImplTest {
         assertEquals(product.getPrice(), rows.get(0).getAverageSellingPrice());
         assertEquals(LocalDate.now().minusDays(179), rows.get(0).getNgay());
         assertEquals(LocalDate.now(), rows.get(179).getNgay());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void seedDemoHistory_shouldFillOnlyMissingSeedDemoDates() {
+        when(inventoryLevelRepository.findSeedDemoSeriesTargets()).thenReturn(List.of(seedTarget()));
+        SalesHistory existing = salesHistory(LocalDate.now().minusDays(179), 9, SalesHistorySource.SEED_DEMO);
+        when(salesHistoryRepository.findByProductIdAndWarehouseIdAndSourceAndNgayBetweenOrderByNgayAsc(
+                eq(1L), eq(2L), eq(SalesHistorySource.SEED_DEMO), any(), any()))
+                .thenReturn(List.of(existing));
+        when(productRepository.getReferenceById(1L)).thenReturn(product);
+        when(warehouseRepository.getReferenceById(2L)).thenReturn(warehouse);
+
+        com.smartflow.smestocksensebackend.dto.forecast.SeedHistoryResponse response = service.seedDemoHistory();
+
+        ArgumentCaptor<List<SalesHistory>> captor = ArgumentCaptor.forClass(List.class);
+        verify(salesHistoryRepository).saveAll(captor.capture());
+        assertEquals(179, captor.getValue().size());
+        assertEquals(179, response.rowsInserted());
+    }
+
+    @Test
+    void seedDemoHistory_shouldRejectConcurrentRun() {
+        when(inventoryLevelRepository.findSeedDemoSeriesTargets()).thenAnswer(invocation -> {
+            assertThrows(ConflictException.class, () -> service.seedDemoHistory());
+            return List.of();
+        });
+
+        service.seedDemoHistory();
+    }
+
+    @Test
+    void seedDemoHistory_shouldUseShortTransactionPerSeries() {
+        TransactionTemplate transactionTemplate = mock(TransactionTemplate.class);
+        service.transactionTemplate = transactionTemplate;
+        when(transactionTemplate.execute(any())).thenAnswer(invocation -> {
+            TransactionCallback<?> callback = invocation.getArgument(0);
+            return callback.doInTransaction(null);
+        });
+        when(inventoryLevelRepository.findSeedDemoSeriesTargets()).thenReturn(List.of(seedTarget(), seedTarget(3L, 4L)));
+        when(salesHistoryRepository.findByProductIdAndWarehouseIdAndSourceAndNgayBetweenOrderByNgayAsc(
+                any(), any(), eq(SalesHistorySource.SEED_DEMO), any(), any()))
+                .thenReturn(List.of());
+        when(productRepository.getReferenceById(any())).thenReturn(product);
+        when(warehouseRepository.getReferenceById(any())).thenReturn(warehouse);
+
+        service.seedDemoHistory();
+
+        verify(transactionTemplate, times(3)).execute(any());
+        verify(salesHistoryRepository, times(2)).saveAll(any());
     }
 
     @Test
@@ -661,6 +715,29 @@ class ForecastServiceImplTest {
         row.setQuantity(quantity);
         row.setSource(source);
         return row;
+    }
+
+    private InventoryLevelRepository.SeedDemoSeriesTarget seedTarget() {
+        return seedTarget(1L, 2L);
+    }
+
+    private InventoryLevelRepository.SeedDemoSeriesTarget seedTarget(Long productId, Long warehouseId) {
+        return new InventoryLevelRepository.SeedDemoSeriesTarget() {
+            @Override
+            public Long getProductId() {
+                return productId;
+            }
+
+            @Override
+            public Long getWarehouseId() {
+                return warehouseId;
+            }
+
+            @Override
+            public BigDecimal getPrice() {
+                return product.getPrice();
+            }
+        };
     }
 
     private ForecastModelMetadata metadata(ForecastDatasetType datasetType, SalesHistorySource source) {

@@ -47,12 +47,14 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -216,6 +218,34 @@ class ForecastServiceImplTest {
         verify(salesHistoryRepository).saveAll(captor.capture());
         assertEquals(179, captor.getValue().size());
         assertEquals(179, response.rowsInserted());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void seedDemoHistory_shouldGenerateSyntheticQuantitiesInsteadOfCopyingExternalStoreItem() {
+        when(inventoryLevelRepository.findSeedDemoSeriesTargets()).thenReturn(List.of(seedTarget()));
+        when(salesHistoryRepository.findByProductIdAndWarehouseIdAndSourceAndNgayBetweenOrderByNgayAsc(
+                eq(1L), eq(2L), eq(SalesHistorySource.SEED_DEMO), any(), any()))
+                .thenReturn(List.of());
+        when(productRepository.getReferenceById(1L)).thenReturn(product);
+        when(warehouseRepository.getReferenceById(2L)).thenReturn(warehouse);
+
+        service.seedDemoHistory();
+
+        ArgumentCaptor<List<SalesHistory>> captor = ArgumentCaptor.forClass(List.class);
+        verify(salesHistoryRepository).saveAll(captor.capture());
+        List<Integer> seedQuantities = captor.getValue().stream()
+                .map(SalesHistory::getQuantity)
+                .toList();
+        List<Integer> copiedExternalQuantities = java.util.stream.IntStream.range(0, 180)
+                .map(i -> 1000 + i)
+                .boxed()
+                .toList();
+        assertNotEquals(copiedExternalQuantities, seedQuantities);
+        verify(salesHistoryRepository, never()).findByProductIdAndWarehouseIdAndSourceOrderByNgayAsc(
+                1L, 2L, SalesHistorySource.EXTERNAL_STORE_ITEM);
+        verify(salesHistoryRepository, never()).findByProductIdAndWarehouseIdAndSourceAndNgayBetweenOrderByNgayAsc(
+                eq(1L), eq(2L), eq(SalesHistorySource.EXTERNAL_STORE_ITEM), any(), any());
     }
 
     @Test

@@ -288,6 +288,39 @@ class AiPurchaseAssignmentServiceImplTest {
     }
 
     @Test
+    void pendingAssignmentCanBeSentManually() {
+        AiPurchaseRequest assignment = assignment(employee(2L, RoleCode.EMPLOYEE));
+        assignment.setEmailStatus(AiPurchaseRequestEmailStatus.CHO_GUI);
+        Employee actor = employee(1L, RoleCode.MANAGER);
+        authenticate(actor);
+        when(employeeRepository.findById(1L)).thenReturn(Optional.of(actor));
+        when(aiPurchaseRequestRepository.findById(99L)).thenReturn(Optional.of(assignment));
+        when(aiPurchaseRequestRepository.saveAndFlush(any(AiPurchaseRequest.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        var response = service.retryEmail(99L);
+
+        assertEquals(AiPurchaseRequestEmailStatus.DA_GUI, response.emailStatus());
+        verify(aiPurchaseAssignmentEmailService).sendAssignmentNotification(assignment);
+        verify(aiPurchaseRequestRepository, times(1)).saveAndFlush(any(AiPurchaseRequest.class));
+    }
+
+    @Test
+    void sentAssignmentCannotBeSentAgain() {
+        AiPurchaseRequest assignment = assignment(employee(2L, RoleCode.EMPLOYEE));
+        assignment.setEmailStatus(AiPurchaseRequestEmailStatus.DA_GUI);
+        Employee actor = employee(1L, RoleCode.MANAGER);
+        authenticate(actor);
+        when(employeeRepository.findById(1L)).thenReturn(Optional.of(actor));
+        when(aiPurchaseRequestRepository.findById(99L)).thenReturn(Optional.of(assignment));
+
+        assertThrows(BadRequestException.class, () -> service.retryEmail(99L));
+
+        verify(aiPurchaseAssignmentEmailService, never()).sendAssignmentNotification(any());
+        verify(aiPurchaseRequestRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
     void retryFailureKeepsFailedAndDoesNotDuplicateAssignment() {
         AiPurchaseRequest assignment = assignment(employee(2L, RoleCode.EMPLOYEE));
         assignment.setEmailStatus(AiPurchaseRequestEmailStatus.THAT_BAI);

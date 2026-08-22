@@ -150,8 +150,12 @@ public class AiPurchaseAssignmentServiceImpl implements AiPurchaseAssignmentServ
         TransactionTemplate tx = new TransactionTemplate(transactionManager);
         AiPurchaseRequest assignment = aiPurchaseRequestRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Yêu cầu nhập hàng AI không tồn tại."));
-        if (assignment.getEmailStatus() != AiPurchaseRequestEmailStatus.THAT_BAI) {
-            throw new BadRequestException("Chỉ retry email ở trạng thái gửi thất bại.");
+        if (assignment.getEmailStatus() == AiPurchaseRequestEmailStatus.DA_GUI) {
+            throw new BadRequestException("Email thông báo đã được gửi.");
+        }
+        if (assignment.getEmailStatus() != AiPurchaseRequestEmailStatus.THAT_BAI
+                && assignment.getEmailStatus() != AiPurchaseRequestEmailStatus.CHO_GUI) {
+            throw new BadRequestException("Chỉ gửi email ở trạng thái chờ gửi hoặc gửi thất bại.");
         }
 
         try {

@@ -2,6 +2,7 @@ package com.smartflow.smestocksensebackend.controller;
 
 import com.smartflow.smestocksensebackend.dto.forecast.DriftResponse;
 import com.smartflow.smestocksensebackend.dto.forecast.ForecastResponse;
+import com.smartflow.smestocksensebackend.dto.forecast.SeedHistoryResponse;
 import com.smartflow.smestocksensebackend.entity.SalesHistorySource;
 import com.smartflow.smestocksensebackend.exception.NotFoundException;
 import com.smartflow.smestocksensebackend.service.ForecastService;
@@ -56,4 +57,9 @@ public class ForecastController {
         return ResponseEntity.ok(forecastService.checkDrift(productId, warehouseId));
     }
 
+    @PostMapping("/seed-history")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    public ResponseEntity<SeedHistoryResponse> seedHistory() {
+        return ResponseEntity.ok(forecastService.seedDemoHistory());
+    }
 }

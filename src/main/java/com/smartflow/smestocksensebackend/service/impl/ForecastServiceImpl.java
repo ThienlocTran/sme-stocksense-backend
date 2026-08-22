@@ -170,13 +170,16 @@ public class ForecastServiceImpl implements ForecastService {
 
         CapacityLimitInfo capInfo = calculateCapacityLimit(product.getUnitVolumeM3(), warehouseId, reorder7, reorder14, reorder30);
 
-        return new ForecastResponse(productId, warehouseId, version, mode.name(), smape,
+        return new ForecastResponse(savedMetadata.getId(), productId, warehouseId, version, mode.name(),
+                savedMetadata.getDatasetType().name(), source.name(), smape, mae, rmse,
                 forecastByHorizon.get(7), forecastByHorizon.get(14), forecastByHorizon.get(30),
                 currentStock, minStock, reorder7, reorder14, reorder30,
                 dataDays, LocalDateTime.now(),
                 capInfo.allowed7d(), capInfo.allowed14d(), capInfo.allowed30d(),
                 capInfo.limited7d(), capInfo.limited14d(), capInfo.limited30d(),
-                capInfo.capacityStatus());
+                capInfo.capacityStatus(),
+                savedMetadata.getHistoryStartDate(), savedMetadata.getHistoryEndDate(),
+                toHistoryPoints(history), toDailyForecastPoints(savedMetadata.getId()));
     }
 
     @Override
@@ -213,13 +216,18 @@ public class ForecastServiceImpl implements ForecastService {
 
         CapacityLimitInfo capInfo = calculateCapacityLimit(product.getUnitVolumeM3(), warehouseId, reorder7, reorder14, reorder30);
 
-        return new ForecastResponse(productId, warehouseId, metadata.getVersion(), metadata.getMode().name(),
-                metadata.getSmape(), forecastByHorizon.get(7), forecastByHorizon.get(14), forecastByHorizon.get(30),
+        return new ForecastResponse(metadata.getId(), productId, warehouseId, metadata.getVersion(),
+                metadata.getMode().name(), metadata.getDatasetType().name(), sourceForDataset(metadata.getDatasetType()),
+                metadata.getSmape(), metadata.getMae(), metadata.getRmse(),
+                forecastByHorizon.get(7), forecastByHorizon.get(14), forecastByHorizon.get(30),
                 currentStock, minStock, reorder7, reorder14, reorder30,
                 metadata.getDataDays(), metadata.getTrainedAt() != null ? metadata.getTrainedAt() : metadata.getCreatedAt(),
                 capInfo.allowed7d(), capInfo.allowed14d(), capInfo.allowed30d(),
                 capInfo.limited7d(), capInfo.limited14d(), capInfo.limited30d(),
-                capInfo.capacityStatus());
+                capInfo.capacityStatus(),
+                metadata.getHistoryStartDate(), metadata.getHistoryEndDate(),
+                toHistoryPoints(historyForMetadata(productId, warehouseId, metadata)),
+                toDailyForecastPoints(metadata.getId()));
     }
 
     @Override
@@ -435,6 +443,43 @@ public class ForecastServiceImpl implements ForecastService {
 
     private static int firstNonNull(Integer value, int fallback) {
         return value != null ? value : fallback;
+    }
+
+    private List<ForecastResponse.DailyPoint> toHistoryPoints(List<SalesHistory> history) {
+        return history.stream()
+                .map(row -> new ForecastResponse.DailyPoint(row.getNgay(), BigDecimal.valueOf(row.getQuantity())))
+                .toList();
+    }
+
+    private List<ForecastResponse.DailyPoint> toDailyForecastPoints(Long modelMetadataId) {
+        return dailyForecastResultRepository.findByModelMetadataIdOrderByForecastDateAsc(modelMetadataId)
+                .stream()
+                .map(row -> new ForecastResponse.DailyPoint(row.getForecastDate(), row.getPredictedQuantity()))
+                .toList();
+    }
+
+    private List<SalesHistory> historyForMetadata(Long productId, Long warehouseId, ForecastModelMetadata metadata) {
+        SalesHistorySource source = sourceForDatasetType(metadata.getDatasetType());
+        if (source == null) {
+            return List.of();
+        }
+        return normalizeDailySeries(salesHistoryRepository
+                .findByProductIdAndWarehouseIdAndSourceOrderByNgayAsc(productId, warehouseId, source), source);
+    }
+
+    private String sourceForDataset(ForecastDatasetType datasetType) {
+        SalesHistorySource source = sourceForDatasetType(datasetType);
+        return source == null ? null : source.name();
+    }
+
+    private SalesHistorySource sourceForDatasetType(ForecastDatasetType datasetType) {
+        if (datasetType == ForecastDatasetType.THUC_TE || datasetType == ForecastDatasetType.COLD_START) {
+            return SalesHistorySource.THUC_TE;
+        }
+        if (datasetType == ForecastDatasetType.EXTERNAL) {
+            return SalesHistorySource.EXTERNAL_RETAIL;
+        }
+        return null;
     }
 
     private ForecastDatasetType datasetType(SalesHistorySource source, ForecastMode mode) {

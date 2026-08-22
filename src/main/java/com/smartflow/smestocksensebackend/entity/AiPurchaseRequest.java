@@ -102,25 +102,43 @@ public class AiPurchaseRequest {
     @PrePersist
     @PreUpdate
     private void validate() {
+        if (modelMetadata == null) {
+            throw new IllegalStateException("modelMetadata is required.");
+        }
+        if (product == null) {
+            throw new IllegalStateException("product is required.");
+        }
+        if (warehouse == null) {
+            throw new IllegalStateException("warehouse is required.");
+        }
+        if (sender == null) {
+            throw new IllegalStateException("sender is required.");
+        }
+        if (receiver == null) {
+            throw new IllegalStateException("receiver is required.");
+        }
         if (!VALID_HORIZONS.contains(horizonDays)) {
             throw new IllegalStateException("horizonDays must be 7, 14, or 30.");
         }
         if (aiSuggestedQuantity == null || aiSuggestedQuantity < 0) {
             throw new IllegalStateException("aiSuggestedQuantity must be non-negative.");
         }
-        if (requestedQuantity == null || requestedQuantity < 0) {
-            throw new IllegalStateException("requestedQuantity must be non-negative.");
+        if (requestedQuantity == null || requestedQuantity <= 0) {
+            throw new IllegalStateException("requestedQuantity must be positive.");
+        }
+        if (content != null && content.length() > 1000) {
+            throw new IllegalStateException("content must be at most 1000 characters.");
         }
         validateRoles();
     }
 
     private void validateRoles() {
         RoleCode senderRole = sender != null && sender.getRole() != null ? sender.getRole().getCode() : null;
-        if (senderRole != null && senderRole != RoleCode.ADMIN && senderRole != RoleCode.MANAGER) {
+        if (senderRole != RoleCode.ADMIN && senderRole != RoleCode.MANAGER) {
             throw new IllegalStateException("sender must be ADMIN or MANAGER.");
         }
         RoleCode receiverRole = receiver != null && receiver.getRole() != null ? receiver.getRole().getCode() : null;
-        if (receiverRole != null && receiverRole != RoleCode.EMPLOYEE) {
+        if (receiverRole != RoleCode.EMPLOYEE) {
             throw new IllegalStateException("receiver must be EMPLOYEE.");
         }
     }

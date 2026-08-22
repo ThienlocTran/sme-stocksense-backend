@@ -1,0 +1,134 @@
+package com.smartflow.smestocksensebackend.service.impl;
+
+import com.smartflow.smestocksensebackend.dto.aiassignment.AiPurchaseAssignmentResponse;
+import com.smartflow.smestocksensebackend.dto.aiassignment.CreateAiPurchaseAssignmentRequest;
+import com.smartflow.smestocksensebackend.entity.AiPurchaseRequest;
+import com.smartflow.smestocksensebackend.entity.AiPurchaseRequestEmailStatus;
+import com.smartflow.smestocksensebackend.entity.AiPurchaseRequestStatus;
+import com.smartflow.smestocksensebackend.entity.Employee;
+import com.smartflow.smestocksensebackend.entity.ForecastModelMetadata;
+import com.smartflow.smestocksensebackend.entity.Product;
+import com.smartflow.smestocksensebackend.entity.RoleCode;
+import com.smartflow.smestocksensebackend.entity.Warehouse;
+import com.smartflow.smestocksensebackend.exception.BadRequestException;
+import com.smartflow.smestocksensebackend.exception.MissingRoleException;
+import com.smartflow.smestocksensebackend.exception.NotFoundException;
+import com.smartflow.smestocksensebackend.repository.AiPurchaseRequestRepository;
+import com.smartflow.smestocksensebackend.repository.EmployeeRepository;
+import com.smartflow.smestocksensebackend.repository.ForecastModelMetadataRepository;
+import com.smartflow.smestocksensebackend.repository.ProductRepository;
+import com.smartflow.smestocksensebackend.repository.WarehouseRepository;
+import com.smartflow.smestocksensebackend.service.AiPurchaseAssignmentService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.concurrent.ThreadLocalRandom;
+
+@Service
+@RequiredArgsConstructor
+public class AiPurchaseAssignmentServiceImpl implements AiPurchaseAssignmentService {
+
+    private static final DateTimeFormatter CODE_TIME = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
+
+    private final AiPurchaseRequestRepository aiPurchaseRequestRepository;
+    private final EmployeeRepository employeeRepository;
+    private final ProductRepository productRepository;
+    private final WarehouseRepository warehouseRepository;
+    private final ForecastModelMetadataRepository forecastModelMetadataRepository;
+
+    @Override
+    @Transactional
+    public AiPurchaseAssignmentResponse createAssignment(CreateAiPurchaseAssignmentRequest request) {
+        Employee sender = currentEmployee();
+        ensureSenderCanAssign(sender);
+
+        Product product = productRepository.findById(request.productId())
+                .orElseThrow(() -> new NotFoundException("Sản phẩm không tồn tại."));
+        Warehouse warehouse = warehouseRepository.findById(request.warehouseId())
+                .orElseThrow(() -> new NotFoundException("Kho không tồn tại."));
+        Employee receiver = employeeRepository.findById(request.receiverId())
+                .orElseThrow(() -> new NotFoundException("Nhân viên nhận việc không tồn tại."));
+        if (receiver.getRole() == null || receiver.getRole().getCode() != RoleCode.EMPLOYEE) {
+            throw new BadRequestException("Người nhận phải là nhân viên.");
+        }
+
+        ForecastModelMetadata modelMetadata = resolveModelMetadata(request, product, warehouse);
+
+        AiPurchaseRequest assignment = new AiPurchaseRequest();
+        assignment.setCode(nextCode());
+        assignment.setModelMetadata(modelMetadata);
+        assignment.setProduct(product);
+        assignment.setWarehouse(warehouse);
+        assignment.setHorizonDays(request.horizonDays());
+        assignment.setAiSuggestedQuantity(request.aiSuggestedQuantity());
+        assignment.setRequestedQuantity(request.requestedQuantity());
+        assignment.setSender(sender);
+        assignment.setReceiver(receiver);
+        assignment.setContent(normalizeContent(request.content()));
+        assignment.setStatus(AiPurchaseRequestStatus.DA_GUI);
+        assignment.setEmailStatus(AiPurchaseRequestEmailStatus.CHO_GUI);
+
+        return AiPurchaseAssignmentResponse.from(aiPurchaseRequestRepository.saveAndFlush(assignment));
+    }
+
+    private Employee currentEmployee() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !(authentication.getPrincipal() instanceof Employee principal)
+                || principal.getId() == null) {
+            throw new AuthenticationCredentialsNotFoundException("Chưa xác thực.");
+        }
+        return employeeRepository.findById(principal.getId())
+                .orElseThrow(() -> new AuthenticationCredentialsNotFoundException("Tài khoản không tồn tại."));
+    }
+
+    private void ensureSenderCanAssign(Employee sender) {
+        RoleCode role = sender.getRole() != null ? sender.getRole().getCode() : null;
+        if (role != RoleCode.ADMIN && role != RoleCode.MANAGER) {
+            throw new MissingRoleException("Chỉ ADMIN hoặc MANAGER được giao yêu cầu nhập hàng AI.");
+        }
+    }
+
+    private ForecastModelMetadata resolveModelMetadata(CreateAiPurchaseAssignmentRequest request, Product product,
+            Warehouse warehouse) {
+        if (request.modelMetadataId() != null) {
+            ForecastModelMetadata metadata = forecastModelMetadataRepository.findById(request.modelMetadataId())
+                    .orElseThrow(() -> new NotFoundException("Thông tin mô hình AI không tồn tại."));
+            if (!sameId(metadata.getProduct(), product) || !sameId(metadata.getWarehouse(), warehouse)) {
+                throw new BadRequestException("Thông tin mô hình AI không khớp sản phẩm hoặc kho.");
+            }
+            return metadata;
+        }
+        return forecastModelMetadataRepository
+                .findFirstByProductIdAndWarehouseIdOrderByVersionDesc(product.getId(), warehouse.getId())
+                .orElseThrow(() -> new BadRequestException("Chưa có thông tin mô hình AI cho sản phẩm và kho."));
+    }
+
+    private boolean sameId(Product left, Product right) {
+        return left != null && right != null && left.getId() != null && left.getId().equals(right.getId());
+    }
+
+    private boolean sameId(Warehouse left, Warehouse right) {
+        return left != null && right != null && left.getId() != null && left.getId().equals(right.getId());
+    }
+
+    private String normalizeContent(String content) {
+        return content == null || content.isBlank() ? null : content.trim();
+    }
+
+    private String nextCode() {
+        for (int i = 0; i < 5; i++) {
+            String code = "YCAI-" + LocalDateTime.now().format(CODE_TIME) + "-"
+                    + ThreadLocalRandom.current().nextInt(100, 1000);
+            if (!aiPurchaseRequestRepository.existsByCodeIgnoreCase(code)) {
+                return code;
+            }
+        }
+        throw new BadRequestException("Không tạo được mã yêu cầu nhập hàng AI.");
+    }
+}

@@ -2,11 +2,13 @@ package com.smartflow.smestocksensebackend.controller;
 
 import com.smartflow.smestocksensebackend.dto.forecast.DriftResponse;
 import com.smartflow.smestocksensebackend.dto.forecast.ForecastResponse;
-import com.smartflow.smestocksensebackend.dto.forecast.SeedHistoryResponse;
+import com.smartflow.smestocksensebackend.dto.forecast.SeedHistoryJobResponse;
 import com.smartflow.smestocksensebackend.entity.SalesHistorySource;
 import com.smartflow.smestocksensebackend.exception.NotFoundException;
 import com.smartflow.smestocksensebackend.service.ForecastService;
+import com.smartflow.smestocksensebackend.service.SeedHistoryJobService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -26,6 +28,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class ForecastController {
 
     private final ForecastService forecastService;
+    private final SeedHistoryJobService seedHistoryJobService;
 
     @PostMapping("/{productId}/{warehouseId}")
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
@@ -60,7 +63,27 @@ public class ForecastController {
 
     @PostMapping("/seed-history")
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
-    public ResponseEntity<SeedHistoryResponse> seedHistory() {
-        return ResponseEntity.ok(forecastService.seedDemoHistory());
+    public ResponseEntity<SeedHistoryJobResponse> seedHistory() {
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body(seedHistoryJobService.start());
+    }
+
+    @PostMapping("/seed-history/jobs")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    public ResponseEntity<SeedHistoryJobResponse> startSeedHistoryJob() {
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body(seedHistoryJobService.start());
+    }
+
+    @GetMapping("/seed-history/jobs/{jobId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    public ResponseEntity<SeedHistoryJobResponse> getSeedHistoryJob(@PathVariable java.util.UUID jobId) {
+        return ResponseEntity.ok(seedHistoryJobService.get(jobId));
+    }
+
+    @GetMapping("/seed-history/jobs/active")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    public ResponseEntity<SeedHistoryJobResponse> getActiveSeedHistoryJob() {
+        return seedHistoryJobService.active()
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.noContent().build());
     }
 }

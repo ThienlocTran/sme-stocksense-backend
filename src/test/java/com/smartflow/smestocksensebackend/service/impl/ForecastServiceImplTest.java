@@ -339,6 +339,28 @@ class ForecastServiceImplTest {
     }
 
     @Test
+    void runForecast_shouldUseOnlyActualHistoricalPricesInForecastInput() {
+        List<SalesHistory> history = buildHistory(90, 5, SalesHistorySource.THUC_TE);
+        history.get(0).setAverageSellingPrice(new BigDecimal("12345"));
+        when(productRepository.findById(1L)).thenReturn(Optional.of(product));
+        when(warehouseRepository.findById(2L)).thenReturn(Optional.of(warehouse));
+        when(salesHistoryRepository.findByProductIdAndWarehouseIdAndSourceOrderByNgayAsc(1L, 2L,
+                SalesHistorySource.THUC_TE)).thenReturn(history);
+        when(forecastResultRepository.findMaxVersion(1L, 2L)).thenReturn(null);
+        when(productRepository.getReferenceById(1L)).thenReturn(product);
+        when(warehouseRepository.getReferenceById(2L)).thenReturn(warehouse);
+        when(inventoryLevelRepository.findByProductIdAndWarehouseId(1L, 2L)).thenReturn(Optional.empty());
+        ArgumentCaptor<AiForecastClientRequest> requestCaptor = ArgumentCaptor.forClass(AiForecastClientRequest.class);
+        stubAiForecast(requestCaptor);
+
+        service.runForecast(1L, 2L);
+
+        List<AiForecastClientRequest.SalesPoint> points = requestCaptor.getValue().history();
+        assertEquals(new BigDecimal("12345"), points.get(0).price());
+        assertNull(points.get(1).price());
+    }
+
+    @Test
     void runForecast_shouldThrowNotFound_whenProductMissing() {
         when(productRepository.findById(99L)).thenReturn(Optional.empty());
         assertThrows(NotFoundException.class, () -> service.runForecast(99L, 2L));

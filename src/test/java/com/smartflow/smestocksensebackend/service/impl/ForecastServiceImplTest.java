@@ -191,7 +191,8 @@ class ForecastServiceImplTest {
         LocalDate realDate = LocalDate.now().minusDays(3);
         when(inventoryTransactionRepository.sumDailyXuatKho(eq(1L), eq(2L), any(), any()))
                 .thenReturn(List.of(dailyQuantity(realDate, 99)));
-        when(salesHistoryRepository.findByProductIdAndWarehouseIdAndNgay(1L, 2L, realDate))
+        when(salesHistoryRepository.findByProductIdAndWarehouseIdAndNgayAndSource(1L, 2L, realDate,
+                SalesHistorySource.THUC_TE))
                 .thenReturn(Optional.empty());
 
         RestClient.RequestBodyUriSpec bodyUriSpec = mock(RestClient.RequestBodyUriSpec.class);

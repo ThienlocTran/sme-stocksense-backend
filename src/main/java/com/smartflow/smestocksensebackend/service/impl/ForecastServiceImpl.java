@@ -286,7 +286,8 @@ public class ForecastServiceImpl implements ForecastService {
         Warehouse warehouseRef = warehouseRepository.getReferenceById(warehouseId);
         for (DailyQuantityProjection row : actualRows) {
             SalesHistory entry = salesHistoryRepository
-                    .findByProductIdAndWarehouseIdAndNgay(productId, warehouseId, row.getNgay())
+                    .findByProductIdAndWarehouseIdAndNgayAndSource(productId, warehouseId, row.getNgay(),
+                            SalesHistorySource.THUC_TE)
                     .orElseGet(SalesHistory::new);
             entry.setProduct(productRef);
             entry.setWarehouse(warehouseRef);

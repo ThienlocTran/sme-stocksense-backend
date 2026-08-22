@@ -32,7 +32,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @Entity
 @Table(name = "lich_su_ban_hang", schema = "ai",
-        uniqueConstraints = @UniqueConstraint(columnNames = { "san_pham_id", "kho_id", "ngay" }))
+        uniqueConstraints = @UniqueConstraint(columnNames = { "san_pham_id", "kho_id", "ngay", "nguon_du_lieu" }))
 public class SalesHistory {
 
     @Id

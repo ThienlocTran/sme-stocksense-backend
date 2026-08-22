@@ -1,6 +1,7 @@
 package com.smartflow.smestocksensebackend.service.impl;
 
 import com.smartflow.smestocksensebackend.dto.aiassignment.CreateAiPurchaseAssignmentRequest;
+import com.smartflow.smestocksensebackend.dto.replenishment.ForecastReplenishmentRecommendationResponse;
 import com.smartflow.smestocksensebackend.entity.AiPurchaseRequest;
 import com.smartflow.smestocksensebackend.entity.AiPurchaseRequestEmailStatus;
 import com.smartflow.smestocksensebackend.entity.Employee;
@@ -18,6 +19,7 @@ import com.smartflow.smestocksensebackend.repository.ForecastModelMetadataReposi
 import com.smartflow.smestocksensebackend.repository.ProductRepository;
 import com.smartflow.smestocksensebackend.repository.WarehouseRepository;
 import com.smartflow.smestocksensebackend.service.AiPurchaseAssignmentEmailService;
+import com.smartflow.smestocksensebackend.service.ForecastReplenishmentRecommendationService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -32,6 +34,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.SimpleTransactionStatus;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
@@ -59,6 +62,7 @@ class AiPurchaseAssignmentServiceImplTest {
     @Mock WarehouseRepository warehouseRepository;
     @Mock ForecastModelMetadataRepository forecastModelMetadataRepository;
     @Mock AiPurchaseAssignmentEmailService aiPurchaseAssignmentEmailService;
+    @Mock ForecastReplenishmentRecommendationService recommendationService;
     @Mock PlatformTransactionManager transactionManager;
 
     @InjectMocks AiPurchaseAssignmentServiceImpl service;
@@ -122,6 +126,29 @@ class AiPurchaseAssignmentServiceImplTest {
         assertEquals(2L, saved.getReceiver().getId());
         assertEquals(70, saved.getAiSuggestedQuantity());
         assertEquals(50, saved.getRequestedQuantity());
+    }
+
+    @Test
+    void clientAiSuggestedQuantityIsIgnoredInFavorOfServerRecommendation() {
+        stubHappyPath(RoleCode.MANAGER);
+
+        service.createAssignment(new CreateAiPurchaseAssignmentRequest(10L, 20L, (short) 7, 999999, 80, 2L,
+                "Nhan vien tao phieu nhap thu cong", 30L));
+
+        AiPurchaseRequest saved = savedAssignment();
+        assertEquals(70, saved.getAiSuggestedQuantity());
+        assertEquals(80, saved.getRequestedQuantity());
+    }
+
+    @Test
+    void modelMetadataMustMatchServerRecommendation() {
+        stubRefs(RoleCode.MANAGER, RoleCode.EMPLOYEE);
+
+        assertThrows(BadRequestException.class,
+                () -> service.createAssignment(new CreateAiPurchaseAssignmentRequest(10L, 20L, (short) 7, 70, 50, 2L,
+                        "Nhan vien tao phieu nhap thu cong", 31L)));
+
+        verify(aiPurchaseRequestRepository, never()).saveAndFlush(any());
     }
 
     @Test
@@ -317,7 +344,9 @@ class AiPurchaseAssignmentServiceImplTest {
         when(productRepository.findById(10L)).thenReturn(Optional.of(product));
         when(warehouseRepository.findById(20L)).thenReturn(Optional.of(warehouse));
         when(employeeRepository.findById(2L)).thenReturn(Optional.of(receiver));
-        when(forecastModelMetadataRepository.findById(30L)).thenReturn(Optional.of(metadata));
+        lenient().when(forecastModelMetadataRepository.findById(30L)).thenReturn(Optional.of(metadata));
+        when(recommendationService.getRecommendation(10L, 20L, (short) 7))
+                .thenReturn(recommendation());
     }
 
     private AiPurchaseRequest savedAssignment() {
@@ -329,6 +358,12 @@ class AiPurchaseAssignmentServiceImplTest {
     private CreateAiPurchaseAssignmentRequest request() {
         return new CreateAiPurchaseAssignmentRequest(10L, 20L, (short) 7, 70, 50, 2L,
                 "Nhan vien tao phieu nhap thu cong", 30L);
+    }
+
+    private ForecastReplenishmentRecommendationResponse recommendation() {
+        return new ForecastReplenishmentRecommendationResponse(10L, "SP001", "Laptop", 20L, "K001", "Kho chinh",
+                (short) 7, BigDecimal.valueOf(60), 20, 30, 70, 70, false, 0, 100,
+                BigDecimal.valueOf(100), BigDecimal.valueOf(20), BigDecimal.valueOf(80), 30L, 2, null);
     }
 
     private void authenticate(Employee employee) {

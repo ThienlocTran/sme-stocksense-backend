@@ -2,6 +2,7 @@ package com.smartflow.smestocksensebackend.service.impl;
 
 import com.smartflow.smestocksensebackend.dto.aiassignment.AiPurchaseAssignmentResponse;
 import com.smartflow.smestocksensebackend.dto.aiassignment.CreateAiPurchaseAssignmentRequest;
+import com.smartflow.smestocksensebackend.dto.replenishment.ForecastReplenishmentRecommendationResponse;
 import com.smartflow.smestocksensebackend.entity.AiPurchaseRequest;
 import com.smartflow.smestocksensebackend.entity.AiPurchaseRequestEmailStatus;
 import com.smartflow.smestocksensebackend.entity.AiPurchaseRequestStatus;
@@ -21,6 +22,7 @@ import com.smartflow.smestocksensebackend.repository.ProductRepository;
 import com.smartflow.smestocksensebackend.repository.WarehouseRepository;
 import com.smartflow.smestocksensebackend.service.AiPurchaseAssignmentEmailService;
 import com.smartflow.smestocksensebackend.service.AiPurchaseAssignmentService;
+import com.smartflow.smestocksensebackend.service.ForecastReplenishmentRecommendationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -49,6 +51,7 @@ public class AiPurchaseAssignmentServiceImpl implements AiPurchaseAssignmentServ
     private final WarehouseRepository warehouseRepository;
     private final ForecastModelMetadataRepository forecastModelMetadataRepository;
     private final AiPurchaseAssignmentEmailService aiPurchaseAssignmentEmailService;
+    private final ForecastReplenishmentRecommendationService recommendationService;
     private final PlatformTransactionManager transactionManager;
 
     @Override
@@ -82,15 +85,17 @@ public class AiPurchaseAssignmentServiceImpl implements AiPurchaseAssignmentServ
             throw new BadRequestException("Người nhận phải là nhân viên.");
         }
 
-        ForecastModelMetadata modelMetadata = resolveModelMetadata(request, product, warehouse);
+        ForecastReplenishmentRecommendationResponse recommendation = recommendationService
+                .getRecommendation(product.getId(), warehouse.getId(), request.horizonDays());
+        ForecastModelMetadata modelMetadata = resolveModelMetadata(request, recommendation);
 
         AiPurchaseRequest assignment = new AiPurchaseRequest();
         assignment.setCode(nextCode());
         assignment.setModelMetadata(modelMetadata);
         assignment.setProduct(product);
         assignment.setWarehouse(warehouse);
-        assignment.setHorizonDays(request.horizonDays());
-        assignment.setAiSuggestedQuantity(request.aiSuggestedQuantity());
+        assignment.setHorizonDays(recommendation.horizonDays());
+        assignment.setAiSuggestedQuantity(recommendation.suggestedQty());
         assignment.setRequestedQuantity(request.requestedQuantity());
         assignment.setSender(sender);
         assignment.setReceiver(receiver);
@@ -191,27 +196,16 @@ public class AiPurchaseAssignmentServiceImpl implements AiPurchaseAssignmentServ
         return employee.getRole() != null ? employee.getRole().getCode() : null;
     }
 
-    private ForecastModelMetadata resolveModelMetadata(CreateAiPurchaseAssignmentRequest request, Product product,
-            Warehouse warehouse) {
-        if (request.modelMetadataId() != null) {
-            ForecastModelMetadata metadata = forecastModelMetadataRepository.findById(request.modelMetadataId())
-                    .orElseThrow(() -> new NotFoundException("Thông tin mô hình AI không tồn tại."));
-            if (!sameId(metadata.getProduct(), product) || !sameId(metadata.getWarehouse(), warehouse)) {
-                throw new BadRequestException("Thông tin mô hình AI không khớp sản phẩm hoặc kho.");
-            }
-            return metadata;
+    private ForecastModelMetadata resolveModelMetadata(CreateAiPurchaseAssignmentRequest request,
+            ForecastReplenishmentRecommendationResponse recommendation) {
+        if (recommendation.modelMetadataId() == null) {
+            throw new BadRequestException("Khuyến nghị chưa có thông tin mô hình AI.");
         }
-        return forecastModelMetadataRepository
-                .findFirstByProductIdAndWarehouseIdOrderByVersionDesc(product.getId(), warehouse.getId())
-                .orElseThrow(() -> new BadRequestException("Chưa có thông tin mô hình AI cho sản phẩm và kho."));
-    }
-
-    private boolean sameId(Product left, Product right) {
-        return left != null && right != null && left.getId() != null && left.getId().equals(right.getId());
-    }
-
-    private boolean sameId(Warehouse left, Warehouse right) {
-        return left != null && right != null && left.getId() != null && left.getId().equals(right.getId());
+        if (request.modelMetadataId() != null && !request.modelMetadataId().equals(recommendation.modelMetadataId())) {
+            throw new BadRequestException("Thông tin mô hình AI không khớp khuyến nghị.");
+        }
+        return forecastModelMetadataRepository.findById(recommendation.modelMetadataId())
+                .orElseThrow(() -> new NotFoundException("Thông tin mô hình AI không tồn tại."));
     }
 
     private String normalizeContent(String content) {

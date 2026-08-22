@@ -7,7 +7,7 @@ from collections import defaultdict
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-OUT = ROOT / "worktrees" / "final-demo-data" / "target" / "final-demo-data"
+OUT = Path(__file__).resolve().parents[1] / "target" / "final-demo-data"
 sys.path.insert(0, str(ROOT / "sme-stocksense-ai-forecast"))
 from app.forecaster import run_xgboost_forecast  # noqa: E402
 
@@ -18,7 +18,7 @@ def finite(*values):
 
 def main():
     history = defaultdict(list)
-    with (OUT / "external-retail-history.csv").open(newline="", encoding="utf-8") as f:
+    with (OUT / "store-item-history.csv").open(newline="", encoding="utf-8") as f:
         for row in csv.DictReader(f):
             history[(row["product_code"], row["warehouse_code"])].append({
                 "date": row["date"],

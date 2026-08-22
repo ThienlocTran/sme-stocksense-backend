@@ -7,11 +7,12 @@ from collections import defaultdict
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-DATA = ROOT / "data_set"
-OUT = ROOT / "worktrees" / "final-demo-data" / "target" / "final-demo-data"
-START = dt.date(2023, 10, 1)
-END = dt.date(2024, 9, 26)
-STORES = ["1", "2", "3"]
+DATA = ROOT / "data" / "data_train"
+OUT = Path(__file__).resolve().parents[1] / "target" / "final-demo-data"
+START = dt.date(2019, 1, 1)
+END = dt.date(2023, 12, 31)
+STORES = ["store_1", "store_2", "store_3"]
+ITEMS = [f"item_{i}" for i in range(1, 51)]
 DAYS = (END - START).days + 1
 
 
@@ -39,7 +40,7 @@ def main():
     rejected = 0
     negative = 0
 
-    with (DATA / "sales.csv").open(newline="", encoding="utf-8") as f:
+    with (DATA / "retail_sales.csv").open(newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         for row in reader:
             source_rows += 1
@@ -47,13 +48,13 @@ def main():
                 day = dt.date.fromisoformat(row["date"])
                 store = row["store_id"]
                 item = row["item_id"]
-                q = float(row["quantity"])
-                total = float(row["sum_total"])
-                price = float(row["price_base"])
+                q = float(row["sales"])
+                price = float(row["price"])
+                total = q * price
             except Exception:
                 rejected += 1
                 continue
-            if store not in STORES or day < START or day > END or q < 0:
+            if store not in STORES or item not in ITEMS or day < START or day > END or q < 0:
                 if q < 0:
                     negative += 1
                 continue
@@ -124,23 +125,20 @@ def main():
             "score": score,
         })
 
-    selected = sorted(
-        [p for p in profiles if p["accepted"]],
-        key=lambda p: (-p["score"], p["item"]),
-    )[:100]
-    if len(selected) != 100:
-        raise SystemExit(f"Only {len(selected)} acceptable items")
+    selected = sorted(profiles, key=lambda p: ITEMS.index(p["item"]))
+    if len(selected) != 50:
+        raise SystemExit(f"Only {len(selected)} Store-Item items")
 
-    with (OUT / "external-retail-mapping-v2.csv").open("w", newline="", encoding="utf-8") as f:
+    with (OUT / "store-item-mapping-v1.csv").open("w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow(["type", "external_id", "stocksense_code", "rank", "metadata"])
         for i, store in enumerate(STORES, 1):
-            w.writerow(["STORE", store, f"K{i:03d}", i, f"benchmark store {store}"])
+            w.writerow(["STORE", store, f"K{i:03d}", i, f"Store-Item benchmark store {i}"])
         for i, p in enumerate(selected, 1):
-            w.writerow(["ITEM", p["item"], f"SP{i:03d}", i, f"mean={p['mean']:.2f};p95={p['p95']};nz={p['nonzero_ratio']:.3f}"])
+            w.writerow(["ITEM", p["item"], f"SP{i:03d}", i, f"Store-Item benchmark item {i};mean={p['mean']:.2f};p95={p['p95']};nz={p['nonzero_ratio']:.3f}"])
 
     selected_items = {p["item"]: i for i, p in enumerate(selected, 1)}
-    with (OUT / "external-retail-history.csv").open("w", newline="", encoding="utf-8") as f:
+    with (OUT / "store-item-history.csv").open("w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow(["product_code", "warehouse_code", "date", "quantity", "average_price", "source_reference"])
         for item, idx in selected_items.items():
@@ -149,12 +147,12 @@ def main():
                     q = qty[(item, store)].get(day, 0)
                     pq = price_qty[(item, store)].get(day, 0)
                     avg = "" if pq <= 0 else f"{totals[(item, store)][day] / pq:.2f}"
-                    w.writerow([f"SP{idx:03d}", f"K{si:03d}", day.isoformat(), q, avg, f"EXTERNAL_RETAIL:{store}:{item}"])
+                    w.writerow([f"SP{idx:03d}", f"K{si:03d}", day.isoformat(), q, avg, f"EXTERNAL_STORE_ITEM:{store}:{item}"])
 
     with (OUT / "demo-inventory.csv").open("w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow(["product_code", "warehouse_code", "quantity", "min_stock", "scenario", "avg_daily"])
-        scenarios = ["LOW"] * 36 + ["NEAR_RISK"] * 72 + ["HEALTHY"] * 180 + ["OVERSTOCK"] * 12
+        scenarios = ["LOW"] * 36 + ["NEAR_RISK"] * 36 + ["HEALTHY"] * 78
         n = 0
         for item, idx in selected_items.items():
             for si, store in enumerate(STORES, 1):

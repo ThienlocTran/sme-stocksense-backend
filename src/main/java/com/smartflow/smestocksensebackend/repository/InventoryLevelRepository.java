@@ -13,6 +13,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 
@@ -61,6 +62,21 @@ public interface InventoryLevelRepository extends JpaRepository<InventoryLevel, 
         @Query("select i from InventoryLevel i where i.warehouse.id = :warehouseId and i.product.id in :productIds")
         List<InventoryLevel> findByWarehouseIdAndProductIdIn(@Param("warehouseId") Long warehouseId,
                         @Param("productIds") List<Long> productIds);
+
+        @Query("""
+                        select p.id as productId, w.id as warehouseId, p.price as price
+                        from InventoryLevel i
+                        join i.product p
+                        join i.warehouse w
+                        order by p.id asc, w.id asc
+                        """)
+        List<SeedDemoSeriesTarget> findSeedDemoSeriesTargets();
+
+        interface SeedDemoSeriesTarget {
+                Long getProductId();
+                Long getWarehouseId();
+                BigDecimal getPrice();
+        }
 
         @Query(value = "SELECT t.kho_id "
                         + "FROM ton_kho t "

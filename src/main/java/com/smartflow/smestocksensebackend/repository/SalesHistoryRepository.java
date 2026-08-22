@@ -39,6 +39,9 @@ public interface SalesHistoryRepository extends JpaRepository<SalesHistory, Long
     Optional<SalesHistory> findByProductIdAndWarehouseIdAndNgayAndSource(Long productId, Long warehouseId,
             LocalDate ngay, SalesHistorySource source);
 
+    List<SalesHistory> findByProductIdAndWarehouseIdAndSourceAndNgayBetweenOrderByNgayAsc(Long productId,
+            Long warehouseId, SalesHistorySource source, LocalDate start, LocalDate end);
+
     @Query("""
             select p.id as productId, p.code as productCode, p.name as productName,
                    w.id as warehouseId, w.code as warehouseCode, w.name as warehouseName,

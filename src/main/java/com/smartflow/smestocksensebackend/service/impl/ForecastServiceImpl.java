@@ -13,11 +13,11 @@ import com.smartflow.smestocksensebackend.entity.ForecastDatasetType;
 import com.smartflow.smestocksensebackend.entity.ForecastMode;
 import com.smartflow.smestocksensebackend.entity.ForecastModelMetadata;
 import com.smartflow.smestocksensebackend.entity.ForecastResult;
-import com.smartflow.smestocksensebackend.entity.InventoryLevel;
 import com.smartflow.smestocksensebackend.entity.Product;
 import com.smartflow.smestocksensebackend.entity.SalesHistory;
 import com.smartflow.smestocksensebackend.entity.SalesHistorySource;
 import com.smartflow.smestocksensebackend.entity.Warehouse;
+import com.smartflow.smestocksensebackend.exception.ConflictException;
 import com.smartflow.smestocksensebackend.exception.NotFoundException;
 import com.smartflow.smestocksensebackend.repository.ForecastDriftLogRepository;
 import com.smartflow.smestocksensebackend.repository.ForecastModelMetadataRepository;
@@ -31,8 +31,10 @@ import com.smartflow.smestocksensebackend.repository.WarehouseRepository;
 import com.smartflow.smestocksensebackend.service.ForecastService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.client.RestClient;
 
 import java.math.BigDecimal;
@@ -44,8 +46,12 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -59,6 +65,7 @@ public class ForecastServiceImpl implements ForecastService {
     private static final int DRIFT_MIN_OVERLAP_DAYS = 7;
     private static final BigDecimal DRIFT_THRESHOLD_SMAPE = new BigDecimal("20.0");
     private static final List<Integer> HORIZONS = List.of(7, 14, 30);
+    private static final AtomicBoolean SEED_DEMO_RUNNING = new AtomicBoolean(false);
 
     private final ProductRepository productRepository;
     private final WarehouseRepository warehouseRepository;
@@ -79,6 +86,9 @@ public class ForecastServiceImpl implements ForecastService {
 
     @org.springframework.beans.factory.annotation.Autowired
     com.smartflow.smestocksensebackend.service.WarehouseCapacityService warehouseCapacityService;
+
+    @Autowired
+    TransactionTemplate transactionTemplate;
 
     @Override
     @Transactional
@@ -102,24 +112,28 @@ public class ForecastServiceImpl implements ForecastService {
     }
 
     @Override
-    @Transactional
     public SeedHistoryResponse seedDemoHistory() {
+        if (!SEED_DEMO_RUNNING.compareAndSet(false, true)) {
+            throw new ConflictException("SEED_DEMO seeding is already running.");
+        }
         LocalDate historyEnd = LocalDate.now();
         LocalDate historyStart = historyEnd.minusDays(SEED_HISTORY_DAYS - 1L);
         int seriesSeeded = 0;
         int rowsInserted = 0;
 
-        for (InventoryLevel level : inventoryLevelRepository.findAll()) {
-            Long productId = level.getProduct().getId();
-            Long warehouseId = level.getWarehouse().getId();
-            if (salesHistoryRepository.countByProductIdAndWarehouseIdAndSource(
-                    productId, warehouseId, SalesHistorySource.SEED_DEMO) >= MIN_HISTORY_DAYS) {
-                continue;
+        try {
+            for (SeedSeriesTarget target : findSeedSeriesTargets()) {
+                List<SalesHistorySeedRow> rows = generateSyntheticHistory(
+                        target.productId(), target.warehouseId(), target.price(), historyStart);
+                SeedSeriesResult result = persistMissingSeedDemoRows(target.productId(), target.warehouseId(),
+                        rows, historyStart, historyEnd);
+                if (result.rowsInserted() > 0) {
+                    seriesSeeded++;
+                    rowsInserted += result.rowsInserted();
+                }
             }
-            List<SalesHistory> rows = generateSyntheticHistory(level.getProduct(), level.getWarehouse(), historyStart);
-            salesHistoryRepository.saveAll(rows);
-            seriesSeeded++;
-            rowsInserted += rows.size();
+        } finally {
+            SEED_DEMO_RUNNING.set(false);
         }
 
         log.info("[ForecastService] Seed SEED_DEMO history: {} series, {} rows", seriesSeeded, rowsInserted);
@@ -497,28 +511,67 @@ public class ForecastServiceImpl implements ForecastService {
         return count == 0 ? 0.0 : (sum / count) * 100;
     }
 
-    private List<SalesHistory> generateSyntheticHistory(Product product, Warehouse warehouse, LocalDate start) {
-        Random random = new Random(product.getId() * 31L + warehouse.getId());
+    private List<SalesHistorySeedRow> generateSyntheticHistory(Long productId, Long warehouseId, BigDecimal price,
+            LocalDate start) {
+        Random random = new Random(productId * 31L + warehouseId);
         double base = 5 + random.nextInt(20);
         double trendPerDay = (random.nextDouble() - 0.3) * 0.05;
 
-        List<SalesHistory> rows = new ArrayList<>(SEED_HISTORY_DAYS);
+        List<SalesHistorySeedRow> rows = new ArrayList<>(SEED_HISTORY_DAYS);
         for (int i = 0; i < SEED_HISTORY_DAYS; i++) {
             LocalDate date = start.plusDays(i);
             double weekly = 1 + 0.3 * Math.sin(2 * Math.PI * date.getDayOfWeek().getValue() / 7.0);
             double noise = (random.nextDouble() - 0.5) * base * 0.4;
             int quantity = (int) Math.max(0, Math.round((base + trendPerDay * i) * weekly + noise));
 
-            SalesHistory row = new SalesHistory();
-            row.setProduct(product);
-            row.setWarehouse(warehouse);
-            row.setNgay(date);
-            row.setQuantity(quantity);
-            row.setAverageSellingPrice(product.getPrice());
-            row.setSource(SalesHistorySource.SEED_DEMO);
-            rows.add(row);
+            rows.add(new SalesHistorySeedRow(date, quantity, price));
         }
         return rows;
+    }
+
+    private List<SeedSeriesTarget> findSeedSeriesTargets() {
+        return inTransaction(() -> inventoryLevelRepository.findSeedDemoSeriesTargets().stream()
+                .map(target -> new SeedSeriesTarget(target.getProductId(), target.getWarehouseId(),
+                        target.getPrice()))
+                .toList());
+    }
+
+    private SeedSeriesResult persistMissingSeedDemoRows(Long productId, Long warehouseId,
+            List<SalesHistorySeedRow> rows, LocalDate historyStart, LocalDate historyEnd) {
+        return inTransaction(() -> {
+            Set<LocalDate> existingDates = salesHistoryRepository
+                    .findByProductIdAndWarehouseIdAndSourceAndNgayBetweenOrderByNgayAsc(
+                            productId, warehouseId, SalesHistorySource.SEED_DEMO, historyStart, historyEnd)
+                    .stream()
+                    .map(SalesHistory::getNgay)
+                    .collect(Collectors.toSet());
+            List<SalesHistory> missingRows = rows.stream()
+                    .filter(row -> !existingDates.contains(row.ngay()))
+                    .map(row -> toSalesHistory(productId, warehouseId, row))
+                    .toList();
+            if (!missingRows.isEmpty()) {
+                salesHistoryRepository.saveAll(missingRows);
+            }
+            return new SeedSeriesResult(missingRows.size());
+        });
+    }
+
+    private SalesHistory toSalesHistory(Long productId, Long warehouseId, SalesHistorySeedRow seedRow) {
+        SalesHistory row = new SalesHistory();
+        row.setProduct(productRepository.getReferenceById(productId));
+        row.setWarehouse(warehouseRepository.getReferenceById(warehouseId));
+        row.setNgay(seedRow.ngay());
+        row.setQuantity(seedRow.quantity());
+        row.setAverageSellingPrice(seedRow.price());
+        row.setSource(SalesHistorySource.SEED_DEMO);
+        return row;
+    }
+
+    private <T> T inTransaction(Supplier<T> action) {
+        if (transactionTemplate == null) {
+            return action.get();
+        }
+        return transactionTemplate.execute(status -> action.get());
     }
 
     private static int firstNonNull(Integer value, int fallback) {
@@ -583,6 +636,12 @@ public class ForecastServiceImpl implements ForecastService {
             int allowed14d, boolean limited14d,
             int allowed30d, boolean limited30d,
             String capacityStatus) {}
+
+    private record SeedSeriesTarget(Long productId, Long warehouseId, BigDecimal price) {}
+
+    private record SalesHistorySeedRow(LocalDate ngay, int quantity, BigDecimal price) {}
+
+    private record SeedSeriesResult(int rowsInserted) {}
 
     private CapacityLimitInfo calculateCapacityLimit(BigDecimal unitVolume, Long warehouseId, int req7d, int req14d, int req30d) {
         if (unitVolume == null) {

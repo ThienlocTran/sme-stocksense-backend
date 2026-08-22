@@ -1,6 +1,8 @@
 package com.smartflow.smestocksensebackend.service.impl;
 
+import com.smartflow.smestocksensebackend.dto.replenishment.WarehouseCapacityAvailability;
 import com.smartflow.smestocksensebackend.entity.*;
+import com.smartflow.smestocksensebackend.exception.BadRequestException;
 import com.smartflow.smestocksensebackend.exception.NotFoundException;
 import com.smartflow.smestocksensebackend.repository.InventoryLevelRepository;
 import com.smartflow.smestocksensebackend.repository.WarehouseCapacityAlertRepository;
@@ -40,6 +42,28 @@ public class WarehouseCapacityServiceImpl implements WarehouseCapacityService {
         BigDecimal max = warehouse.getMaxCapacityM3() != null ? warehouse.getMaxCapacityM3() : new BigDecimal("1500.000");
         BigDecimal used = getUsedCapacity(warehouseId);
         return max.subtract(used).setScale(3, RoundingMode.HALF_UP);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public WarehouseCapacityAvailability getAvailability(Long warehouseId, BigDecimal targetProductUnitVolumeM3) {
+        Warehouse warehouse = warehouseRepository.findById(warehouseId)
+                .orElseThrow(() -> new NotFoundException("Kho hàng không tồn tại."));
+        BigDecimal max = warehouse.getMaxCapacityM3();
+        if (max == null || max.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new BadRequestException("Sức chứa kho không hợp lệ.");
+        }
+        if (targetProductUnitVolumeM3 == null || targetProductUnitVolumeM3.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new BadRequestException("Thể tích đơn vị sản phẩm không hợp lệ.");
+        }
+
+        BigDecimal occupied = getUsedCapacity(warehouseId);
+        BigDecimal available = max.subtract(occupied).max(BigDecimal.ZERO).setScale(3, RoundingMode.HALF_UP);
+        int maxAdditionalUnits = available.divide(targetProductUnitVolumeM3, 0, RoundingMode.DOWN).intValue();
+        String warning = occupied.compareTo(max) > 0 ? "WAREHOUSE_OVER_CAPACITY" : null;
+
+        return new WarehouseCapacityAvailability(max.setScale(3, RoundingMode.HALF_UP), occupied, available,
+                Math.max(0, maxAdditionalUnits), warning);
     }
 
     @Override

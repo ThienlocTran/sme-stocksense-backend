@@ -247,7 +247,7 @@ public class SecurityConfig {
                                                 .requestMatchers(HttpMethod.POST, "/api/import-receipts")
                                                 .hasAnyRole("ADMIN", "EMPLOYEE")
                                                 .requestMatchers(HttpMethod.POST, "/api/forecast/seed-history")
-                                                .hasRole("ADMIN")
+                                                .hasAnyRole("ADMIN", "MANAGER")
                                                 .requestMatchers(HttpMethod.GET, "/api/forecast/*/*/drift")
                                                 .hasAnyRole("ADMIN", "MANAGER")
                                                 .requestMatchers(HttpMethod.POST, "/api/forecast/*/*")

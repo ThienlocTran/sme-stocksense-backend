@@ -2,6 +2,7 @@ package com.smartflow.smestocksensebackend.controller;
 
 import com.smartflow.smestocksensebackend.dto.forecast.DriftResponse;
 import com.smartflow.smestocksensebackend.dto.forecast.ForecastResponse;
+import com.smartflow.smestocksensebackend.dto.forecast.SeedHistoryResponse;
 import com.smartflow.smestocksensebackend.entity.SalesHistorySource;
 import com.smartflow.smestocksensebackend.exception.NotFoundException;
 import com.smartflow.smestocksensebackend.service.ForecastService;
@@ -41,9 +42,10 @@ public class ForecastController {
     @GetMapping("/{productId}/{warehouseId}")
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'EMPLOYEE')")
     public ResponseEntity<ForecastResponse> getLatestForecast(@PathVariable Long productId,
-            @PathVariable Long warehouseId) {
+            @PathVariable Long warehouseId,
+            @RequestParam(defaultValue = "EXTERNAL_STORE_ITEM") SalesHistorySource source) {
         try {
-            return ResponseEntity.ok(forecastService.getLatestForecast(productId, warehouseId));
+            return ResponseEntity.ok(forecastService.getLatestForecast(productId, warehouseId, source));
         } catch (NotFoundException e) {
             return ResponseEntity.noContent().build();
         }
@@ -56,4 +58,9 @@ public class ForecastController {
         return ResponseEntity.ok(forecastService.checkDrift(productId, warehouseId));
     }
 
+    @PostMapping("/seed-history")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    public ResponseEntity<SeedHistoryResponse> seedHistory() {
+        return ResponseEntity.ok(forecastService.seedDemoHistory());
+    }
 }

@@ -20,6 +20,8 @@ public interface SalesHistoryRepository extends JpaRepository<SalesHistory, Long
 
     long countByProductIdAndWarehouseId(Long productId, Long warehouseId);
 
+    long countByProductIdAndWarehouseIdAndSource(Long productId, Long warehouseId, SalesHistorySource source);
+
     void deleteByProductIdAndWarehouseId(Long productId, Long warehouseId);
 
     Optional<SalesHistory> findByProductIdAndWarehouseIdAndNgay(Long productId, Long warehouseId, LocalDate ngay);

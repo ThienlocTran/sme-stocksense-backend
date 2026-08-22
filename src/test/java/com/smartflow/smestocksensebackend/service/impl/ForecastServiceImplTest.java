@@ -171,6 +171,31 @@ class ForecastServiceImplTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void seedDemoHistory_shouldIgnoreExternalHistoryCount() {
+        InventoryLevel level = new InventoryLevel();
+        level.setProduct(product);
+        level.setWarehouse(warehouse);
+        when(inventoryLevelRepository.findAll()).thenReturn(List.of(level));
+        when(salesHistoryRepository.countByProductIdAndWarehouseIdAndSource(1L, 2L, SalesHistorySource.SEED_DEMO))
+                .thenReturn(0L);
+
+        com.smartflow.smestocksensebackend.dto.forecast.SeedHistoryResponse response = service.seedDemoHistory();
+
+        ArgumentCaptor<List<SalesHistory>> captor = ArgumentCaptor.forClass(List.class);
+        verify(salesHistoryRepository).saveAll(captor.capture());
+        List<SalesHistory> rows = captor.getValue();
+        assertEquals("SEED_DEMO", response.source());
+        assertEquals(1, response.seriesSeeded());
+        assertEquals(180, response.rowsInserted());
+        assertEquals(180, rows.size());
+        assertEquals(SalesHistorySource.SEED_DEMO, rows.get(0).getSource());
+        assertEquals(product.getPrice(), rows.get(0).getAverageSellingPrice());
+        assertEquals(LocalDate.now().minusDays(179), rows.get(0).getNgay());
+        assertEquals(LocalDate.now(), rows.get(179).getNgay());
+    }
+
+    @Test
     void runForecast_shouldUseColdStartAverage_whenNotEnoughHistory() {
         List<SalesHistory> history = buildHistory(10, 5, SalesHistorySource.EXTERNAL_STORE_ITEM);
         when(productRepository.findById(1L)).thenReturn(Optional.of(product));
@@ -526,7 +551,8 @@ class ForecastServiceImplTest {
     void getLatestForecast_shouldThrowNotFound_whenNoForecastYet() {
         when(productRepository.findById(1L)).thenReturn(Optional.of(product));
         when(warehouseRepository.findById(2L)).thenReturn(Optional.of(warehouse));
-        when(forecastModelMetadataRepository.findFirstByProductIdAndWarehouseIdOrderByVersionDesc(1L, 2L))
+        when(forecastModelMetadataRepository.findFirstByProductIdAndWarehouseIdAndHistorySourceOrderByVersionDesc(
+                1L, 2L, SalesHistorySource.EXTERNAL_STORE_ITEM))
                 .thenReturn(Optional.empty());
 
         assertThrows(NotFoundException.class, () -> service.getLatestForecast(1L, 2L));
@@ -548,7 +574,7 @@ class ForecastServiceImplTest {
         ForecastModelMetadata metadata = metadata(ForecastDatasetType.EXTERNAL, SalesHistorySource.EXTERNAL_RETAIL);
         stubLatestForecast(metadata, SalesHistorySource.EXTERNAL_RETAIL);
 
-        ForecastResponse response = service.getLatestForecast(1L, 2L);
+        ForecastResponse response = service.getLatestForecast(1L, 2L, SalesHistorySource.EXTERNAL_RETAIL);
 
         assertEquals("EXTERNAL", response.datasetType());
         assertEquals("EXTERNAL_RETAIL", response.source());
@@ -557,12 +583,24 @@ class ForecastServiceImplTest {
     @Test
     void getLatestForecast_shouldNotInventSourceForLegacyExternalMetadata() {
         ForecastModelMetadata metadata = metadata(ForecastDatasetType.EXTERNAL, null);
-        stubLatestForecast(metadata, null);
+        stubLatestForecast(metadata, SalesHistorySource.EXTERNAL_STORE_ITEM);
 
         ForecastResponse response = service.getLatestForecast(1L, 2L);
 
         assertEquals("EXTERNAL", response.datasetType());
         assertNull(response.source());
+    }
+
+    @Test
+    void getLatestForecast_shouldUseExplicitSeedDemoSource() {
+        ForecastModelMetadata metadata = metadata(ForecastDatasetType.LEGACY_UNKNOWN, SalesHistorySource.SEED_DEMO);
+        stubLatestForecast(metadata, SalesHistorySource.SEED_DEMO);
+
+        ForecastResponse response = service.getLatestForecast(1L, 2L, SalesHistorySource.SEED_DEMO);
+
+        assertEquals("SEED_DEMO", response.source());
+        verify(forecastModelMetadataRepository).findFirstByProductIdAndWarehouseIdAndHistorySourceOrderByVersionDesc(
+                1L, 2L, SalesHistorySource.SEED_DEMO);
     }
 
     @Test
@@ -640,13 +678,14 @@ class ForecastServiceImplTest {
     private void stubLatestForecast(ForecastModelMetadata metadata, SalesHistorySource source) {
         when(productRepository.findById(1L)).thenReturn(Optional.of(product));
         when(warehouseRepository.findById(2L)).thenReturn(Optional.of(warehouse));
-        when(forecastModelMetadataRepository.findFirstByProductIdAndWarehouseIdOrderByVersionDesc(1L, 2L))
+        when(forecastModelMetadataRepository.findFirstByProductIdAndWarehouseIdAndHistorySourceOrderByVersionDesc(
+                1L, 2L, source))
                 .thenReturn(Optional.of(metadata));
         when(forecastResultRepository.findByProductIdAndWarehouseIdAndVersion(1L, 2L, 1))
                 .thenReturn(List.of(forecastResult(7), forecastResult(14), forecastResult(30)));
         when(inventoryLevelRepository.findByProductIdAndWarehouseId(1L, 2L)).thenReturn(Optional.empty());
         when(dailyForecastResultRepository.findByModelMetadataIdOrderByForecastDateAsc(10L)).thenReturn(List.of());
-        if (source != null) {
+        if (metadata.getHistorySource() != null) {
             when(salesHistoryRepository.findByProductIdAndWarehouseIdAndSourceOrderByNgayAsc(1L, 2L, source))
                     .thenReturn(buildHistory(90, 5, source));
         }

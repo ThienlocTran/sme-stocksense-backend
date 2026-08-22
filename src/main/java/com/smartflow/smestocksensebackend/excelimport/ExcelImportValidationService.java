@@ -8,13 +8,17 @@ import com.smartflow.smestocksensebackend.dto.excelimport.ExcelImportValidationR
 import com.smartflow.smestocksensebackend.entity.ExcelImport;
 import com.smartflow.smestocksensebackend.entity.ExcelImportError;
 import com.smartflow.smestocksensebackend.entity.ExcelImportStatus;
-import com.smartflow.smestocksensebackend.entity.Product;
+import com.smartflow.smestocksensebackend.entity.PartnerType;
+import com.smartflow.smestocksensebackend.entity.Employee;
+import com.smartflow.smestocksensebackend.entity.RoleCode;
 import com.smartflow.smestocksensebackend.exception.BadRequestException;
+import com.smartflow.smestocksensebackend.exception.MissingRoleException;
 import com.smartflow.smestocksensebackend.exception.NotFoundException;
 import com.smartflow.smestocksensebackend.repository.CategoryRepository;
 import com.smartflow.smestocksensebackend.repository.ExcelImportErrorRepository;
 import com.smartflow.smestocksensebackend.repository.ExcelImportRepository;
 import com.smartflow.smestocksensebackend.repository.ProductRepository;
+import com.smartflow.smestocksensebackend.repository.PartnerRepository;
 import com.smartflow.smestocksensebackend.repository.WarehouseRepository;
 import lombok.RequiredArgsConstructor;
 import org.apache.poi.ss.usermodel.Cell;
@@ -24,6 +28,9 @@ import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -50,6 +57,7 @@ public class ExcelImportValidationService {
 
     private final CategoryRepository categoryRepository;
     private final ProductRepository productRepository;
+    private final PartnerRepository partnerRepository;
     private final WarehouseRepository warehouseRepository;
     private final ExcelImportRepository excelImportRepository;
     private final ExcelImportErrorRepository excelImportErrorRepository;
@@ -58,6 +66,7 @@ public class ExcelImportValidationService {
     public ExcelImportValidationResponse validate(MultipartFile file, String loaiImport, Long khoId) {
         validateRequest(file, loaiImport);
         ExcelImportMode mode = parseMode(loaiImport);
+        ensureCanImportProductMaster(mode);
 
         try (InputStream inputStream = file.getInputStream();
              Workbook workbook = WorkbookFactory.create(inputStream)) {
@@ -85,6 +94,7 @@ public class ExcelImportValidationService {
     public ExcelImportConfirmResponse confirm(Long importId) {
         ExcelImport excelImport = excelImportRepository.findById(importId)
                 .orElseThrow(() -> new NotFoundException("Lan import khong ton tai."));
+        ensureCanImportProductMaster(excelImport.getImportType());
 
         validateConfirmable(excelImport);
         excelImport.setStatus(ExcelImportStatus.DA_XAC_NHAN);
@@ -274,57 +284,73 @@ public class ExcelImportValidationService {
             String barcode = readCell(row, 3);
             String unit = readCell(row, 4);
             String categoryCode = readCell(row, 5);
-            String priceRaw = readCell(row, 6);
-            String unitVolumeRaw = readCell(row, 7);
-            String statusRaw = readCell(row, 8);
-            Product existingProduct = isBlank(code) ? null : findExistingProductByCode(code);
+            String supplierCode = readCell(row, 6);
+            String priceRaw = readCell(row, 7);
+            String defaultMinStockRaw = readCell(row, 8);
+            String unitVolumeRaw = readCell(row, 9);
+            String leadTimeRaw = readCell(row, 10);
+            String statusRaw = readCell(row, 11);
 
             if (isBlank(code)) {
-                state.addRowError(sheetName, rowIndex + 1, "ma_san_pham", code, "Mã sản phẩm không được để trống.", "Nhập mã sản phẩm.");
+                state.addRowError(sheetName, rowIndex + 1, "ma_san_pham", code, "PRODUCT_CODE_REQUIRED", "Mã sản phẩm không được để trống.", "Nhập mã sản phẩm.");
             } else {
                 productCodesInWorkbook.add(normalize(code));
                 if (!seenCodes.add(normalize(code))) {
-                    state.addRowError(sheetName, rowIndex + 1, "ma_san_pham", code, "Mã sản phẩm bị trùng trong file.", "Mỗi mã sản phẩm chỉ được xuất hiện một lần.");
+                    state.addRowError(sheetName, rowIndex + 1, "ma_san_pham", code, "PRODUCT_CODE_DUPLICATE_FILE", "Mã sản phẩm bị trùng trong file.", "Mỗi mã sản phẩm chỉ được xuất hiện một lần.");
+                } else if (productRepository.existsByCodeIgnoreCase(code.trim())) {
+                    state.addRowError(sheetName, rowIndex + 1, "ma_san_pham", code, "PRODUCT_CODE_ALREADY_EXISTS", "Mã sản phẩm đã tồn tại trong hệ thống.", "Đổi mã sản phẩm trước khi import.");
                 }
             }
 
             if (isBlank(name)) {
-                state.addRowError(sheetName, rowIndex + 1, "ten_san_pham", name, "Tên sản phẩm không được để trống.", "Nhập tên sản phẩm.");
+                state.addRowError(sheetName, rowIndex + 1, "ten_san_pham", name, "PRODUCT_NAME_REQUIRED", "Tên sản phẩm không được để trống.", "Nhập tên sản phẩm.");
             }
             if (isBlank(unit)) {
-                state.addRowError(sheetName, rowIndex + 1, "don_vi_tinh", unit, "Đơn vị tính không được để trống.", "Nhập đơn vị tính.");
+                state.addRowError(sheetName, rowIndex + 1, "don_vi_tinh", unit, "UNIT_REQUIRED", "Đơn vị tính không được để trống.", "Nhập đơn vị tính.");
             }
 
             if (isBlank(categoryCode)) {
-                state.addRowError(sheetName, rowIndex + 1, "ma_danh_muc", categoryCode, "Mã danh mục không được để trống.", "Chọn danh mục hợp lệ.");
+                state.addRowError(sheetName, rowIndex + 1, "ma_danh_muc", categoryCode, "CATEGORY_CODE_REQUIRED", "Mã danh mục không được để trống.", "Chọn danh mục hợp lệ.");
             } else if (!categoryRepository.existsByNormalizedCode(categoryCode)) {
-                state.addRowError(sheetName, rowIndex + 1, "ma_danh_muc", categoryCode, "Danh mục không tồn tại.", "Kiểm tra lại mã danh mục.");
+                state.addRowError(sheetName, rowIndex + 1, "ma_danh_muc", categoryCode, "CATEGORY_NOT_FOUND", "Danh mục không tồn tại.", "Kiểm tra lại mã danh mục.");
             }
 
-            validateNonNegativeDecimal(sheetName, rowIndex + 1, "gia_ban", priceRaw, state);
+            if (!isBlank(supplierCode) && !partnerRepository.existsByCodeIgnoreCaseAndType(supplierCode.trim(), PartnerType.NHA_CUNG_CAP)) {
+                state.addRowError(sheetName, rowIndex + 1, "ma_nha_cung_cap", supplierCode, "SUPPLIER_NOT_FOUND", "Nhà cung cấp không tồn tại.", "Kiểm tra lại mã nhà cung cấp.");
+            }
+
+            validateNonNegativeDecimal(sheetName, rowIndex + 1, "gia_ban", priceRaw, "INVALID_PRICE", state);
+            if (isBlank(defaultMinStockRaw)) {
+                state.addRowError(sheetName, rowIndex + 1, "ton_toi_thieu_mac_dinh", defaultMinStockRaw, "MIN_STOCK_REQUIRED", "Tồn tối thiểu mặc định không được để trống.", "Nhập số nguyên lớn hơn hoặc bằng 0.");
+            } else {
+                validateNonNegativeInteger(sheetName, rowIndex + 1, "ton_toi_thieu_mac_dinh", defaultMinStockRaw, "INVALID_MIN_STOCK", state);
+            }
             if (!isBlank(unitVolumeRaw)) {
                 BigDecimal vol = parseDecimal(unitVolumeRaw);
                 if (vol == null) {
-                    state.addRowError(sheetName, rowIndex + 1, "the_tich_don_vi_m3", unitVolumeRaw, "Giá trị số không hợp lệ.", "Nhập số thập phân hợp lệ.");
+                    state.addRowError(sheetName, rowIndex + 1, "the_tich_don_vi_m3", unitVolumeRaw, "INVALID_VOLUME", "Giá trị số không hợp lệ.", "Nhập số thập phân hợp lệ.");
                 } else if (vol.compareTo(BigDecimal.ZERO) <= 0) {
-                    state.addRowError(sheetName, rowIndex + 1, "the_tich_don_vi_m3", unitVolumeRaw, "Thể tích phải lớn hơn 0.", "Nhập thể tích lớn hơn 0.");
+                    state.addRowError(sheetName, rowIndex + 1, "the_tich_don_vi_m3", unitVolumeRaw, "INVALID_VOLUME", "Thể tích phải lớn hơn 0.", "Nhập thể tích lớn hơn 0.");
                 }
+            }
+            if (!isBlank(leadTimeRaw)) {
+                validateNonNegativeInteger(sheetName, rowIndex + 1, "thoi_gian_giao_hang", leadTimeRaw, "INVALID_LEAD_TIME", state);
             }
             validateStatus(sheetName, rowIndex + 1, statusRaw, state);
 
             if (!isBlank(sku)) {
                 if (!seenSkus.add(normalize(sku))) {
-                    state.addRowError(sheetName, rowIndex + 1, "sku", sku, "SKU bị trùng trong file.", "Dùng SKU khác cho từng sản phẩm.");
-                } else if (isSkuUsedByAnotherProduct(sku, existingProduct)) {
-                    state.addRowError(sheetName, rowIndex + 1, "sku", sku, "SKU đã tồn tại trong hệ thống.", "Đổi SKU trước khi import.");
+                    state.addRowError(sheetName, rowIndex + 1, "sku", sku, "SKU_DUPLICATE_FILE", "SKU bị trùng trong file.", "Dùng SKU khác cho từng sản phẩm.");
+                } else if (productRepository.existsBySkuIgnoreCase(sku.trim())) {
+                    state.addRowError(sheetName, rowIndex + 1, "sku", sku, "SKU_ALREADY_EXISTS", "SKU đã tồn tại trong hệ thống.", "Đổi SKU trước khi import.");
                 }
             }
 
             if (!isBlank(barcode)) {
                 if (!seenBarcodes.add(normalize(barcode))) {
-                    state.addRowError(sheetName, rowIndex + 1, "ma_vach", barcode, "Mã vạch bị trùng trong file.", "Dùng mã vạch khác cho từng sản phẩm.");
-                } else if (isBarcodeUsedByAnotherProduct(barcode, existingProduct)) {
-                    state.addRowError(sheetName, rowIndex + 1, "ma_vach", barcode, "Mã vạch đã tồn tại trong hệ thống.", "Đổi mã vạch trước khi import.");
+                    state.addRowError(sheetName, rowIndex + 1, "ma_vach", barcode, "BARCODE_DUPLICATE_FILE", "Mã vạch bị trùng trong file.", "Dùng mã vạch khác cho từng sản phẩm.");
+                } else if (productRepository.existsByBarcodeIgnoreCase(barcode.trim())) {
+                    state.addRowError(sheetName, rowIndex + 1, "ma_vach", barcode, "BARCODE_ALREADY_EXISTS", "Mã vạch đã tồn tại trong hệ thống.", "Đổi mã vạch trước khi import.");
                 }
             }
         }
@@ -350,27 +376,27 @@ public class ExcelImportValidationService {
             String quantityRaw = readCell(row, 2);
 
             if (isBlank(warehouseCode)) {
-                state.addRowError(sheetName, rowIndex + 1, "ma_kho", warehouseCode, "Mã kho không được để trống.", "Nhập mã kho.");
+                state.addRowError(sheetName, rowIndex + 1, "ma_kho", warehouseCode, "WAREHOUSE_CODE_REQUIRED", "Mã kho không được để trống.", "Nhập mã kho.");
             } else if (!warehouseRepository.existsByCodeIgnoreCase(warehouseCode)) {
-                state.addRowError(sheetName, rowIndex + 1, "ma_kho", warehouseCode, "Kho hàng không tồn tại.", "Kiểm tra lại mã kho.");
+                state.addRowError(sheetName, rowIndex + 1, "ma_kho", warehouseCode, "WAREHOUSE_NOT_FOUND", "Kho hàng không tồn tại.", "Kiểm tra lại mã kho.");
             }
 
             if (isBlank(productCode)) {
-                state.addRowError(sheetName, rowIndex + 1, "ma_san_pham", productCode, "Mã sản phẩm không được để trống.", "Nhập mã sản phẩm.");
+                state.addRowError(sheetName, rowIndex + 1, "ma_san_pham", productCode, "PRODUCT_CODE_REQUIRED", "Mã sản phẩm không được để trống.", "Nhập mã sản phẩm.");
             } else if (!productRepository.existsByCode(productCode.trim().toUpperCase(Locale.ROOT)) && !productCodesInWorkbook.contains(normalize(productCode))) {
-                state.addRowError(sheetName, rowIndex + 1, "ma_san_pham", productCode, "Sản phẩm không tồn tại.", "Thêm sản phẩm vào sheet 01_SanPham hoặc dùng mã đang có trong hệ thống.");
+                state.addRowError(sheetName, rowIndex + 1, "ma_san_pham", productCode, "PRODUCT_NOT_FOUND", "Sản phẩm không tồn tại.", "Thêm sản phẩm vào sheet 01_SanPham hoặc dùng mã đang có trong hệ thống.");
             }
 
             if (isBlank(quantityRaw)) {
-                state.addRowError(sheetName, rowIndex + 1, "so_luong_ton", quantityRaw, "Số lượng tồn không được để trống.", "Nhập số lượng tồn.");
+                state.addRowError(sheetName, rowIndex + 1, "so_luong_ton", quantityRaw, "OPENING_QUANTITY_REQUIRED", "Số lượng tồn không được để trống.", "Nhập số lượng tồn.");
             } else {
-                validateNonNegativeInteger(sheetName, rowIndex + 1, "so_luong_ton", quantityRaw, state);
+                validateNonNegativeInteger(sheetName, rowIndex + 1, "so_luong_ton", quantityRaw, "INVALID_OPENING_QUANTITY", state);
             }
 
             if (!isBlank(warehouseCode) && !isBlank(productCode)) {
                 String pairKey = normalize(warehouseCode) + "|" + normalize(productCode);
                 if (!seenPairs.add(pairKey)) {
-                    state.addRowError(sheetName, rowIndex + 1, "ma_kho", warehouseCode, "Cặp mã kho và mã sản phẩm bị trùng trong file.", "Mỗi cặp kho - sản phẩm chỉ được xuất hiện một lần.");
+                    state.addRowError(sheetName, rowIndex + 1, "ma_kho", warehouseCode, "OPENING_STOCK_DUPLICATE_FILE", "Cặp mã kho và mã sản phẩm bị trùng trong file.", "Mỗi cặp kho - sản phẩm chỉ được xuất hiện một lần.");
                 }
             }
         }
@@ -413,66 +439,55 @@ public class ExcelImportValidationService {
         try {
             com.smartflow.smestocksensebackend.entity.ProductStatus.valueOf(value.trim());
         } catch (IllegalArgumentException exception) {
-            state.addRowError(sheetName, rowNumber, "trang_thai", value, "Trạng thái sản phẩm không hợp lệ.", "Chỉ dùng HOAT_DONG hoặc NGUNG_HOAT_DONG.");
+            state.addRowError(sheetName, rowNumber, "trang_thai", value, "INVALID_STATUS", "Trạng thái sản phẩm không hợp lệ.", "Chỉ dùng HOAT_DONG hoặc NGUNG_HOAT_DONG.");
         }
     }
 
-    private boolean isSkuUsedByAnotherProduct(String sku, Product existingProduct) {
-        if (existingProduct == null) {
-            return productRepository.existsBySku(sku);
+    private void ensureCanImportProductMaster(ExcelImportMode mode) {
+        if (mode != ExcelImportMode.PRODUCT_ONLY) {
+            return;
         }
-        java.util.Optional<Product> found = productRepository.findBySku(sku);
-        if (found == null) {
-            return false;
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !(authentication.getPrincipal() instanceof Employee employee)) {
+            return;
         }
-        return found
-                .map(product -> !product.getId().equals(existingProduct.getId()))
-                .orElse(false);
+        RoleCode role = employee.getRole() == null ? null : employee.getRole().getCode();
+        if (role != RoleCode.ADMIN && role != RoleCode.MANAGER) {
+            throw new MissingRoleException("Ban khong co quyen import danh muc san pham.");
+        }
     }
 
-    private boolean isBarcodeUsedByAnotherProduct(String barcode, Product existingProduct) {
-        if (existingProduct == null) {
-            return productRepository.existsByBarcode(barcode);
+    private void ensureCanImportProductMaster(String importType) {
+        if (ExcelImportMode.PRODUCT_ONLY.name().equals(importType)) {
+            ensureCanImportProductMaster(ExcelImportMode.PRODUCT_ONLY);
         }
-        java.util.Optional<Product> found = productRepository.findByBarcode(barcode);
-        if (found == null) {
-            return false;
-        }
-        return found
-                .map(product -> !product.getId().equals(existingProduct.getId()))
-                .orElse(false);
     }
 
-    private Product findExistingProductByCode(String code) {
-        java.util.Optional<Product> product = productRepository.findByCode(code.trim().toUpperCase(Locale.ROOT));
-        return product == null ? null : product.orElse(null);
-    }
-
-    private void validateNonNegativeDecimal(String sheetName, int rowNumber, String columnName, String rawValue, ValidationState state) {
+    private void validateNonNegativeDecimal(String sheetName, int rowNumber, String columnName, String rawValue, String errorCode, ValidationState state) {
         if (isBlank(rawValue)) {
             return;
         }
         BigDecimal value = parseDecimal(rawValue);
         if (value == null) {
-            state.addRowError(sheetName, rowNumber, columnName, rawValue, "Giá trị số không hợp lệ.", "Nhập số hợp lệ.");
+            state.addRowError(sheetName, rowNumber, columnName, rawValue, errorCode, "Giá trị số không hợp lệ.", "Nhập số hợp lệ.");
             return;
         }
         if (value.compareTo(BigDecimal.ZERO) < 0) {
-            state.addRowError(sheetName, rowNumber, columnName, rawValue, "Giá trị không được âm.", "Nhập giá trị lớn hơn hoặc bằng 0.");
+            state.addRowError(sheetName, rowNumber, columnName, rawValue, errorCode, "Giá trị không được âm.", "Nhập giá trị lớn hơn hoặc bằng 0.");
         }
     }
 
-    private void validateNonNegativeInteger(String sheetName, int rowNumber, String columnName, String rawValue, ValidationState state) {
+    private void validateNonNegativeInteger(String sheetName, int rowNumber, String columnName, String rawValue, String errorCode, ValidationState state) {
         if (isBlank(rawValue)) {
             return;
         }
         BigDecimal value = parseDecimal(rawValue);
         if (value == null || value.stripTrailingZeros().scale() > 0) {
-            state.addRowError(sheetName, rowNumber, columnName, rawValue, "Giá trị số không hợp lệ.", "Nhập số nguyên hợp lệ.");
+            state.addRowError(sheetName, rowNumber, columnName, rawValue, errorCode, "Giá trị số không hợp lệ.", "Nhập số nguyên hợp lệ.");
             return;
         }
         if (value.compareTo(BigDecimal.ZERO) < 0) {
-            state.addRowError(sheetName, rowNumber, columnName, rawValue, "Giá trị không được âm.", "Nhập giá trị lớn hơn hoặc bằng 0.");
+            state.addRowError(sheetName, rowNumber, columnName, rawValue, errorCode, "Giá trị không được âm.", "Nhập giá trị lớn hơn hoặc bằng 0.");
         }
     }
 
@@ -586,8 +601,8 @@ public class ExcelImportValidationService {
             }
         }
 
-        private void addRowError(String sheetName, int rowNumber, String columnName, String rawValue, String message, String suggestion) {
-            addError(new ExcelImportValidationErrorResponse(sheetName, rowNumber, columnName, rawValue, message, suggestion));
+        private void addRowError(String sheetName, int rowNumber, String columnName, String rawValue, String errorCode, String message, String suggestion) {
+            addError(new ExcelImportValidationErrorResponse(sheetName, rowNumber, columnName, rawValue, message, suggestion, errorCode));
         }
 
         private ExcelImportValidationResponse toResponse() {

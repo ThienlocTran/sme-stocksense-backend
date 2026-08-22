@@ -19,6 +19,7 @@ import com.smartflow.smestocksensebackend.repository.ExcelImportErrorRepository;
 import com.smartflow.smestocksensebackend.repository.ExcelImportRepository;
 import com.smartflow.smestocksensebackend.repository.InventoryLevelRepository;
 import com.smartflow.smestocksensebackend.repository.InventoryTransactionRepository;
+import com.smartflow.smestocksensebackend.repository.PartnerRepository;
 import com.smartflow.smestocksensebackend.repository.ProductRepository;
 import com.smartflow.smestocksensebackend.repository.WarehouseRepository;
 import org.apache.poi.ss.usermodel.Row;
@@ -69,6 +70,9 @@ class ExcelImportApplyServiceTest {
 
     @Mock
     private CategoryRepository categoryRepository;
+
+    @Mock
+    private PartnerRepository partnerRepository;
 
     @Mock
     private WarehouseRepository warehouseRepository;
@@ -155,35 +159,38 @@ class ExcelImportApplyServiceTest {
     }
 
     @Test
-    void apply_productOnlyUpsertsProductAndDoesNotUpdateInventory() {
+    void apply_productOnlyCreatesProductAndDoesNotUpdateInventory() {
         ExcelImport excelImport = readyImport(99L, ExcelImportMode.PRODUCT_ONLY);
         MockMultipartFile file = file(productWorkbook());
         Category category = category();
-        Product product = product(10L, "P01");
         when(excelImportRepository.findByIdForUpdate(99L)).thenReturn(Optional.of(excelImport));
         when(excelImportChecksumService.sha256(file)).thenReturn("checksum");
         when(excelImportErrorRepository.existsByExcelImportId(99L)).thenReturn(false);
         when(excelImportValidationService.validate(file, ExcelImportMode.PRODUCT_ONLY.name(), null))
                 .thenReturn(new ExcelImportValidationResponse(true, ExcelImportMode.PRODUCT_ONLY.name(), 1, 1, 0, List.of()));
         when(categoryRepository.findByNormalizedCode("CAT01")).thenReturn(Optional.of(category));
-        when(productRepository.findByCode("P01")).thenReturn(Optional.of(product));
+        when(productRepository.existsByCodeIgnoreCase("P01")).thenReturn(false);
         when(excelImportRepository.save(excelImport)).thenReturn(excelImport);
 
         ExcelImportApplyResponse response = applyService.apply(99L, file);
 
+        ArgumentCaptor<Product> productCaptor = ArgumentCaptor.forClass(Product.class);
+        verify(productRepository).saveAndFlush(productCaptor.capture());
+        Product product = productCaptor.getValue();
         assertThat(product.getName()).isEqualTo("San pham moi");
         assertThat(product.getSku()).isEqualTo("SKU01");
         assertThat(product.getBarcode()).isEqualTo("BAR01");
         assertThat(product.getUnit()).isEqualTo("Cai");
         assertThat(product.getCategory()).isSameAs(category);
         assertThat(product.getPrice()).isEqualByComparingTo(new BigDecimal("10"));
+        assertThat(product.getDefaultMinStock()).isZero();
         assertThat(product.getUnitVolumeM3()).isEqualByComparingTo(new BigDecimal("1"));
+        assertThat(product.getLeadTimeDays()).isEqualTo(1);
         assertThat(product.getStatus()).isEqualTo(ProductStatus.HOAT_DONG);
         assertThat(response.status()).isEqualTo(ExcelImportStatus.DA_IMPORT.name());
         assertThat(excelImport.getCompletedAt()).isNotNull();
         verify(excelImportRepository).findByIdForUpdate(99L);
         verify(excelImportRepository, never()).findById(99L);
-        verify(productRepository).saveAndFlush(product);
         verify(inventoryLevelRepository, never()).saveAndFlush(any(InventoryLevel.class));
         verify(inventoryTransactionRepository, never()).saveAndFlush(any(InventoryTransaction.class));
     }
@@ -205,6 +212,7 @@ class ExcelImportApplyServiceTest {
         when(excelImportValidationService.validate(file, ExcelImportMode.PRODUCT_WITH_OPENING_STOCK.name(), null))
                 .thenReturn(new ExcelImportValidationResponse(true, ExcelImportMode.PRODUCT_WITH_OPENING_STOCK.name(), 2, 2, 0, List.of()));
         when(categoryRepository.findByNormalizedCode("CAT01")).thenReturn(Optional.of(category));
+        when(productRepository.existsByCodeIgnoreCase("P01")).thenReturn(false);
         when(productRepository.findByCode("P01")).thenReturn(Optional.of(product));
         when(warehouseRepository.findByCodeIgnoreCase("WH01")).thenReturn(Optional.of(warehouse));
         when(inventoryLevelRepository.findByProductIdAndWarehouseIdForUpdate(10L, 20L)).thenReturn(Optional.of(level));
@@ -215,7 +223,7 @@ class ExcelImportApplyServiceTest {
         assertThat(level.getQuantity()).isEqualTo(17);
         assertThat(excelImport.getStatus()).isEqualTo(ExcelImportStatus.DA_IMPORT);
         assertThat(excelImport.getCompletedAt()).isNotNull();
-        verify(productRepository).saveAndFlush(product);
+        verify(productRepository).saveAndFlush(any(Product.class));
         verify(inventoryLevelRepository).saveAndFlush(level);
 
         ArgumentCaptor<InventoryTransaction> captor = ArgumentCaptor.forClass(InventoryTransaction.class);
@@ -286,6 +294,7 @@ class ExcelImportApplyServiceTest {
         when(excelImportValidationService.validate(file, ExcelImportMode.PRODUCT_WITH_OPENING_STOCK.name(), null))
                 .thenReturn(new ExcelImportValidationResponse(true, ExcelImportMode.PRODUCT_WITH_OPENING_STOCK.name(), 2, 2, 0, List.of()));
         when(categoryRepository.findByNormalizedCode("CAT01")).thenReturn(Optional.of(category));
+        when(productRepository.existsByCodeIgnoreCase("P01")).thenReturn(false);
         when(productRepository.findByCode("P01")).thenReturn(Optional.of(product));
         when(warehouseRepository.findByCodeIgnoreCase("WH01")).thenReturn(Optional.of(warehouse));
         when(inventoryLevelRepository.findByProductIdAndWarehouseIdForUpdate(10L, 20L)).thenReturn(Optional.empty());
@@ -416,6 +425,7 @@ class ExcelImportApplyServiceTest {
         when(excelImportValidationService.validate(file, ExcelImportMode.PRODUCT_WITH_OPENING_STOCK.name(), null))
                 .thenReturn(new ExcelImportValidationResponse(true, ExcelImportMode.PRODUCT_WITH_OPENING_STOCK.name(), 2, 2, 0, List.of()));
         when(categoryRepository.findByNormalizedCode("CAT01")).thenReturn(Optional.of(category));
+        when(productRepository.existsByCodeIgnoreCase("P01")).thenReturn(false);
         when(productRepository.findByCode("P01")).thenReturn(Optional.of(product));
         when(warehouseRepository.findByCodeIgnoreCase("WH01")).thenReturn(Optional.of(warehouse));
         when(inventoryLevelRepository.findByProductIdAndWarehouseIdForUpdate(10L, 20L)).thenReturn(Optional.of(level));
@@ -423,7 +433,7 @@ class ExcelImportApplyServiceTest {
 
     private XSSFWorkbook productWorkbook() {
         return workbook(
-                List.of(List.of("P01", "San pham moi", "SKU01", "BAR01", "Cai", "CAT01", "10", "1", "HOAT_DONG")),
+                List.of(List.of("P01", "San pham moi", "SKU01", "BAR01", "Cai", "CAT01", "", "10", "0", "1", "", "HOAT_DONG")),
                 null
         );
     }
@@ -434,7 +444,7 @@ class ExcelImportApplyServiceTest {
 
     private XSSFWorkbook openingWorkbook(String openingQuantity) {
         return workbook(
-                List.of(List.of("P01", "San pham moi", "SKU01", "BAR01", "Cai", "CAT01", "10", "1", "HOAT_DONG")),
+                List.of(List.of("P01", "San pham moi", "SKU01", "BAR01", "Cai", "CAT01", "", "10", "0", "1", "", "HOAT_DONG")),
                 List.of(List.of("WH01", "P01", openingQuantity))
         );
     }

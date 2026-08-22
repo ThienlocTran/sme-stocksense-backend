@@ -5,6 +5,8 @@ import com.smartflow.smestocksensebackend.dto.excelimport.ExcelImportValidationR
 import com.smartflow.smestocksensebackend.entity.Employee;
 import com.smartflow.smestocksensebackend.entity.ExcelImport;
 import com.smartflow.smestocksensebackend.entity.ExcelImportStatus;
+import com.smartflow.smestocksensebackend.entity.Role;
+import com.smartflow.smestocksensebackend.entity.RoleCode;
 import com.smartflow.smestocksensebackend.entity.Warehouse;
 import com.smartflow.smestocksensebackend.exception.BadRequestException;
 import com.smartflow.smestocksensebackend.repository.ExcelImportRepository;
@@ -228,6 +230,7 @@ class ExcelImportUploadServiceTest {
 
     @Test
     void upload_invalidWarehouseShouldReturnBadRequestWhenProvided() {
+        authenticateUploader();
         when(warehouseRepository.findById(404L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> excelImportUploadService.upload(
@@ -254,6 +257,9 @@ class ExcelImportUploadServiceTest {
         Employee employee = new Employee();
         employee.setId(7L);
         employee.setEmail("admin@example.com");
+        Role role = new Role();
+        role.setCode(RoleCode.MANAGER);
+        employee.setRole(role);
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(employee, null, List.of())
         );

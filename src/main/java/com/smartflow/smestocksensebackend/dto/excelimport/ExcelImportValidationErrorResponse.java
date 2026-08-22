@@ -6,6 +6,17 @@ public record ExcelImportValidationErrorResponse(
         String columnName,
         String rawValue,
         String message,
-        String suggestion
+        String suggestion,
+        String errorCode
 ) {
+    public ExcelImportValidationErrorResponse(
+            String sheetName,
+            Integer rowNumber,
+            String columnName,
+            String rawValue,
+            String message,
+            String suggestion
+    ) {
+        this(sheetName, rowNumber, columnName, rawValue, message, suggestion, null);
+    }
 }

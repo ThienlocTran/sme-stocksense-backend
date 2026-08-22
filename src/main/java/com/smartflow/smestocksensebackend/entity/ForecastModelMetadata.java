@@ -62,6 +62,10 @@ public class ForecastModelMetadata {
     @Column(name = "kieu_tap_du_lieu", nullable = false, length = 30)
     private ForecastDatasetType datasetType = ForecastDatasetType.LEGACY_UNKNOWN;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "nguon_du_lieu", length = 50)
+    private SalesHistorySource historySource;
+
     @Column(name = "ngay_bat_dau_du_lieu")
     private LocalDate historyStartDate;
 

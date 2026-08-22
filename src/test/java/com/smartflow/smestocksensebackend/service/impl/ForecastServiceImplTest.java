@@ -315,6 +315,28 @@ class ForecastServiceImplTest {
         ArgumentCaptor<ForecastModelMetadata> captor = ArgumentCaptor.forClass(ForecastModelMetadata.class);
         verify(forecastModelMetadataRepository).save(captor.capture());
         assertEquals(ForecastDatasetType.EXTERNAL, captor.getValue().getDatasetType());
+        assertEquals(SalesHistorySource.EXTERNAL_RETAIL, captor.getValue().getHistorySource());
+    }
+
+    @Test
+    void runForecast_shouldStoreExactExternalStoreItemSource() {
+        List<SalesHistory> history = buildHistory(90, 5, SalesHistorySource.EXTERNAL_STORE_ITEM);
+        when(productRepository.findById(1L)).thenReturn(Optional.of(product));
+        when(warehouseRepository.findById(2L)).thenReturn(Optional.of(warehouse));
+        when(salesHistoryRepository.findByProductIdAndWarehouseIdAndSourceOrderByNgayAsc(1L, 2L,
+                SalesHistorySource.EXTERNAL_STORE_ITEM)).thenReturn(history);
+        when(forecastResultRepository.findMaxVersion(1L, 2L)).thenReturn(null);
+        when(productRepository.getReferenceById(1L)).thenReturn(product);
+        when(warehouseRepository.getReferenceById(2L)).thenReturn(warehouse);
+        when(inventoryLevelRepository.findByProductIdAndWarehouseId(1L, 2L)).thenReturn(Optional.empty());
+        stubAiForecast();
+
+        service.runForecast(1L, 2L);
+
+        ArgumentCaptor<ForecastModelMetadata> captor = ArgumentCaptor.forClass(ForecastModelMetadata.class);
+        verify(forecastModelMetadataRepository).save(captor.capture());
+        assertEquals(ForecastDatasetType.EXTERNAL, captor.getValue().getDatasetType());
+        assertEquals(SalesHistorySource.EXTERNAL_STORE_ITEM, captor.getValue().getHistorySource());
     }
 
     @Test
@@ -482,6 +504,39 @@ class ForecastServiceImplTest {
     }
 
     @Test
+    void getLatestForecast_shouldReturnExactExternalStoreItemSource() {
+        ForecastModelMetadata metadata = metadata(ForecastDatasetType.EXTERNAL, SalesHistorySource.EXTERNAL_STORE_ITEM);
+        stubLatestForecast(metadata, SalesHistorySource.EXTERNAL_STORE_ITEM);
+
+        ForecastResponse response = service.getLatestForecast(1L, 2L);
+
+        assertEquals("EXTERNAL", response.datasetType());
+        assertEquals("EXTERNAL_STORE_ITEM", response.source());
+    }
+
+    @Test
+    void getLatestForecast_shouldReturnExactExternalRetailSource() {
+        ForecastModelMetadata metadata = metadata(ForecastDatasetType.EXTERNAL, SalesHistorySource.EXTERNAL_RETAIL);
+        stubLatestForecast(metadata, SalesHistorySource.EXTERNAL_RETAIL);
+
+        ForecastResponse response = service.getLatestForecast(1L, 2L);
+
+        assertEquals("EXTERNAL", response.datasetType());
+        assertEquals("EXTERNAL_RETAIL", response.source());
+    }
+
+    @Test
+    void getLatestForecast_shouldNotInventSourceForLegacyExternalMetadata() {
+        ForecastModelMetadata metadata = metadata(ForecastDatasetType.EXTERNAL, null);
+        stubLatestForecast(metadata, null);
+
+        ForecastResponse response = service.getLatestForecast(1L, 2L);
+
+        assertEquals("EXTERNAL", response.datasetType());
+        assertNull(response.source());
+    }
+
+    @Test
     void checkDrift_shouldReturnNoForecastData_whenNoSavedForecast() {
         when(forecastResultRepository.findByProductIdAndWarehouseIdAndHorizonDaysAndForecastDateBetweenOrderByForecastDateAsc(
                 eq(1L), eq(2L), eq(7), any(), any())).thenReturn(List.of());
@@ -539,6 +594,40 @@ class ForecastServiceImplTest {
         row.setQuantity(quantity);
         row.setSource(source);
         return row;
+    }
+
+    private ForecastModelMetadata metadata(ForecastDatasetType datasetType, SalesHistorySource source) {
+        ForecastModelMetadata metadata = new ForecastModelMetadata();
+        metadata.setId(10L);
+        metadata.setVersion(1);
+        metadata.setMode(ForecastMode.XGBOOST);
+        metadata.setDatasetType(datasetType);
+        metadata.setHistorySource(source);
+        metadata.setSmape(new BigDecimal("5"));
+        metadata.setDataDays(90);
+        return metadata;
+    }
+
+    private void stubLatestForecast(ForecastModelMetadata metadata, SalesHistorySource source) {
+        when(productRepository.findById(1L)).thenReturn(Optional.of(product));
+        when(warehouseRepository.findById(2L)).thenReturn(Optional.of(warehouse));
+        when(forecastModelMetadataRepository.findFirstByProductIdAndWarehouseIdOrderByVersionDesc(1L, 2L))
+                .thenReturn(Optional.of(metadata));
+        when(forecastResultRepository.findByProductIdAndWarehouseIdAndVersion(1L, 2L, 1))
+                .thenReturn(List.of(forecastResult(7), forecastResult(14), forecastResult(30)));
+        when(inventoryLevelRepository.findByProductIdAndWarehouseId(1L, 2L)).thenReturn(Optional.empty());
+        when(dailyForecastResultRepository.findByModelMetadataIdOrderByForecastDateAsc(10L)).thenReturn(List.of());
+        if (source != null) {
+            when(salesHistoryRepository.findByProductIdAndWarehouseIdAndSourceOrderByNgayAsc(1L, 2L, source))
+                    .thenReturn(buildHistory(90, 5, source));
+        }
+    }
+
+    private ForecastResult forecastResult(int horizon) {
+        ForecastResult result = new ForecastResult();
+        result.setHorizonDays(horizon);
+        result.setPredictedQuantity(new BigDecimal("5"));
+        return result;
     }
 
     private void stubAiForecast() {

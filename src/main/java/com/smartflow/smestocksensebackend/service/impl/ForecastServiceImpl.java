@@ -39,6 +39,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 import java.util.TreeSet;
 
 @Service
@@ -90,6 +91,7 @@ public class ForecastServiceImpl implements ForecastService {
 
         List<SalesHistory> history = salesHistoryRepository
                 .findByProductIdAndWarehouseIdAndSourceOrderByNgayAsc(productId, warehouseId, source);
+        history = normalizeDailySeries(history, source);
         int dataDays = history.size();
 
         BigDecimal smape;
@@ -102,7 +104,7 @@ public class ForecastServiceImpl implements ForecastService {
             forecastByHorizon = coldStartForecast(history);
         } else {
             mode = ForecastMode.XGBOOST;
-            AiForecastClientResult result = callAiService(history, product.getPrice());
+            AiForecastClientResult result = callAiService(history);
             smape = result.smape() != null ? result.smape() : BigDecimal.ZERO;
             forecastByHorizon = new HashMap<>();
             for (Integer horizon : HORIZONS) {
@@ -306,13 +308,11 @@ public class ForecastServiceImpl implements ForecastService {
                 actualRows.size(), productId, warehouseId);
     }
 
-    private AiForecastClientResult callAiService(List<SalesHistory> history, BigDecimal price) {
-        BigDecimal effectivePrice = price != null ? price : BigDecimal.ZERO;
+    private AiForecastClientResult callAiService(List<SalesHistory> history) {
         List<AiForecastClientRequest.SalesPoint> points = new ArrayList<>(history.size());
         for (SalesHistory row : history) {
-            BigDecimal rowPrice = row.getAverageSellingPrice() != null ? row.getAverageSellingPrice() : effectivePrice;
             points.add(new AiForecastClientRequest.SalesPoint(row.getNgay().toString(),
-                    BigDecimal.valueOf(row.getQuantity()), rowPrice));
+                    BigDecimal.valueOf(row.getQuantity()), row.getAverageSellingPrice()));
         }
         AiForecastClientRequest request = new AiForecastClientRequest(points, HORIZONS);
         return aiServiceRestClient.post()
@@ -320,6 +320,36 @@ public class ForecastServiceImpl implements ForecastService {
                 .body(request)
                 .retrieve()
                 .body(AiForecastClientResult.class);
+    }
+
+    private List<SalesHistory> normalizeDailySeries(List<SalesHistory> history, SalesHistorySource source) {
+        if (history.isEmpty()) {
+            return history;
+        }
+        TreeMap<LocalDate, SalesHistory> byDate = new TreeMap<>();
+        for (SalesHistory row : history) {
+            byDate.merge(row.getNgay(), row, (left, right) -> {
+                left.setQuantity(firstNonNull(left.getQuantity(), 0) + firstNonNull(right.getQuantity(), 0));
+                if (left.getAverageSellingPrice() == null) {
+                    left.setAverageSellingPrice(right.getAverageSellingPrice());
+                }
+                return left;
+            });
+        }
+
+        LocalDate end = byDate.lastKey();
+        List<SalesHistory> normalized = new ArrayList<>();
+        for (LocalDate date = byDate.firstKey(); !date.isAfter(end); date = date.plusDays(1)) {
+            SalesHistory row = byDate.get(date);
+            if (row == null) {
+                row = new SalesHistory();
+                row.setNgay(date);
+                row.setQuantity(0);
+                row.setSource(source);
+            }
+            normalized.add(row);
+        }
+        return normalized;
     }
 
     private Map<Integer, BigDecimal> coldStartForecast(List<SalesHistory> history) {

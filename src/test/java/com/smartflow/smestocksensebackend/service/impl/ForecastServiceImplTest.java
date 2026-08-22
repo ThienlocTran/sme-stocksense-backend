@@ -39,6 +39,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -301,6 +302,43 @@ class ForecastServiceImplTest {
     }
 
     @Test
+    void runForecast_shouldNormalizeHistoryToContinuousDailySeries() {
+        LocalDate start = LocalDate.now().minusDays(70);
+        List<SalesHistory> history = new ArrayList<>();
+        for (int i = 0; i <= 60; i++) {
+            if (i == 2) {
+                continue;
+            }
+            SalesHistory row = salesHistory(start.plusDays(i), i == 3 ? 0 : 5, SalesHistorySource.THUC_TE);
+            row.setAverageSellingPrice(new BigDecimal("12000"));
+            history.add(row);
+        }
+        history.add(salesHistory(start.plusDays(4), 2, SalesHistorySource.THUC_TE));
+        when(productRepository.findById(1L)).thenReturn(Optional.of(product));
+        when(warehouseRepository.findById(2L)).thenReturn(Optional.of(warehouse));
+        when(salesHistoryRepository.findByProductIdAndWarehouseIdAndSourceOrderByNgayAsc(1L, 2L,
+                SalesHistorySource.THUC_TE)).thenReturn(history);
+        when(forecastResultRepository.findMaxVersion(1L, 2L)).thenReturn(null);
+        when(productRepository.getReferenceById(1L)).thenReturn(product);
+        when(warehouseRepository.getReferenceById(2L)).thenReturn(warehouse);
+        when(inventoryLevelRepository.findByProductIdAndWarehouseId(1L, 2L)).thenReturn(Optional.empty());
+        ArgumentCaptor<AiForecastClientRequest> requestCaptor = ArgumentCaptor.forClass(AiForecastClientRequest.class);
+        stubAiForecast(requestCaptor);
+
+        service.runForecast(1L, 2L);
+
+        List<AiForecastClientRequest.SalesPoint> points = requestCaptor.getValue().history();
+        assertEquals(61, points.size());
+        for (int i = 0; i < points.size(); i++) {
+            assertEquals(start.plusDays(i).toString(), points.get(i).date());
+        }
+        assertEquals(BigDecimal.ZERO, points.get(2).quantity());
+        assertNull(points.get(2).price());
+        assertEquals(BigDecimal.ZERO, points.get(3).quantity());
+        assertEquals(new BigDecimal("7"), points.get(4).quantity());
+    }
+
+    @Test
     void runForecast_shouldThrowNotFound_whenProductMissing() {
         when(productRepository.findById(99L)).thenReturn(Optional.empty());
         assertThrows(NotFoundException.class, () -> service.runForecast(99L, 2L));
@@ -377,12 +415,20 @@ class ForecastServiceImplTest {
     }
 
     private void stubAiForecast() {
+        stubAiForecast(null);
+    }
+
+    private void stubAiForecast(ArgumentCaptor<AiForecastClientRequest> requestCaptor) {
         RestClient.RequestBodyUriSpec bodyUriSpec = mock(RestClient.RequestBodyUriSpec.class);
         RestClient.RequestBodySpec bodySpec = mock(RestClient.RequestBodySpec.class);
         RestClient.ResponseSpec responseSpec = mock(RestClient.ResponseSpec.class);
         when(aiServiceRestClient.post()).thenReturn(bodyUriSpec);
         when(bodyUriSpec.uri(anyString())).thenReturn(bodySpec);
-        when(bodySpec.body(any(AiForecastClientRequest.class))).thenReturn(bodySpec);
+        if (requestCaptor == null) {
+            when(bodySpec.body(any(AiForecastClientRequest.class))).thenReturn(bodySpec);
+        } else {
+            when(bodySpec.body(requestCaptor.capture())).thenReturn(bodySpec);
+        }
         when(bodySpec.retrieve()).thenReturn(responseSpec);
         when(responseSpec.body(eq(AiForecastClientResult.class))).thenReturn(new AiForecastClientResult(
                 new BigDecimal("5"), 70, 20,

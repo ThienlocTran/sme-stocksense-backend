@@ -8,4 +8,5 @@ import java.util.Optional;
 public interface InventoryAdjustmentRepository extends JpaRepository<InventoryAdjustment, Long> {
     Optional<InventoryAdjustment> findByInventoryCountId(Long inventoryCountId);
     boolean existsByInventoryCountId(Long inventoryCountId);
+    boolean existsByCodeIgnoreCase(String code);
 }

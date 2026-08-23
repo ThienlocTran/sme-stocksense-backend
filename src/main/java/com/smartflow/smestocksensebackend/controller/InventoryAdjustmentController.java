@@ -23,7 +23,7 @@ public class InventoryAdjustmentController {
 
     @PostMapping("/api/inventory-counts/{countId}/adjustment")
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN','EMPLOYEE')")
     public InventoryAdjustmentResponse getOrCreateDraft(@PathVariable @Positive Long countId) {
         return service.getOrCreateDraft(countId);
     }

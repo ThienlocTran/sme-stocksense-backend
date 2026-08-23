@@ -1,6 +1,9 @@
 package com.smartflow.smestocksensebackend.service.impl;
 
 import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptDraftResponse;
+import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptHistoryResponse;
+import org.springframework.test.util.ReflectionTestUtils;
+import java.lang.reflect.Method;
 import com.smartflow.smestocksensebackend.dto.inbound.InspectImportReceiptRequest;
 import com.smartflow.smestocksensebackend.dto.inbound.InspectImportReceiptItemRequest;
 import com.smartflow.smestocksensebackend.entity.Employee;
@@ -211,6 +214,61 @@ class ImportReceiptDetailServiceTest {
         assertThat(response).hasSize(1);
         assertThat(response.getFirst().receiptId()).isEqualTo(100L);
         assertThat(response.getFirst().action()).isEqualTo("DUYET_CAP_2");
+        assertThat(response.getFirst().actorId()).isEqualTo(1L);
+        assertThat(response.getFirst().actorName()).isEqualTo("Employee 1");
+    }
+
+    @Test
+    void getHistory_shouldReadLegacyCreationActionsAndPreserveOrder() {
+        Employee manager = createEmployee(1L, RoleCode.MANAGER, EmployeeStatus.HOAT_DONG);
+        authenticateAs(manager);
+        Employee owner = createEmployee(2L, RoleCode.EMPLOYEE, EmployeeStatus.HOAT_DONG);
+        ImportReceipt receipt = createReceipt(100L, ImportReceiptStatus.HOAN_THANH, owner);
+        ImportReceiptHistory latest = createHistory(2L, receipt, manager);
+        setPersistedAction(latest, "TAO_PHIEU");
+        latest.setCreatedAt(LocalDateTime.of(2026, 6, 18, 11, 0));
+        ImportReceiptHistory older = createHistory(1L, receipt, manager);
+        setPersistedAction(older, "TAO");
+        older.setActor(null);
+        older.setCreatedAt(LocalDateTime.of(2026, 6, 18, 10, 0));
+        when(importReceiptRepository.findById(100L)).thenReturn(Optional.of(receipt));
+        when(importReceiptHistoryRepository.findByDocumentIdOrderByCreatedAtDesc(100L))
+                .thenReturn(List.of(latest, older));
+
+        var response = importReceiptService.getHistory(100L);
+
+        assertThat(response).extracting(ImportReceiptHistoryResponse::action)
+                .containsExactly("TAO_PHIEU", "TAO");
+        assertThat(response.get(0).actorId()).isEqualTo(1L);
+        assertThat(response.get(0).actorName()).isEqualTo("Employee 1");
+        assertThat(response.get(1).actorId()).isNull();
+        assertThat(response.get(1).actorName()).isNull();
+    }
+
+    @Test
+    void getHistory_shouldHandleNullActor() {
+        Employee manager = createEmployee(1L, RoleCode.MANAGER, EmployeeStatus.HOAT_DONG);
+        authenticateAs(manager);
+        Employee owner = createEmployee(2L, RoleCode.EMPLOYEE, EmployeeStatus.HOAT_DONG);
+        ImportReceipt receipt = createReceipt(100L, ImportReceiptStatus.HOAN_THANH, owner);
+        ImportReceiptHistory history = createHistory(1L, receipt, null);
+
+        when(importReceiptRepository.findById(100L)).thenReturn(Optional.of(receipt));
+        when(importReceiptHistoryRepository.findByDocumentIdOrderByCreatedAtDesc(100L))
+                .thenReturn(List.of(history));
+
+        var response = importReceiptService.getHistory(100L);
+
+        assertThat(response).hasSize(1);
+        assertThat(response.getFirst().actorId()).isNull();
+        assertThat(response.getFirst().actorName()).isNull();
+    }
+
+    @Test
+    void importReceiptHistory_shouldKeepWritesEnumConstrained() {
+        assertThat(ImportReceiptHistory.class.getMethods())
+                .extracting(Method::toString)
+                .noneMatch(signature -> signature.contains("setAction(java.lang.String)"));
     }
 
     @Test
@@ -688,6 +746,10 @@ class ImportReceiptDetailServiceTest {
         history.setAction(ImportReceiptAction.DUYET_CAP_2);
         history.setCreatedAt(LocalDateTime.of(2026, 6, 18, 10, 0));
         return history;
+    }
+
+    private void setPersistedAction(ImportReceiptHistory history, String action) {
+        ReflectionTestUtils.setField(history, "action", action);
     }
 
     private void authenticateAs(Employee employee) {

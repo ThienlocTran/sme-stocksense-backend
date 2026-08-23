@@ -127,6 +127,8 @@ class ForecastServiceImplTest {
                     metadata.setId(metadataIds.getAndIncrement());
                     return metadata;
                 });
+        org.mockito.Mockito.lenient().when(dailyForecastResultRepository.saveAllAndFlush(any()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
     }
 
     private List<SalesHistory> buildHistory(int days, int dailyQuantity) {
@@ -575,12 +577,16 @@ class ForecastServiceImplTest {
         when(inventoryLevelRepository.findByProductIdAndWarehouseId(1L, 2L)).thenReturn(Optional.empty());
         stubAiForecast(null, dailyPredictions(LocalDate.parse("2026-03-12"), 30));
 
-        service.runForecast(1L, 2L);
+        ForecastResponse response = service.runForecast(1L, 2L);
         service.runForecast(1L, 2L);
 
-        ArgumentCaptor<DailyForecastResult> dailyCaptor = ArgumentCaptor.forClass(DailyForecastResult.class);
-        verify(dailyForecastResultRepository, org.mockito.Mockito.times(60)).save(dailyCaptor.capture());
-        List<DailyForecastResult> rows = dailyCaptor.getAllValues();
+        assertEquals(30, response.dailyForecast().size());
+        assertEquals(LocalDate.parse("2026-03-12"), response.dailyForecast().getFirst().date());
+        assertEquals(new BigDecimal("1"), response.dailyForecast().getFirst().quantity());
+
+        ArgumentCaptor<List<DailyForecastResult>> dailyCaptor = ArgumentCaptor.forClass(List.class);
+        verify(dailyForecastResultRepository, org.mockito.Mockito.times(2)).saveAllAndFlush(dailyCaptor.capture());
+        List<DailyForecastResult> rows = dailyCaptor.getAllValues().stream().flatMap(List::stream).toList();
         assertEquals(30, rows.subList(0, 30).size());
         assertEquals(LocalDate.parse("2026-03-12"), rows.get(0).getForecastDate());
         assertEquals(LocalDate.parse("2026-04-10"), rows.get(29).getForecastDate());
@@ -688,6 +694,23 @@ class ForecastServiceImplTest {
     }
 
     @Test
+    void getLatestForecast_shouldReadSummaryAndDailyRowsFromSelectedModelOnly() {
+        ForecastModelMetadata metadata = metadata(ForecastDatasetType.EXTERNAL, SalesHistorySource.EXTERNAL_STORE_ITEM);
+        stubLatestForecast(metadata, SalesHistorySource.EXTERNAL_STORE_ITEM);
+        DailyForecastResult daily = new DailyForecastResult();
+        daily.setForecastDate(LocalDate.parse("2026-03-12"));
+        daily.setPredictedQuantity(new BigDecimal("8.25"));
+        when(dailyForecastResultRepository.findByModelMetadataIdOrderByForecastDateAsc(10L)).thenReturn(List.of(daily));
+
+        ForecastResponse response = service.getLatestForecast(1L, 2L);
+
+        assertEquals(1, response.dailyForecast().size());
+        assertEquals(new BigDecimal("5"), response.forecast7d());
+        assertEquals(new BigDecimal("8.25"), response.dailyForecast().getFirst().quantity());
+        verify(forecastResultRepository).findByModelMetadataId(10L);
+    }
+
+    @Test
     void checkDrift_shouldReturnNoForecastData_whenNoSavedForecast() {
         when(forecastResultRepository.findByProductIdAndWarehouseIdAndHorizonDaysAndForecastDateBetweenOrderByForecastDateAsc(
                 eq(1L), eq(2L), eq(7), any(), any())).thenReturn(List.of());
@@ -788,7 +811,7 @@ class ForecastServiceImplTest {
         when(forecastModelMetadataRepository.findFirstByProductIdAndWarehouseIdAndHistorySourceOrderByVersionDesc(
                 1L, 2L, source))
                 .thenReturn(Optional.of(metadata));
-        when(forecastResultRepository.findByProductIdAndWarehouseIdAndVersion(1L, 2L, 1))
+        when(forecastResultRepository.findByModelMetadataId(10L))
                 .thenReturn(List.of(forecastResult(7), forecastResult(14), forecastResult(30)));
         when(inventoryLevelRepository.findByProductIdAndWarehouseId(1L, 2L)).thenReturn(Optional.empty());
         when(dailyForecastResultRepository.findByModelMetadataIdOrderByForecastDateAsc(10L)).thenReturn(List.of());

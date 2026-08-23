@@ -219,7 +219,7 @@ public class ForecastServiceImpl implements ForecastService {
             forecastResult.setAverageDailyDemand(forecastByHorizon.get(horizon));
             forecastResultRepository.save(forecastResult);
         }
-        persistDailyForecasts(savedMetadata, dailyPredictions);
+        List<DailyForecastResult> dailyForecasts = persistDailyForecasts(savedMetadata, dailyPredictions);
 
         int currentStock = currentStock(productId, warehouseId);
         Integer minStock = effectiveMinStockResolver
@@ -241,7 +241,7 @@ public class ForecastServiceImpl implements ForecastService {
                 capInfo.limited7d(), capInfo.limited14d(), capInfo.limited30d(),
                 capInfo.capacityStatus(),
                 savedMetadata.getHistoryStartDate(), savedMetadata.getHistoryEndDate(),
-                toHistoryPoints(history), toDailyForecastPoints(savedMetadata.getId()));
+                toHistoryPoints(history), toDailyForecastPoints(dailyForecasts));
     }
 
     @Override
@@ -265,8 +265,7 @@ public class ForecastServiceImpl implements ForecastService {
                 .orElseThrow(() -> new NotFoundException(
                         "Chưa có dự báo nào cho sản phẩm/kho/nguồn dữ liệu này, hãy chạy dự báo trước."));
 
-        List<ForecastResult> results = forecastResultRepository
-                .findByProductIdAndWarehouseIdAndVersion(productId, warehouseId, metadata.getVersion());
+        List<ForecastResult> results = forecastResultRepository.findByModelMetadataId(metadata.getId());
 
         Map<Integer, BigDecimal> forecastByHorizon = new HashMap<>();
         for (ForecastResult result : results) {
@@ -414,15 +413,17 @@ public class ForecastServiceImpl implements ForecastService {
                 .body(AiForecastClientResult.class);
     }
 
-    private void persistDailyForecasts(ForecastModelMetadata metadata,
+    private List<DailyForecastResult> persistDailyForecasts(ForecastModelMetadata metadata,
             List<AiForecastClientResult.DailyPrediction> dailyPredictions) {
+        List<DailyForecastResult> rows = new ArrayList<>(dailyPredictions.size());
         for (AiForecastClientResult.DailyPrediction prediction : dailyPredictions) {
             DailyForecastResult row = new DailyForecastResult();
             row.setModelMetadata(metadata);
             row.setForecastDate(LocalDate.parse(prediction.date()));
             row.setPredictedQuantity(prediction.predictedQuantity());
-            dailyForecastResultRepository.save(row);
+            rows.add(row);
         }
+        return dailyForecastResultRepository.saveAllAndFlush(rows);
     }
 
     private List<SalesHistory> normalizeDailySeries(List<SalesHistory> history, SalesHistorySource source) {
@@ -585,8 +586,11 @@ public class ForecastServiceImpl implements ForecastService {
     }
 
     private List<ForecastResponse.DailyPoint> toDailyForecastPoints(Long modelMetadataId) {
-        return dailyForecastResultRepository.findByModelMetadataIdOrderByForecastDateAsc(modelMetadataId)
-                .stream()
+        return toDailyForecastPoints(dailyForecastResultRepository.findByModelMetadataIdOrderByForecastDateAsc(modelMetadataId));
+    }
+
+    private List<ForecastResponse.DailyPoint> toDailyForecastPoints(List<DailyForecastResult> rows) {
+        return rows.stream()
                 .map(row -> new ForecastResponse.DailyPoint(row.getForecastDate(), row.getPredictedQuantity()))
                 .toList();
     }

@@ -5,6 +5,7 @@ import com.smartflow.smestocksensebackend.dto.replenishment.WarehouseCapacityAva
 import com.smartflow.smestocksensebackend.entity.ForecastModelMetadata;
 import com.smartflow.smestocksensebackend.entity.InventoryLevel;
 import com.smartflow.smestocksensebackend.entity.Product;
+import com.smartflow.smestocksensebackend.entity.SalesHistorySource;
 import com.smartflow.smestocksensebackend.entity.Warehouse;
 import com.smartflow.smestocksensebackend.entity.WarehouseStockConfig;
 import com.smartflow.smestocksensebackend.exception.BadRequestException;
@@ -94,6 +95,35 @@ class ForecastReplenishmentRecommendationServiceImplTest {
     }
 
     @Test
+    void recommendationCanBeScopedToSelectedSource() {
+        Product product = product(10);
+        Warehouse warehouse = warehouse();
+        ForecastModelMetadata model = model(product, warehouse);
+        InventoryLevel inventory = new InventoryLevel();
+        inventory.setQuantity(20);
+
+        when(productRepository.findById(10L)).thenReturn(Optional.of(product));
+        when(warehouseRepository.findById(20L)).thenReturn(Optional.of(warehouse));
+        when(warehouseStockConfigRepository.findByProductIdAndWarehouseId(10L, 20L)).thenReturn(Optional.empty());
+        when(inventoryLevelRepository.findByProductIdAndWarehouseId(10L, 20L)).thenReturn(Optional.of(inventory));
+        when(forecastModelMetadataRepository.findFirstByProductIdAndWarehouseIdAndHistorySourceOrderByVersionDesc(
+                10L, 20L, SalesHistorySource.SEED_DEMO))
+                .thenReturn(Optional.of(model));
+        when(dailyForecastDemandService.sumHorizonDemand(model, (short) 7, 10L, 20L))
+                .thenReturn(new HorizonDemand(30L, 2, (short) 7, new BigDecimal("50")));
+        when(warehouseCapacityService.getAvailability(20L, product.getUnitVolumeM3()))
+                .thenReturn(new WarehouseCapacityAvailability(new BigDecimal("100.000"), new BigDecimal("20.000"),
+                        new BigDecimal("80.000"), 100, null));
+
+        var result = service().getRecommendation(10L, 20L, (short) 7, SalesHistorySource.SEED_DEMO);
+
+        assertEquals(30L, result.modelMetadataId());
+        verify(forecastModelMetadataRepository).findFirstByProductIdAndWarehouseIdAndHistorySourceOrderByVersionDesc(
+                10L, 20L, SalesHistorySource.SEED_DEMO);
+        verify(forecastModelMetadataRepository, never()).findFirstByProductIdAndWarehouseIdOrderByVersionDesc(10L, 20L);
+    }
+
+    @Test
     void currentStockScopedToRequestedWarehouseAndOverrideMinWins() {
         WarehouseStockConfig config = WarehouseStockConfig.builder().minStockOverride(25).build();
         stubBase((short) 7, new BigDecimal("50"), 30, 25, 100, config);
@@ -152,7 +182,8 @@ class ForecastReplenishmentRecommendationServiceImplTest {
         when(warehouseRepository.findById(20L)).thenReturn(Optional.of(warehouse));
         when(warehouseStockConfigRepository.findByProductIdAndWarehouseId(10L, 20L)).thenReturn(Optional.ofNullable(config));
         when(inventoryLevelRepository.findByProductIdAndWarehouseId(10L, 20L)).thenReturn(Optional.of(inventory));
-        when(forecastModelMetadataRepository.findFirstByProductIdAndWarehouseIdOrderByVersionDesc(10L, 20L))
+        when(forecastModelMetadataRepository.findFirstByProductIdAndWarehouseIdAndHistorySourceOrderByVersionDesc(
+                10L, 20L, SalesHistorySource.EXTERNAL_STORE_ITEM))
                 .thenReturn(Optional.of(model));
         when(dailyForecastDemandService.sumHorizonDemand(model, horizon, 10L, 20L))
                 .thenReturn(new HorizonDemand(30L, 2, horizon, demand));

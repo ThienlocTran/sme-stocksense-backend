@@ -7,6 +7,7 @@ import com.smartflow.smestocksensebackend.dto.replenishment.WarehouseCapacityAva
 import com.smartflow.smestocksensebackend.entity.ForecastModelMetadata;
 import com.smartflow.smestocksensebackend.entity.InventoryLevel;
 import com.smartflow.smestocksensebackend.entity.Product;
+import com.smartflow.smestocksensebackend.entity.SalesHistorySource;
 import com.smartflow.smestocksensebackend.entity.Warehouse;
 import com.smartflow.smestocksensebackend.entity.WarehouseStockConfig;
 import com.smartflow.smestocksensebackend.exception.BadRequestException;
@@ -45,6 +46,13 @@ public class ForecastReplenishmentRecommendationServiceImpl implements ForecastR
     @Transactional(readOnly = true)
     public ForecastReplenishmentRecommendationResponse getRecommendation(Long productId, Long warehouseId,
             Short horizonDays) {
+        return getRecommendation(productId, warehouseId, horizonDays, SalesHistorySource.EXTERNAL_STORE_ITEM);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ForecastReplenishmentRecommendationResponse getRecommendation(Long productId, Long warehouseId,
+            Short horizonDays, SalesHistorySource source) {
         if (horizonDays == null || (horizonDays != 7 && horizonDays != 14 && horizonDays != 30)) {
             throw new BadRequestException("Kỳ dự báo chỉ hỗ trợ 7, 14 hoặc 30 ngày.");
         }
@@ -60,9 +68,11 @@ public class ForecastReplenishmentRecommendationServiceImpl implements ForecastR
                 .map(InventoryLevel::getQuantity)
                 .map(quantity -> Math.max(0, quantity))
                 .orElse(0);
+        SalesHistorySource effectiveSource = source == null ? SalesHistorySource.EXTERNAL_STORE_ITEM : source;
         ForecastModelMetadata modelMetadata = forecastModelMetadataRepository
-                .findFirstByProductIdAndWarehouseIdOrderByVersionDesc(productId, warehouseId)
-                .orElseThrow(() -> new BadRequestException("Chưa có mô hình dự báo cho sản phẩm và kho."));
+                .findFirstByProductIdAndWarehouseIdAndHistorySourceOrderByVersionDesc(
+                        productId, warehouseId, effectiveSource)
+                .orElseThrow(() -> new BadRequestException("Chưa có mô hình dự báo cho sản phẩm, kho và nguồn dữ liệu."));
         HorizonDemand demand = dailyForecastDemandService
                 .sumHorizonDemand(modelMetadata, horizonDays, productId, warehouseId);
         int rawSuggestedQty = reorderQuantityCalculator

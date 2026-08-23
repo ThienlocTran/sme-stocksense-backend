@@ -378,7 +378,7 @@ class AiPurchaseAssignmentServiceImplTest {
         when(warehouseRepository.findById(20L)).thenReturn(Optional.of(warehouse));
         when(employeeRepository.findById(2L)).thenReturn(Optional.of(receiver));
         lenient().when(forecastModelMetadataRepository.findById(30L)).thenReturn(Optional.of(metadata));
-        when(recommendationService.getRecommendation(10L, 20L, (short) 7))
+        when(recommendationService.getRecommendation(10L, 20L, (short) 7, null))
                 .thenReturn(recommendation());
     }
 

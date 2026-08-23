@@ -86,7 +86,7 @@ public class AiPurchaseAssignmentServiceImpl implements AiPurchaseAssignmentServ
         }
 
         ForecastReplenishmentRecommendationResponse recommendation = recommendationService
-                .getRecommendation(product.getId(), warehouse.getId(), request.horizonDays());
+                .getRecommendation(product.getId(), warehouse.getId(), request.horizonDays(), request.source());
         ForecastModelMetadata modelMetadata = resolveModelMetadata(request, recommendation);
 
         AiPurchaseRequest assignment = new AiPurchaseRequest();

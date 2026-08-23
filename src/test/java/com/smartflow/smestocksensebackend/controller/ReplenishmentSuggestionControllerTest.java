@@ -2,6 +2,7 @@ package com.smartflow.smestocksensebackend.controller;
 
 import com.smartflow.smestocksensebackend.config.*;
 import com.smartflow.smestocksensebackend.dto.replenishment.*;
+import com.smartflow.smestocksensebackend.entity.SalesHistorySource;
 import com.smartflow.smestocksensebackend.exception.ApiExceptionHandler;
 import com.smartflow.smestocksensebackend.repository.EmployeeRepository;
 import com.smartflow.smestocksensebackend.service.*;
@@ -41,7 +42,7 @@ class ReplenishmentSuggestionControllerTest {
 
     @Test
     void recommendationEndpoint_shouldExposeRawAndCapacityFields() throws Exception {
-        when(recommendationService.getRecommendation(44L, 11L, (short) 7)).thenReturn(
+        when(recommendationService.getRecommendation(44L, 11L, (short) 7, SalesHistorySource.EXTERNAL_STORE_ITEM)).thenReturn(
                 new ForecastReplenishmentRecommendationResponse(44L, "SP001", "Laptop", 11L, "K001", "Kho",
                         (short) 7, java.math.BigDecimal.valueOf(50), 20, 10, 40, 30, true, 10, 30,
                         java.math.BigDecimal.valueOf(100), java.math.BigDecimal.valueOf(70),
@@ -51,6 +52,7 @@ class ReplenishmentSuggestionControllerTest {
                         .param("productId", "44")
                         .param("warehouseId", "11")
                         .param("horizonDays", "7")
+                        .param("source", "EXTERNAL_STORE_ITEM")
                         .with(user("u").roles("MANAGER")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.rawSuggestedQty").value(40))

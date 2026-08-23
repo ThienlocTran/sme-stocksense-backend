@@ -3,6 +3,7 @@ package com.smartflow.smestocksensebackend.controller;
 import com.smartflow.smestocksensebackend.dto.common.PageResponse;
 import com.smartflow.smestocksensebackend.dto.replenishment.ForecastReplenishmentRecommendationResponse;
 import com.smartflow.smestocksensebackend.dto.replenishment.ReplenishmentSuggestionResponse;
+import com.smartflow.smestocksensebackend.entity.SalesHistorySource;
 import com.smartflow.smestocksensebackend.service.ForecastReplenishmentRecommendationService;
 import com.smartflow.smestocksensebackend.service.ReplenishmentSuggestionService;
 import jakarta.validation.constraints.*;
@@ -36,7 +37,8 @@ public class ReplenishmentSuggestionController {
     public ForecastReplenishmentRecommendationResponse recommendation(
             @RequestParam @Positive Long productId,
             @RequestParam @Positive Long warehouseId,
-            @RequestParam @Pattern(regexp = "7|14|30", message = "horizonDays chỉ hỗ trợ 7, 14 hoặc 30.") String horizonDays) {
-        return recommendationService.getRecommendation(productId, warehouseId, Short.valueOf(horizonDays));
+            @RequestParam @Pattern(regexp = "7|14|30", message = "horizonDays chỉ hỗ trợ 7, 14 hoặc 30.") String horizonDays,
+            @RequestParam(defaultValue = "EXTERNAL_STORE_ITEM") SalesHistorySource source) {
+        return recommendationService.getRecommendation(productId, warehouseId, Short.valueOf(horizonDays), source);
     }
 }

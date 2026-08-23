@@ -11,6 +11,11 @@ public record CreateImportReceiptRequest(
         Long supplierId,
 
         @Size(max = 255, message = "note không được vượt quá 255 ký tự.")
-        String note
+        String note,
+
+        Long aiPurchaseRequestId
 ) {
+    public CreateImportReceiptRequest(Long warehouseId, Long supplierId, String note) {
+        this(warehouseId, supplierId, note, null);
+    }
 }

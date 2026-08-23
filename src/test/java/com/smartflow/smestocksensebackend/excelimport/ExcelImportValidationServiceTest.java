@@ -37,6 +37,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -52,6 +53,9 @@ class ExcelImportValidationServiceTest {
 
     @Mock
     private ProductRepository productRepository;
+
+    @Mock
+    private com.smartflow.smestocksensebackend.repository.PartnerRepository partnerRepository;
 
     @Mock
     private WarehouseRepository warehouseRepository;
@@ -71,13 +75,13 @@ class ExcelImportValidationServiceTest {
     @Test
     void validate_validProductOnlyWorkbookReturnsValidTrue() throws Exception {
         when(categoryRepository.existsByNormalizedCode("CAT01")).thenReturn(true);
-        when(productRepository.existsBySku("SKU01")).thenReturn(false);
-        when(productRepository.existsByBarcode("BAR01")).thenReturn(false);
+        when(productRepository.existsBySkuIgnoreCase("SKU01")).thenReturn(false);
+        when(productRepository.existsByBarcodeIgnoreCase("BAR01")).thenReturn(false);
 
         ExcelImportValidationResponse response = validationService.validate(
                 xlsxFile(workbook(
                         ExcelImportTemplateConstants.PRODUCT_HEADERS,
-                        List.of(List.of("P01", "San pham 1", "SKU01", "BAR01", "Cai", "CAT01", "10", "1", "HOAT_DONG")),
+                        List.of(List.of("P01", "San pham 1", "SKU01", "BAR01", "Cai", "CAT01", "", "10", "0", "1", "", "HOAT_DONG")),
                         null,
                         null
                 )),
@@ -96,13 +100,11 @@ class ExcelImportValidationServiceTest {
     @Test
     void validate_commaDecimalReturnsValidationError() throws Exception {
         when(categoryRepository.existsByNormalizedCode("CAT01")).thenReturn(true);
-        when(productRepository.existsBySku("SKU01")).thenReturn(false);
-        when(productRepository.existsByBarcode("BAR01")).thenReturn(false);
 
         ExcelImportValidationResponse response = validationService.validate(
                 xlsxFile(workbook(
                         ExcelImportTemplateConstants.PRODUCT_HEADERS,
-                        List.of(List.of("P01", "San pham 1", "SKU01", "BAR01", "Cai", "CAT01", "12,5", "1", "HOAT_DONG")),
+                        List.of(List.of("P01", "San pham 1", "SKU01", "BAR01", "Cai", "CAT01", "", "12,5", "0", "1", "", "HOAT_DONG")),
                         null,
                         null
                 )),
@@ -130,8 +132,8 @@ class ExcelImportValidationServiceTest {
     void validate_wrongProductHeaderReturnsValidationError() throws Exception {
         ExcelImportValidationResponse response = validationService.validate(
                 xlsxFile(workbook(
-                        List.of("sai_cot", "ten_san_pham", "sku", "ma_vach", "don_vi_tinh", "ma_danh_muc", "gia_ban", "the_tich_don_vi_m3", "trang_thai"),
-                        List.of(List.of("P01", "SP", "", "", "Cai", "CAT01", "10", "1", "HOAT_DONG")),
+                        List.of("sai_cot", "ten_san_pham", "sku", "ma_vach", "don_vi_tinh", "ma_danh_muc", "ma_nha_cung_cap", "gia_ban", "ton_toi_thieu_mac_dinh", "the_tich_don_vi_m3", "thoi_gian_giao_hang", "trang_thai"),
+                        List.of(List.of("P01", "SP", "", "", "Cai", "CAT01", "", "10", "0", "1", "", "HOAT_DONG")),
                         null,
                         null
                 )),
@@ -150,7 +152,7 @@ class ExcelImportValidationServiceTest {
         ExcelImportValidationResponse response = validationService.validate(
                 xlsxFile(workbook(
                         ExcelImportTemplateConstants.PRODUCT_HEADERS,
-                        List.of(List.of("", "", "", "", "", "CAT01", "", "", "", "")),
+                        List.of(List.of("", "", "", "", "", "CAT01", "", "", "0", "", "", "")),
                         null,
                         null
                 )),
@@ -171,8 +173,8 @@ class ExcelImportValidationServiceTest {
                 xlsxFile(workbook(
                         ExcelImportTemplateConstants.PRODUCT_HEADERS,
                         List.of(
-                                List.of("P01", "SP1", "", "", "Cai", "CAT01", "10", "1", "HOAT_DONG"),
-                                List.of("P01", "SP2", "", "", "Cai", "CAT01", "10", "1", "HOAT_DONG")
+                                List.of("P01", "SP1", "", "", "Cai", "CAT01", "", "10", "0", "1", "", "HOAT_DONG"),
+                                List.of("P01", "SP2", "", "", "Cai", "CAT01", "", "10", "0", "1", "", "HOAT_DONG")
                         ),
                         null,
                         null
@@ -186,11 +188,31 @@ class ExcelImportValidationServiceTest {
     }
 
     @Test
+    void validate_existingProductCodeReturnsValidationError() throws Exception {
+        when(categoryRepository.existsByNormalizedCode("CAT01")).thenReturn(true);
+        when(productRepository.existsByCodeIgnoreCase("P01")).thenReturn(true);
+
+        ExcelImportValidationResponse response = validationService.validate(
+                xlsxFile(workbook(
+                        ExcelImportTemplateConstants.PRODUCT_HEADERS,
+                        List.of(List.of("P01", "SP1", "", "", "Cai", "CAT01", "", "10", "0", "1", "", "HOAT_DONG")),
+                        null,
+                        null
+                )),
+                ExcelImportMode.PRODUCT_ONLY.name(),
+                null
+        );
+
+        assertThat(response.valid()).isFalse();
+        assertThat(response.errors()).anyMatch(error -> "PRODUCT_CODE_ALREADY_EXISTS".equals(error.errorCode()));
+    }
+
+    @Test
     void validate_invalidCategoryReturnsValidationError() throws Exception {
         ExcelImportValidationResponse response = validationService.validate(
                 xlsxFile(workbook(
                         ExcelImportTemplateConstants.PRODUCT_HEADERS,
-                        List.of(List.of("P01", "SP1", "", "", "Cai", "CAT99", "10", "1", "HOAT_DONG")),
+                        List.of(List.of("P01", "SP1", "", "", "Cai", "CAT99", "", "10", "0", "1", "", "HOAT_DONG")),
                         null,
                         null
                 )),
@@ -203,13 +225,36 @@ class ExcelImportValidationServiceTest {
     }
 
     @Test
+    void validate_invalidSupplierReturnsValidationError() throws Exception {
+        when(categoryRepository.existsByNormalizedCode("CAT01")).thenReturn(true);
+        when(partnerRepository.existsByCodeIgnoreCaseAndType(
+                eq("SUP99"),
+                eq(com.smartflow.smestocksensebackend.entity.PartnerType.NHA_CUNG_CAP)
+        )).thenReturn(false);
+
+        ExcelImportValidationResponse response = validationService.validate(
+                xlsxFile(workbook(
+                        ExcelImportTemplateConstants.PRODUCT_HEADERS,
+                        List.of(List.of("P01", "SP1", "", "", "Cai", "CAT01", "SUP99", "10", "0", "1", "", "HOAT_DONG")),
+                        null,
+                        null
+                )),
+                ExcelImportMode.PRODUCT_ONLY.name(),
+                null
+        );
+
+        assertThat(response.valid()).isFalse();
+        assertThat(response.errors()).anyMatch(error -> "SUPPLIER_NOT_FOUND".equals(error.errorCode()));
+    }
+
+    @Test
     void validate_negativePriceAndStockRangeAndInvalidStatusReturnsValidationErrors() throws Exception {
         when(categoryRepository.existsByNormalizedCode("CAT01")).thenReturn(true);
 
         ExcelImportValidationResponse response = validationService.validate(
                 xlsxFile(workbook(
                         ExcelImportTemplateConstants.PRODUCT_HEADERS,
-                        List.of(List.of("P01", "SP1", "", "", "Cai", "CAT01", "-10", "-1", "BOGUS")),
+                        List.of(List.of("P01", "SP1", "", "", "Cai", "CAT01", "", "-10", "-1", "-1", "-1", "BOGUS")),
                         null,
                         null
                 )),
@@ -223,16 +268,33 @@ class ExcelImportValidationServiceTest {
     }
 
     @Test
+    void validate_numericIdentifierCellsDoNotBecomeDecimalCodes() throws Exception {
+        ExcelImportValidationResponse response = validationService.validate(
+                xlsxFile(workbook(
+                        ExcelImportTemplateConstants.PRODUCT_HEADERS,
+                        List.of(List.of("123", "SP1", "", "", "Cai", "456", "", "10", "0", "1", "", "HOAT_DONG")),
+                        null,
+                        null
+                )),
+                ExcelImportMode.PRODUCT_ONLY.name(),
+                null
+        );
+
+        assertThat(response.errors()).noneMatch(error -> "123.0".equals(error.rawValue()));
+        assertThat(response.errors()).anyMatch(error -> "456".equals(error.rawValue()));
+    }
+
+    @Test
     void validate_validProductWithOpeningStockWorkbookReturnsValidTrue() throws Exception {
         when(categoryRepository.existsByNormalizedCode("CAT01")).thenReturn(true);
-        when(productRepository.existsBySku("SKU01")).thenReturn(false);
-        when(productRepository.existsByBarcode("BAR01")).thenReturn(false);
+        when(productRepository.existsBySkuIgnoreCase("SKU01")).thenReturn(false);
+        when(productRepository.existsByBarcodeIgnoreCase("BAR01")).thenReturn(false);
         when(warehouseRepository.existsByCodeIgnoreCase("WH01")).thenReturn(true);
 
         ExcelImportValidationResponse response = validationService.validate(
                 xlsxFile(workbook(
                         ExcelImportTemplateConstants.PRODUCT_HEADERS,
-                        List.of(List.of("P01", "SP1", "SKU01", "BAR01", "Cai", "CAT01", "10", "1", "HOAT_DONG")),
+                        List.of(List.of("P01", "SP1", "SKU01", "BAR01", "Cai", "CAT01", "", "10", "0", "1", "", "HOAT_DONG")),
                         List.of(List.of("WH01", "P01", "12")),
                         null
                 )),
@@ -251,7 +313,7 @@ class ExcelImportValidationServiceTest {
         ExcelImportValidationResponse response = validationService.validate(
                 xlsxFile(workbook(
                         ExcelImportTemplateConstants.PRODUCT_HEADERS,
-                        List.of(List.of("P01", "SP1", "", "", "Cai", "CAT01", "10", "1", "HOAT_DONG")),
+                        List.of(List.of("P01", "SP1", "", "", "Cai", "CAT01", "", "10", "0", "1", "", "HOAT_DONG")),
                         null,
                         null
                 )),
@@ -271,7 +333,7 @@ class ExcelImportValidationServiceTest {
         ExcelImportValidationResponse response = validationService.validate(
                 xlsxFile(workbook(
                         ExcelImportTemplateConstants.PRODUCT_HEADERS,
-                        List.of(List.of("P01", "SP1", "", "", "Cai", "CAT01", "10", "1", "HOAT_DONG")),
+                        List.of(List.of("P01", "SP1", "", "", "Cai", "CAT01", "", "10", "0", "1", "", "HOAT_DONG")),
                         List.of(
                                 List.of("WH01", "P01", "12"),
                                 List.of("WH01", "P01", "13")
@@ -293,7 +355,7 @@ class ExcelImportValidationServiceTest {
         ExcelImportValidationResponse response = validationService.validate(
                 xlsxFile(workbook(
                         ExcelImportTemplateConstants.PRODUCT_HEADERS,
-                        List.of(List.of("P01", "SP1", "", "", "Cai", "CAT01", "10", "1", "HOAT_DONG")),
+                        List.of(List.of("P01", "SP1", "", "", "Cai", "CAT01", "", "10", "0", "1", "", "HOAT_DONG")),
                         List.of(List.of("WH99", "P01", "12")),
                         null
                 )),
@@ -373,7 +435,7 @@ class ExcelImportValidationServiceTest {
         ExcelImportValidationResponse response = validationService.validate(
                 xlsxFile(workbook(
                         ExcelImportTemplateConstants.PRODUCT_HEADERS,
-                        List.of(List.of("P01", "SP1", "", "", "Cai", "CAT01", "10", "1", "HOAT_DONG")),
+                        List.of(List.of("P01", "SP1", "", "", "Cai", "CAT01", "", "10", "0", "1", "", "HOAT_DONG")),
                         List.of(List.of("WH01", "P01", "12")),
                         null
                 )),
@@ -396,7 +458,7 @@ class ExcelImportValidationServiceTest {
                 99L,
                 xlsxFile(workbook(
                         ExcelImportTemplateConstants.PRODUCT_HEADERS,
-                        List.of(List.of("", "San pham loi", "", "", "Cai", "CAT99", "10", "1", "HOAT_DONG")),
+                        List.of(List.of("", "San pham loi", "", "", "Cai", "CAT99", "", "10", "0", "1", "", "HOAT_DONG")),
                         null,
                         null
                 )),
@@ -430,7 +492,7 @@ class ExcelImportValidationServiceTest {
                 100L,
                 xlsxFile(workbook(
                         ExcelImportTemplateConstants.PRODUCT_HEADERS,
-                        List.of(List.of("P01", "San pham 1", "", "", "Cai", "CAT01", "10", "1", "HOAT_DONG")),
+                        List.of(List.of("P01", "San pham 1", "", "", "Cai", "CAT01", "", "10", "0", "1", "", "HOAT_DONG")),
                         null,
                         null
                 )),
@@ -461,7 +523,7 @@ class ExcelImportValidationServiceTest {
                 101L,
                 xlsxFile(workbook(
                         ExcelImportTemplateConstants.PRODUCT_HEADERS,
-                        List.of(List.of("", "San pham loi", "", "", "Cai", "CAT99", "10", "1", "HOAT_DONG")),
+                        List.of(List.of("", "San pham loi", "", "", "Cai", "CAT99", "", "10", "0", "1", "", "HOAT_DONG")),
                         null,
                         null
                 )),

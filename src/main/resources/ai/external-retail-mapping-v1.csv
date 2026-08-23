@@ -1,0 +1,16 @@
+type,external_id,stocksense_code,rank,metadata
+STORE,1,K001,1,benchmark store 1
+STORE,2,K002,2,benchmark store 2
+STORE,3,K003,3,benchmark store 3
+ITEM,b0d24502fb66,SP001,1,dept=ВСПОМОГАТЕЛЬНАЯ ГРУППА;class=ПЛАТНЫЕ ПАКЕТЫ
+ITEM,9a7e315f3f42,SP002,2,dept=ДОМАШНЯЯ КУХНЯ;class=ДОМАШНЯЯ КУХНЯ
+ITEM,63161948a95a,SP003,3,dept=ВСПОМОГАТЕЛЬНАЯ ГРУППА;class=УСЛУГА И АРЕНДА
+ITEM,e5b2b6f57ea7,SP004,4,dept=КАФЕ;class=КАФЕ
+ITEM,0973df3ff57f,SP005,5,dept=ФРУКТЫ;class=БАНАНЫ
+ITEM,327c5bc1e583,SP006,6,dept=not found in catalog
+ITEM,b5aac3497e3f,SP007,7,dept=ВСПОМОГАТЕЛЬНАЯ ГРУППА;class=УСЛУГА И АРЕНДА
+ITEM,5b8e114fdf6f,SP008,8,dept=ФРУКТЫ;class=АРБУЗЫ ДЫНИ
+ITEM,9b4865c6faf1,SP009,9,dept=ЯЙЦО;class=ЯЙЦО
+ITEM,ad5239463b05,SP010,10,dept=ПИРОГИ;class=ШТУЧНЫЕ
+ITEM,f1eb9c33424e,SP011,11,dept=ПИЦЦА;class=КУСОК ПИЦЦЫ
+ITEM,6d284b4e9982,SP012,12,dept=САХАР;class=САХАР-ПЕСОК

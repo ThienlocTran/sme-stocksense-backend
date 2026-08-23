@@ -2,15 +2,20 @@ package com.smartflow.smestocksensebackend.controller;
 
 import com.smartflow.smestocksensebackend.dto.forecast.DriftResponse;
 import com.smartflow.smestocksensebackend.dto.forecast.ForecastResponse;
-import com.smartflow.smestocksensebackend.dto.forecast.SeedHistoryResponse;
+import com.smartflow.smestocksensebackend.dto.forecast.SeedHistoryJobResponse;
+import com.smartflow.smestocksensebackend.entity.SalesHistorySource;
+import com.smartflow.smestocksensebackend.exception.NotFoundException;
 import com.smartflow.smestocksensebackend.service.ForecastService;
+import com.smartflow.smestocksensebackend.service.SeedHistoryJobService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -23,19 +28,30 @@ import org.springframework.web.bind.annotation.RestController;
 public class ForecastController {
 
     private final ForecastService forecastService;
+    private final SeedHistoryJobService seedHistoryJobService;
 
     @PostMapping("/{productId}/{warehouseId}")
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<ForecastResponse> runForecast(@PathVariable Long productId,
-            @PathVariable Long warehouseId) {
-        return ResponseEntity.ok(forecastService.runForecast(productId, warehouseId));
+            @PathVariable Long warehouseId,
+            @RequestParam(defaultValue = "EXTERNAL_STORE_ITEM") SalesHistorySource source) {
+        return ResponseEntity.ok(forecastService.runForecast(productId, warehouseId, source));
     }
 
+    /**
+     * Trả 200 + body khi đã có kết quả dự báo lưu sẵn.
+     * Trả 204 No Content khi SP/Kho hợp lệ nhưng chưa từng chạy dự báo – không phải lỗi.
+     */
     @GetMapping("/{productId}/{warehouseId}")
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'EMPLOYEE')")
     public ResponseEntity<ForecastResponse> getLatestForecast(@PathVariable Long productId,
-            @PathVariable Long warehouseId) {
-        return ResponseEntity.ok(forecastService.getLatestForecast(productId, warehouseId));
+            @PathVariable Long warehouseId,
+            @RequestParam(defaultValue = "EXTERNAL_STORE_ITEM") SalesHistorySource source) {
+        try {
+            return ResponseEntity.ok(forecastService.getLatestForecast(productId, warehouseId, source));
+        } catch (NotFoundException e) {
+            return ResponseEntity.noContent().build();
+        }
     }
 
     @GetMapping("/{productId}/{warehouseId}/drift")
@@ -45,10 +61,29 @@ public class ForecastController {
         return ResponseEntity.ok(forecastService.checkDrift(productId, warehouseId));
     }
 
-    /** Công cụ demo: sinh dữ liệu lịch sử bán hàng giả lập. Chỉ ADMIN được gọi. */
     @PostMapping("/seed-history")
-    @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<SeedHistoryResponse> seedHistory() {
-        return ResponseEntity.ok(forecastService.seedHistory());
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    public ResponseEntity<SeedHistoryJobResponse> seedHistory() {
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body(seedHistoryJobService.start());
+    }
+
+    @PostMapping("/seed-history/jobs")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    public ResponseEntity<SeedHistoryJobResponse> startSeedHistoryJob() {
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body(seedHistoryJobService.start());
+    }
+
+    @GetMapping("/seed-history/jobs/{jobId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    public ResponseEntity<SeedHistoryJobResponse> getSeedHistoryJob(@PathVariable java.util.UUID jobId) {
+        return ResponseEntity.ok(seedHistoryJobService.get(jobId));
+    }
+
+    @GetMapping("/seed-history/jobs/active")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    public ResponseEntity<SeedHistoryJobResponse> getActiveSeedHistoryJob() {
+        return seedHistoryJobService.active()
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.noContent().build());
     }
 }

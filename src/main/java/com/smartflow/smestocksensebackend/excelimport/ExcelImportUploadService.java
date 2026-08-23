@@ -4,6 +4,7 @@ import com.smartflow.smestocksensebackend.dto.excelimport.ExcelImportUploadRespo
 import com.smartflow.smestocksensebackend.entity.Employee;
 import com.smartflow.smestocksensebackend.entity.ExcelImport;
 import com.smartflow.smestocksensebackend.entity.ExcelImportStatus;
+import com.smartflow.smestocksensebackend.entity.RoleCode;
 import com.smartflow.smestocksensebackend.entity.Warehouse;
 import com.smartflow.smestocksensebackend.exception.BadRequestException;
 import com.smartflow.smestocksensebackend.repository.ExcelImportRepository;
@@ -38,6 +39,7 @@ public class ExcelImportUploadService {
         String fileName = file == null || file.isEmpty() ? null : safeOriginalFileName(file);
         validateFile(file, fileName);
         ExcelImportMode importMode = parseImportMode(loaiImport);
+        ensureCanImportProductMaster(importMode);
         Warehouse warehouse = findWarehouseIfProvided(khoId);
 
         ExcelImport excelImport = new ExcelImport();
@@ -66,6 +68,17 @@ public class ExcelImportUploadService {
             throw new AuthenticationCredentialsNotFoundException("Authentication required.");
         }
         return employee;
+    }
+
+    private void ensureCanImportProductMaster(ExcelImportMode mode) {
+        if (mode != ExcelImportMode.PRODUCT_ONLY) {
+            return;
+        }
+        Employee employee = currentEmployee();
+        RoleCode role = employee.getRole() == null ? null : employee.getRole().getCode();
+        if (role != RoleCode.ADMIN && role != RoleCode.MANAGER) {
+            throw new com.smartflow.smestocksensebackend.exception.MissingRoleException("Ban khong co quyen import danh muc san pham.");
+        }
     }
 
     private void validateFile(MultipartFile file, String fileName) {

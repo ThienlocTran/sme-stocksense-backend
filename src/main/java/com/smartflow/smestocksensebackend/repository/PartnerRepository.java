@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Interface Repository quản lý các giao tiếp CSDL liên quan đến thực thể Partner.
@@ -24,6 +25,10 @@ public interface PartnerRepository extends JpaRepository<Partner, Long>, JpaSpec
      * @return true nếu đã tồn tại mã đối tác này, ngược lại là false
      */
     boolean existsByCodeIgnoreCase(String code);
+
+    Optional<Partner> findByCodeIgnoreCase(String code);
+
+    boolean existsByCodeIgnoreCaseAndType(String code, PartnerType type);
 
     List<Partner> findByTypeAndStatusOrderByNameAsc(PartnerType type, PartnerStatus status);
 }

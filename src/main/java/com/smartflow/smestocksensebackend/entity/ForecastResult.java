@@ -33,6 +33,10 @@ public class ForecastResult {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "thong_tin_mo_hinh_id")
+    private ForecastModelMetadata modelMetadata;
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "san_pham_id", nullable = false)
     private Product product;
@@ -52,6 +56,15 @@ public class ForecastResult {
 
     @Column(name = "phien_ban", nullable = false)
     private Integer version = 1;
+
+    @Column(name = "horizon_days")
+    private Short targetHorizonDays;
+
+    @Column(name = "ngay_moc_du_bao")
+    private LocalDate forecastBaseDate;
+
+    @Column(name = "nhu_cau_trung_binh_ngay")
+    private BigDecimal averageDailyDemand;
 
     @CreationTimestamp
     @Column(name = "ngay_tao", updatable = false)

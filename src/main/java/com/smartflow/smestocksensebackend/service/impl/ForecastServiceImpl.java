@@ -3,22 +3,26 @@ package com.smartflow.smestocksensebackend.service.impl;
 import com.smartflow.smestocksensebackend.dto.forecast.AiForecastClientRequest;
 import com.smartflow.smestocksensebackend.dto.forecast.AiForecastClientResult;
 import com.smartflow.smestocksensebackend.dto.forecast.DriftResponse;
+import com.smartflow.smestocksensebackend.dto.forecast.ForecastAvailabilityResponse;
 import com.smartflow.smestocksensebackend.dto.forecast.ForecastResponse;
 import com.smartflow.smestocksensebackend.dto.forecast.SeedHistoryResponse;
 import com.smartflow.smestocksensebackend.dto.inventory.DailyQuantityProjection;
+import com.smartflow.smestocksensebackend.entity.DailyForecastResult;
 import com.smartflow.smestocksensebackend.entity.ForecastDriftLog;
+import com.smartflow.smestocksensebackend.entity.ForecastDatasetType;
 import com.smartflow.smestocksensebackend.entity.ForecastMode;
 import com.smartflow.smestocksensebackend.entity.ForecastModelMetadata;
 import com.smartflow.smestocksensebackend.entity.ForecastResult;
-import com.smartflow.smestocksensebackend.entity.InventoryLevel;
 import com.smartflow.smestocksensebackend.entity.Product;
 import com.smartflow.smestocksensebackend.entity.SalesHistory;
 import com.smartflow.smestocksensebackend.entity.SalesHistorySource;
 import com.smartflow.smestocksensebackend.entity.Warehouse;
+import com.smartflow.smestocksensebackend.exception.ConflictException;
 import com.smartflow.smestocksensebackend.exception.NotFoundException;
 import com.smartflow.smestocksensebackend.repository.ForecastDriftLogRepository;
 import com.smartflow.smestocksensebackend.repository.ForecastModelMetadataRepository;
 import com.smartflow.smestocksensebackend.repository.ForecastResultRepository;
+import com.smartflow.smestocksensebackend.repository.DailyForecastResultRepository;
 import com.smartflow.smestocksensebackend.repository.InventoryLevelRepository;
 import com.smartflow.smestocksensebackend.repository.InventoryTransactionRepository;
 import com.smartflow.smestocksensebackend.repository.ProductRepository;
@@ -27,8 +31,10 @@ import com.smartflow.smestocksensebackend.repository.WarehouseRepository;
 import com.smartflow.smestocksensebackend.service.ForecastService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.client.RestClient;
 
 import java.math.BigDecimal;
@@ -40,7 +46,12 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
+import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -54,6 +65,7 @@ public class ForecastServiceImpl implements ForecastService {
     private static final int DRIFT_MIN_OVERLAP_DAYS = 7;
     private static final BigDecimal DRIFT_THRESHOLD_SMAPE = new BigDecimal("20.0");
     private static final List<Integer> HORIZONS = List.of(7, 14, 30);
+    private static final AtomicBoolean SEED_DEMO_RUNNING = new AtomicBoolean(false);
 
     private final ProductRepository productRepository;
     private final WarehouseRepository warehouseRepository;
@@ -61,6 +73,7 @@ public class ForecastServiceImpl implements ForecastService {
     private final InventoryTransactionRepository inventoryTransactionRepository;
     private final SalesHistoryRepository salesHistoryRepository;
     private final ForecastResultRepository forecastResultRepository;
+    private final DailyForecastResultRepository dailyForecastResultRepository;
     private final ForecastModelMetadataRepository forecastModelMetadataRepository;
     private final ForecastDriftLogRepository forecastDriftLogRepository;
     private final RestClient aiServiceRestClient;
@@ -74,22 +87,82 @@ public class ForecastServiceImpl implements ForecastService {
     @org.springframework.beans.factory.annotation.Autowired
     com.smartflow.smestocksensebackend.service.WarehouseCapacityService warehouseCapacityService;
 
+    @Autowired
+    TransactionTemplate transactionTemplate;
+
     @Override
     @Transactional
     public ForecastResponse runForecast(Long productId, Long warehouseId) {
+        return runForecast(productId, warehouseId, SalesHistorySource.EXTERNAL_STORE_ITEM);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ForecastAvailabilityResponse getAvailability(SalesHistorySource source) {
+        SalesHistorySource effectiveSource = source == null ? SalesHistorySource.EXTERNAL_STORE_ITEM : source;
+        List<ForecastAvailabilityResponse.Combination> combinations = salesHistoryRepository
+                .findForecastAvailability(effectiveSource, MIN_HISTORY_DAYS)
+                .stream()
+                .map(row -> new ForecastAvailabilityResponse.Combination(
+                        row.getProductId(), row.getProductCode(), row.getProductName(),
+                        row.getWarehouseId(), row.getWarehouseCode(), row.getWarehouseName(),
+                        row.getHistoryDays(), row.getHistoryStart(), row.getHistoryEnd()))
+                .toList();
+        return new ForecastAvailabilityResponse(effectiveSource.name(), combinations);
+    }
+
+    @Override
+    public SeedHistoryResponse seedDemoHistory() {
+        if (!SEED_DEMO_RUNNING.compareAndSet(false, true)) {
+            throw new ConflictException("SEED_DEMO seeding is already running.");
+        }
+        LocalDate historyEnd = LocalDate.now();
+        LocalDate historyStart = historyEnd.minusDays(SEED_HISTORY_DAYS - 1L);
+        int seriesSeeded = 0;
+        int rowsInserted = 0;
+
+        try {
+            for (SeedSeriesTarget target : findSeedSeriesTargets()) {
+                List<SalesHistorySeedRow> rows = generateSyntheticHistory(
+                        target.productId(), target.warehouseId(), target.price(), historyStart);
+                SeedSeriesResult result = persistMissingSeedDemoRows(target.productId(), target.warehouseId(),
+                        rows, historyStart, historyEnd);
+                if (result.rowsInserted() > 0) {
+                    seriesSeeded++;
+                    rowsInserted += result.rowsInserted();
+                }
+            }
+        } finally {
+            SEED_DEMO_RUNNING.set(false);
+        }
+
+        log.info("[ForecastService] Seed SEED_DEMO history: {} series, {} rows", seriesSeeded, rowsInserted);
+        return new SeedHistoryResponse(SalesHistorySource.SEED_DEMO.name(), seriesSeeded, rowsInserted,
+                historyStart, historyEnd);
+    }
+
+    @Override
+    @Transactional
+    public ForecastResponse runForecast(Long productId, Long warehouseId, SalesHistorySource source) {
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new NotFoundException("Không tìm thấy sản phẩm với id " + productId));
         Warehouse warehouse = warehouseRepository.findById(warehouseId)
                 .orElseThrow(() -> new NotFoundException("Không tìm thấy kho với id " + warehouseId));
 
-        syncRealSalesHistory(productId, warehouseId);
+        if (source == SalesHistorySource.THUC_TE) {
+            syncRealSalesHistory(productId, warehouseId);
+        }
 
         List<SalesHistory> history = salesHistoryRepository
-                .findByProductIdAndWarehouseIdOrderByNgayAsc(productId, warehouseId);
+                .findByProductIdAndWarehouseIdAndSourceOrderByNgayAsc(productId, warehouseId, source);
+        history = normalizeDailySeries(history, source);
         int dataDays = history.size();
 
         BigDecimal smape;
+        BigDecimal mae = null;
+        BigDecimal rmse = null;
         Map<Integer, BigDecimal> forecastByHorizon;
+        List<AiForecastClientResult.DailyPrediction> dailyPredictions = List.of();
         ForecastMode mode;
 
         if (dataDays < MIN_HISTORY_DAYS) {
@@ -98,12 +171,17 @@ public class ForecastServiceImpl implements ForecastService {
             forecastByHorizon = coldStartForecast(history);
         } else {
             mode = ForecastMode.XGBOOST;
-            AiForecastClientResult result = callAiService(history, product.getPrice());
+            AiForecastClientResult result = callAiService(history);
             smape = result.smape() != null ? result.smape() : BigDecimal.ZERO;
+            mae = result.mae();
+            rmse = result.rmse();
             forecastByHorizon = new HashMap<>();
             for (Integer horizon : HORIZONS) {
                 BigDecimal value = result.forecast() != null ? result.forecast().get(String.valueOf(horizon)) : null;
                 forecastByHorizon.put(horizon, value != null ? value : BigDecimal.ZERO);
+            }
+            if (result.dailyPredictions() != null) {
+                dailyPredictions = result.dailyPredictions();
             }
         }
 
@@ -114,21 +192,34 @@ public class ForecastServiceImpl implements ForecastService {
         metadata.setProduct(productRepository.getReferenceById(productId));
         metadata.setWarehouse(warehouseRepository.getReferenceById(warehouseId));
         metadata.setSmape(smape);
+        metadata.setMae(mae);
+        metadata.setRmse(rmse);
         metadata.setVersion(version);
         metadata.setDataDays(dataDays);
         metadata.setMode(mode);
-        forecastModelMetadataRepository.save(metadata);
+        metadata.setDatasetType(datasetType(source, mode));
+        metadata.setHistorySource(source);
+        if (!history.isEmpty()) {
+            metadata.setHistoryStartDate(history.get(0).getNgay());
+            metadata.setHistoryEndDate(history.get(history.size() - 1).getNgay());
+        }
+        ForecastModelMetadata savedMetadata = forecastModelMetadataRepository.save(metadata);
 
         for (Integer horizon : HORIZONS) {
             ForecastResult forecastResult = new ForecastResult();
+            forecastResult.setModelMetadata(savedMetadata);
             forecastResult.setProduct(productRepository.getReferenceById(productId));
             forecastResult.setWarehouse(warehouseRepository.getReferenceById(warehouseId));
             forecastResult.setForecastDate(baseDate.plusDays(horizon));
             forecastResult.setHorizonDays(horizon);
             forecastResult.setPredictedQuantity(forecastByHorizon.get(horizon));
             forecastResult.setVersion(version);
+            forecastResult.setTargetHorizonDays(horizon.shortValue());
+            forecastResult.setForecastBaseDate(baseDate);
+            forecastResult.setAverageDailyDemand(forecastByHorizon.get(horizon));
             forecastResultRepository.save(forecastResult);
         }
+        persistDailyForecasts(savedMetadata, dailyPredictions);
 
         int currentStock = currentStock(productId, warehouseId);
         Integer minStock = effectiveMinStockResolver
@@ -141,27 +232,38 @@ public class ForecastServiceImpl implements ForecastService {
 
         CapacityLimitInfo capInfo = calculateCapacityLimit(product.getUnitVolumeM3(), warehouseId, reorder7, reorder14, reorder30);
 
-        return new ForecastResponse(productId, warehouseId, version, mode.name(), smape,
+        return new ForecastResponse(savedMetadata.getId(), productId, warehouseId, version, mode.name(),
+                savedMetadata.getDatasetType().name(), source.name(), smape, mae, rmse,
                 forecastByHorizon.get(7), forecastByHorizon.get(14), forecastByHorizon.get(30),
                 currentStock, minStock, reorder7, reorder14, reorder30,
                 dataDays, LocalDateTime.now(),
                 capInfo.allowed7d(), capInfo.allowed14d(), capInfo.allowed30d(),
                 capInfo.limited7d(), capInfo.limited14d(), capInfo.limited30d(),
-                capInfo.capacityStatus());
+                capInfo.capacityStatus(),
+                savedMetadata.getHistoryStartDate(), savedMetadata.getHistoryEndDate(),
+                toHistoryPoints(history), toDailyForecastPoints(savedMetadata.getId()));
     }
 
     @Override
     @Transactional(readOnly = true)
     public ForecastResponse getLatestForecast(Long productId, Long warehouseId) {
+        return getLatestForecast(productId, warehouseId, SalesHistorySource.EXTERNAL_STORE_ITEM);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ForecastResponse getLatestForecast(Long productId, Long warehouseId, SalesHistorySource source) {
         productRepository.findById(productId)
                 .orElseThrow(() -> new NotFoundException("Không tìm thấy sản phẩm với id " + productId));
         warehouseRepository.findById(warehouseId)
                 .orElseThrow(() -> new NotFoundException("Không tìm thấy kho với id " + warehouseId));
+        SalesHistorySource effectiveSource = source == null ? SalesHistorySource.EXTERNAL_STORE_ITEM : source;
 
         ForecastModelMetadata metadata = forecastModelMetadataRepository
-                .findFirstByProductIdAndWarehouseIdOrderByVersionDesc(productId, warehouseId)
+                .findFirstByProductIdAndWarehouseIdAndHistorySourceOrderByVersionDesc(
+                        productId, warehouseId, effectiveSource)
                 .orElseThrow(() -> new NotFoundException(
-                        "Chưa có dự báo nào cho sản phẩm/kho này, hãy chạy dự báo trước."));
+                        "Chưa có dự báo nào cho sản phẩm/kho/nguồn dữ liệu này, hãy chạy dự báo trước."));
 
         List<ForecastResult> results = forecastResultRepository
                 .findByProductIdAndWarehouseIdAndVersion(productId, warehouseId, metadata.getVersion());
@@ -184,13 +286,18 @@ public class ForecastServiceImpl implements ForecastService {
 
         CapacityLimitInfo capInfo = calculateCapacityLimit(product.getUnitVolumeM3(), warehouseId, reorder7, reorder14, reorder30);
 
-        return new ForecastResponse(productId, warehouseId, metadata.getVersion(), metadata.getMode().name(),
-                metadata.getSmape(), forecastByHorizon.get(7), forecastByHorizon.get(14), forecastByHorizon.get(30),
+        return new ForecastResponse(metadata.getId(), productId, warehouseId, metadata.getVersion(),
+                metadata.getMode().name(), metadata.getDatasetType().name(), sourceName(metadata),
+                metadata.getSmape(), metadata.getMae(), metadata.getRmse(),
+                forecastByHorizon.get(7), forecastByHorizon.get(14), forecastByHorizon.get(30),
                 currentStock, minStock, reorder7, reorder14, reorder30,
-                metadata.getDataDays(), metadata.getCreatedAt(),
+                metadata.getDataDays(), metadata.getTrainedAt() != null ? metadata.getTrainedAt() : metadata.getCreatedAt(),
                 capInfo.allowed7d(), capInfo.allowed14d(), capInfo.allowed30d(),
                 capInfo.limited7d(), capInfo.limited14d(), capInfo.limited30d(),
-                capInfo.capacityStatus());
+                capInfo.capacityStatus(),
+                metadata.getHistoryStartDate(), metadata.getHistoryEndDate(),
+                toHistoryPoints(historyForMetadata(productId, warehouseId, metadata)),
+                toDailyForecastPoints(metadata.getId()));
     }
 
     @Override
@@ -245,35 +352,16 @@ public class ForecastServiceImpl implements ForecastService {
             log.setProduct(productRepository.getReferenceById(productId));
             log.setWarehouse(warehouseRepository.getReferenceById(warehouseId));
             log.setActualSmape(rollingSmape);
+            log.setRollingSmape(rollingSmape);
             log.setThresholdSmape(DRIFT_THRESHOLD_SMAPE);
             log.setRetrainNeeded(true);
+            log.setTargetRetrainNeeded(true);
+            log.setComparedDays(commonDates.size());
             forecastDriftLogRepository.save(log);
         }
 
         return new DriftResponse(productId, warehouseId, drift ? "DRIFT" : "OK", rollingSmape,
                 DRIFT_THRESHOLD_SMAPE, drift, commonDates.size());
-    }
-
-    @Override
-    @Transactional
-    public SeedHistoryResponse seedHistory() {
-        List<InventoryLevel> levels = inventoryLevelRepository.findAll();
-        int productsSeeded = 0;
-        int rowsInserted = 0;
-
-        for (InventoryLevel level : levels) {
-            Long productId = level.getProduct().getId();
-            Long warehouseId = level.getWarehouse().getId();
-            if (salesHistoryRepository.countByProductIdAndWarehouseId(productId, warehouseId) >= MIN_HISTORY_DAYS) {
-                continue;
-            }
-            List<SalesHistory> rows = generateSyntheticHistory(productId, warehouseId);
-            salesHistoryRepository.saveAll(rows);
-            productsSeeded++;
-            rowsInserted += rows.size();
-        }
-        log.info("[ForecastService] Seed du lieu demo: {} san pham/kho, {} dong lich su", productsSeeded, rowsInserted);
-        return new SeedHistoryResponse(productsSeeded, rowsInserted);
     }
 
     // --- Helpers ---
@@ -298,7 +386,8 @@ public class ForecastServiceImpl implements ForecastService {
         Warehouse warehouseRef = warehouseRepository.getReferenceById(warehouseId);
         for (DailyQuantityProjection row : actualRows) {
             SalesHistory entry = salesHistoryRepository
-                    .findByProductIdAndWarehouseIdAndNgay(productId, warehouseId, row.getNgay())
+                    .findByProductIdAndWarehouseIdAndNgayAndSource(productId, warehouseId, row.getNgay(),
+                            SalesHistorySource.THUC_TE)
                     .orElseGet(SalesHistory::new);
             entry.setProduct(productRef);
             entry.setWarehouse(warehouseRef);
@@ -311,12 +400,11 @@ public class ForecastServiceImpl implements ForecastService {
                 actualRows.size(), productId, warehouseId);
     }
 
-    private AiForecastClientResult callAiService(List<SalesHistory> history, BigDecimal price) {
-        BigDecimal effectivePrice = price != null ? price : BigDecimal.ZERO;
+    private AiForecastClientResult callAiService(List<SalesHistory> history) {
         List<AiForecastClientRequest.SalesPoint> points = new ArrayList<>(history.size());
         for (SalesHistory row : history) {
             points.add(new AiForecastClientRequest.SalesPoint(row.getNgay().toString(),
-                    BigDecimal.valueOf(row.getQuantity()), effectivePrice));
+                    BigDecimal.valueOf(row.getQuantity()), row.getAverageSellingPrice()));
         }
         AiForecastClientRequest request = new AiForecastClientRequest(points, HORIZONS);
         return aiServiceRestClient.post()
@@ -324,6 +412,47 @@ public class ForecastServiceImpl implements ForecastService {
                 .body(request)
                 .retrieve()
                 .body(AiForecastClientResult.class);
+    }
+
+    private void persistDailyForecasts(ForecastModelMetadata metadata,
+            List<AiForecastClientResult.DailyPrediction> dailyPredictions) {
+        for (AiForecastClientResult.DailyPrediction prediction : dailyPredictions) {
+            DailyForecastResult row = new DailyForecastResult();
+            row.setModelMetadata(metadata);
+            row.setForecastDate(LocalDate.parse(prediction.date()));
+            row.setPredictedQuantity(prediction.predictedQuantity());
+            dailyForecastResultRepository.save(row);
+        }
+    }
+
+    private List<SalesHistory> normalizeDailySeries(List<SalesHistory> history, SalesHistorySource source) {
+        if (history.isEmpty()) {
+            return history;
+        }
+        TreeMap<LocalDate, SalesHistory> byDate = new TreeMap<>();
+        for (SalesHistory row : history) {
+            byDate.merge(row.getNgay(), row, (left, right) -> {
+                left.setQuantity(firstNonNull(left.getQuantity(), 0) + firstNonNull(right.getQuantity(), 0));
+                if (left.getAverageSellingPrice() == null) {
+                    left.setAverageSellingPrice(right.getAverageSellingPrice());
+                }
+                return left;
+            });
+        }
+
+        LocalDate end = byDate.lastKey();
+        List<SalesHistory> normalized = new ArrayList<>();
+        for (LocalDate date = byDate.firstKey(); !date.isAfter(end); date = date.plusDays(1)) {
+            SalesHistory row = byDate.get(date);
+            if (row == null) {
+                row = new SalesHistory();
+                row.setNgay(date);
+                row.setQuantity(0);
+                row.setSource(source);
+            }
+            normalized.add(row);
+        }
+        return normalized;
     }
 
     private Map<Integer, BigDecimal> coldStartForecast(List<SalesHistory> history) {
@@ -368,30 +497,6 @@ public class ForecastServiceImpl implements ForecastService {
         return (int) Math.round(Math.max(0.0, minStock + demandOverHorizon - currentStock));
     }
 
-    private List<SalesHistory> generateSyntheticHistory(Long productId, Long warehouseId) {
-        Random random = new Random(productId * 31L + warehouseId);
-        double base = 5 + random.nextInt(20);
-        double trendPerDay = (random.nextDouble() - 0.3) * 0.05;
-        LocalDate start = LocalDate.now().minusDays(SEED_HISTORY_DAYS);
-
-        List<SalesHistory> rows = new ArrayList<>(SEED_HISTORY_DAYS);
-        for (int i = 0; i < SEED_HISTORY_DAYS; i++) {
-            LocalDate date = start.plusDays(i);
-            double weekly = 1 + 0.3 * Math.sin(2 * Math.PI * date.getDayOfWeek().getValue() / 7.0);
-            double noise = (random.nextDouble() - 0.5) * base * 0.4;
-            double value = (base + trendPerDay * i) * weekly + noise;
-            int quantity = (int) Math.max(0, Math.round(value));
-
-            SalesHistory row = new SalesHistory();
-            row.setProduct(productRepository.getReferenceById(productId));
-            row.setWarehouse(warehouseRepository.getReferenceById(warehouseId));
-            row.setNgay(date);
-            row.setQuantity(quantity);
-            row.setSource(SalesHistorySource.SEED);
-            rows.add(row);
-        }
-        return rows;
-    }
 
     private double computeSmape(double[] actual, double[] predicted) {
         double sum = 0;
@@ -406,8 +511,124 @@ public class ForecastServiceImpl implements ForecastService {
         return count == 0 ? 0.0 : (sum / count) * 100;
     }
 
+    private List<SalesHistorySeedRow> generateSyntheticHistory(Long productId, Long warehouseId, BigDecimal price,
+            LocalDate start) {
+        Random random = new Random(productId * 31L + warehouseId);
+        double base = 5 + random.nextInt(20);
+        double trendPerDay = (random.nextDouble() - 0.3) * 0.05;
+
+        List<SalesHistorySeedRow> rows = new ArrayList<>(SEED_HISTORY_DAYS);
+        for (int i = 0; i < SEED_HISTORY_DAYS; i++) {
+            LocalDate date = start.plusDays(i);
+            double weekly = 1 + 0.3 * Math.sin(2 * Math.PI * date.getDayOfWeek().getValue() / 7.0);
+            double noise = (random.nextDouble() - 0.5) * base * 0.4;
+            int quantity = (int) Math.max(0, Math.round((base + trendPerDay * i) * weekly + noise));
+
+            rows.add(new SalesHistorySeedRow(date, quantity, price));
+        }
+        return rows;
+    }
+
+    private List<SeedSeriesTarget> findSeedSeriesTargets() {
+        return inTransaction(() -> inventoryLevelRepository.findSeedDemoSeriesTargets().stream()
+                .map(target -> new SeedSeriesTarget(target.getProductId(), target.getWarehouseId(),
+                        target.getPrice()))
+                .toList());
+    }
+
+    private SeedSeriesResult persistMissingSeedDemoRows(Long productId, Long warehouseId,
+            List<SalesHistorySeedRow> rows, LocalDate historyStart, LocalDate historyEnd) {
+        return inTransaction(() -> {
+            Set<LocalDate> existingDates = salesHistoryRepository
+                    .findByProductIdAndWarehouseIdAndSourceAndNgayBetweenOrderByNgayAsc(
+                            productId, warehouseId, SalesHistorySource.SEED_DEMO, historyStart, historyEnd)
+                    .stream()
+                    .map(SalesHistory::getNgay)
+                    .collect(Collectors.toSet());
+            List<SalesHistory> missingRows = rows.stream()
+                    .filter(row -> !existingDates.contains(row.ngay()))
+                    .map(row -> toSalesHistory(productId, warehouseId, row))
+                    .toList();
+            if (!missingRows.isEmpty()) {
+                salesHistoryRepository.saveAll(missingRows);
+            }
+            return new SeedSeriesResult(missingRows.size());
+        });
+    }
+
+    private SalesHistory toSalesHistory(Long productId, Long warehouseId, SalesHistorySeedRow seedRow) {
+        SalesHistory row = new SalesHistory();
+        row.setProduct(productRepository.getReferenceById(productId));
+        row.setWarehouse(warehouseRepository.getReferenceById(warehouseId));
+        row.setNgay(seedRow.ngay());
+        row.setQuantity(seedRow.quantity());
+        row.setAverageSellingPrice(seedRow.price());
+        row.setSource(SalesHistorySource.SEED_DEMO);
+        return row;
+    }
+
+    private <T> T inTransaction(Supplier<T> action) {
+        if (transactionTemplate == null) {
+            return action.get();
+        }
+        return transactionTemplate.execute(status -> action.get());
+    }
+
     private static int firstNonNull(Integer value, int fallback) {
         return value != null ? value : fallback;
+    }
+
+    private List<ForecastResponse.DailyPoint> toHistoryPoints(List<SalesHistory> history) {
+        return history.stream()
+                .map(row -> new ForecastResponse.DailyPoint(row.getNgay(), BigDecimal.valueOf(row.getQuantity())))
+                .toList();
+    }
+
+    private List<ForecastResponse.DailyPoint> toDailyForecastPoints(Long modelMetadataId) {
+        return dailyForecastResultRepository.findByModelMetadataIdOrderByForecastDateAsc(modelMetadataId)
+                .stream()
+                .map(row -> new ForecastResponse.DailyPoint(row.getForecastDate(), row.getPredictedQuantity()))
+                .toList();
+    }
+
+    private List<SalesHistory> historyForMetadata(Long productId, Long warehouseId, ForecastModelMetadata metadata) {
+        SalesHistorySource source = sourceForMetadata(metadata);
+        if (source == null) {
+            return List.of();
+        }
+        return normalizeDailySeries(salesHistoryRepository
+                .findByProductIdAndWarehouseIdAndSourceOrderByNgayAsc(productId, warehouseId, source), source);
+    }
+
+    private String sourceName(ForecastModelMetadata metadata) {
+        SalesHistorySource source = sourceForMetadata(metadata);
+        return source == null ? null : source.name();
+    }
+
+    private SalesHistorySource sourceForMetadata(ForecastModelMetadata metadata) {
+        if (metadata.getHistorySource() != null) {
+            return metadata.getHistorySource();
+        }
+        ForecastDatasetType datasetType = metadata.getDatasetType();
+        if (datasetType == ForecastDatasetType.THUC_TE || datasetType == ForecastDatasetType.COLD_START) {
+            return SalesHistorySource.THUC_TE;
+        }
+        return null;
+    }
+
+    private ForecastDatasetType datasetType(SalesHistorySource source, ForecastMode mode) {
+        if (mode == ForecastMode.COLD_START_AVG) {
+            return ForecastDatasetType.COLD_START;
+        }
+        if (source == SalesHistorySource.THUC_TE) {
+            return ForecastDatasetType.THUC_TE;
+        }
+        if (source == SalesHistorySource.EXTERNAL_RETAIL
+                || source == SalesHistorySource.EXTERNAL_M5
+                || source == SalesHistorySource.EXTERNAL_STORE_ITEM) {
+            return ForecastDatasetType.EXTERNAL;
+        }
+        return ForecastDatasetType.LEGACY_UNKNOWN;
     }
 
     private static record CapacityLimitInfo(
@@ -415,6 +636,12 @@ public class ForecastServiceImpl implements ForecastService {
             int allowed14d, boolean limited14d,
             int allowed30d, boolean limited30d,
             String capacityStatus) {}
+
+    private record SeedSeriesTarget(Long productId, Long warehouseId, BigDecimal price) {}
+
+    private record SalesHistorySeedRow(LocalDate ngay, int quantity, BigDecimal price) {}
+
+    private record SeedSeriesResult(int rowsInserted) {}
 
     private CapacityLimitInfo calculateCapacityLimit(BigDecimal unitVolume, Long warehouseId, int req7d, int req14d, int req30d) {
         if (unitVolume == null) {

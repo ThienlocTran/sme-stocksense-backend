@@ -1,4 +1,11 @@
 package com.smartflow.smestocksensebackend.dto.forecast;
 
-public record SeedHistoryResponse(int productsSeeded, int rowsInserted) {
+import java.time.LocalDate;
+
+public record SeedHistoryResponse(
+        String source,
+        int seriesSeeded,
+        int rowsInserted,
+        LocalDate historyStart,
+        LocalDate historyEnd) {
 }

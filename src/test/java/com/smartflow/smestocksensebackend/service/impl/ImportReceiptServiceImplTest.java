@@ -5,6 +5,8 @@ import com.smartflow.smestocksensebackend.dto.inbound.CreateImportReceiptRequest
 import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptArrivalRequest;
 import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptDraftResponse;
 import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptResponse;
+import com.smartflow.smestocksensebackend.entity.AiPurchaseRequest;
+import com.smartflow.smestocksensebackend.entity.AiPurchaseRequestStatus;
 import com.smartflow.smestocksensebackend.entity.Employee;
 import com.smartflow.smestocksensebackend.entity.EmployeeStatus;
 import com.smartflow.smestocksensebackend.entity.ImportReceipt;
@@ -23,6 +25,7 @@ import com.smartflow.smestocksensebackend.exception.AccountInactiveException;
 import com.smartflow.smestocksensebackend.exception.MissingRoleException;
 import com.smartflow.smestocksensebackend.repository.ImportReceiptDetailRepository;
 import com.smartflow.smestocksensebackend.repository.ImportReceiptRepository;
+import com.smartflow.smestocksensebackend.repository.AiPurchaseRequestRepository;
 import com.smartflow.smestocksensebackend.repository.PartnerRepository;
 import com.smartflow.smestocksensebackend.repository.ProductRepository;
 import com.smartflow.smestocksensebackend.repository.WarehouseRepository;
@@ -38,6 +41,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import org.springframework.dao.OptimisticLockingFailureException;
 
@@ -62,6 +66,9 @@ class ImportReceiptServiceImplTest {
 
     @Mock
     private ImportReceiptDetailRepository importReceiptDetailRepository;
+
+    @Mock
+    private AiPurchaseRequestRepository aiPurchaseRequestRepository;
 
     @Mock
     private ProductRepository productRepository;
@@ -118,6 +125,7 @@ class ImportReceiptServiceImplTest {
 
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(creator, null, List.of()));
+        ReflectionTestUtils.setField(importReceiptService, "aiPurchaseRequestRepository", aiPurchaseRequestRepository);
     }
 
     @AfterEach
@@ -163,6 +171,60 @@ class ImportReceiptServiceImplTest {
         assertEquals(warehouse, saved.getWarehouse());
         assertEquals(supplier, saved.getSupplier());
         assertNotNull(saved.getCode());
+    }
+
+    @Test
+    void createDraft_canLinkValidAiAssignmentWithoutAutoCreatingReceipt() {
+        when(warehouseRepository.findById(1L)).thenReturn(Optional.of(warehouse));
+        when(partnerRepository.findById(10L)).thenReturn(Optional.of(supplier));
+        when(codeGenerator.generate()).thenReturn("PNK-OK");
+        when(importReceiptRepository.existsByCodeIgnoreCase("PNK-OK")).thenReturn(false);
+        when(importReceiptRepository.saveAndFlush(any(ImportReceipt.class))).thenAnswer(invocation -> {
+            ImportReceipt receipt = invocation.getArgument(0);
+            receipt.setId(123L);
+            return receipt;
+        });
+        AiPurchaseRequest assignment = aiAssignment(creator, warehouse);
+        when(aiPurchaseRequestRepository.findById(77L)).thenReturn(Optional.of(assignment));
+
+        ImportReceiptResponse response = importReceiptService.createDraft(
+                new CreateImportReceiptRequest(1L, 10L, null, 77L));
+
+        assertEquals(123L, response.id());
+        assertEquals(123L, assignment.getImportReceipt().getId());
+        assertEquals(AiPurchaseRequestStatus.DA_TAO_PHIEU, assignment.getStatus());
+        verify(aiPurchaseRequestRepository).saveAndFlush(assignment);
+    }
+
+    @Test
+    void createDraft_cannotHijackAnotherEmployeeAssignment() {
+        when(warehouseRepository.findById(1L)).thenReturn(Optional.of(warehouse));
+        when(partnerRepository.findById(10L)).thenReturn(Optional.of(supplier));
+        when(codeGenerator.generate()).thenReturn("PNK-OK");
+        when(importReceiptRepository.existsByCodeIgnoreCase("PNK-OK")).thenReturn(false);
+        when(importReceiptRepository.saveAndFlush(any(ImportReceipt.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        Employee other = new Employee();
+        other.setId(99L);
+        AiPurchaseRequest assignment = aiAssignment(other, warehouse);
+        when(aiPurchaseRequestRepository.findById(77L)).thenReturn(Optional.of(assignment));
+
+        assertThrows(MissingRoleException.class, () -> importReceiptService.createDraft(
+                new CreateImportReceiptRequest(1L, 10L, null, 77L)));
+    }
+
+    @Test
+    void createDraft_rejectsAlreadyLinkedAiAssignment() {
+        when(warehouseRepository.findById(1L)).thenReturn(Optional.of(warehouse));
+        when(partnerRepository.findById(10L)).thenReturn(Optional.of(supplier));
+        when(codeGenerator.generate()).thenReturn("PNK-OK");
+        when(importReceiptRepository.existsByCodeIgnoreCase("PNK-OK")).thenReturn(false);
+        when(importReceiptRepository.saveAndFlush(any(ImportReceipt.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        AiPurchaseRequest assignment = aiAssignment(creator, warehouse);
+        assignment.setImportReceipt(new ImportReceipt());
+        when(aiPurchaseRequestRepository.findById(77L)).thenReturn(Optional.of(assignment));
+
+        assertThrows(ConflictException.class, () -> importReceiptService.createDraft(
+                new CreateImportReceiptRequest(1L, 10L, null, 77L)));
     }
 
     @Test
@@ -252,6 +314,13 @@ class ImportReceiptServiceImplTest {
 
         assertFalse(fields.contains("status"));
         assertFalse(fields.contains("createdById"));
+    }
+
+    private AiPurchaseRequest aiAssignment(Employee receiver, Warehouse warehouse) {
+        AiPurchaseRequest assignment = new AiPurchaseRequest();
+        assignment.setReceiver(receiver);
+        assignment.setWarehouse(warehouse);
+        return assignment;
     }
 
     @Test

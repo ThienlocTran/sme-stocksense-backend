@@ -47,13 +47,13 @@ class ExportReceiptPendingApprovalControllerTest {
         @Test
         void pendingApproval_managerShouldReturn200() throws Exception {
                 when(exportReceiptService.listPendingApproval(eq(null), any(Pageable.class)))
-                                .thenReturn(pageResponse("CHO_DUYET_CAP_1"));
+                                .thenReturn(pageResponse("CHO_DUYET"));
 
                 mockMvc.perform(get("/api/export-receipts/pending-approval")
                                 .with(user("manager@example.com").roles("MANAGER")))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.content[0].code").value("XUAT-001"))
-                                .andExpect(jsonPath("$.content[0].approvalLevel").value("LEVEL_1"))
+                                .andExpect(jsonPath("$.content[0].approvalLevel").doesNotExist())
                                 .andExpect(jsonPath("$.totalElements").value(1));
         }
 
@@ -90,7 +90,7 @@ class ExportReceiptPendingApprovalControllerTest {
         void pendingApproval_invalidStatusShouldReturn400() throws Exception {
                 when(exportReceiptService.listPendingApproval(eq("NHAP"), any(Pageable.class)))
                                 .thenThrow(new BadRequestException(
-                                                "Chi duoc loc theo trang thai cho duyet (CHO_DUYET_CAP_1 hoac CHO_DUYET_CAP_2)."));
+                                                "Chi duoc loc theo trang thai cho duyet (CHO_DUYET)."));
 
                 mockMvc.perform(get("/api/export-receipts/pending-approval")
                                 .param("status", "NHAP")
@@ -107,7 +107,7 @@ class ExportReceiptPendingApprovalControllerTest {
                                 20L,
                                 "Nguyen Van A",
                                 status,
-                                "CHO_DUYET_CAP_1".equals(status) ? "LEVEL_1" : "LEVEL_2",
+                                null,
                                 LocalDateTime.of(2026, 7, 5, 8, 0),
                                 LocalDateTime.of(2026, 7, 5, 7, 0));
                 return new ExportReceiptPageResponse(List.of(summary), 0, 10, 1, 1);

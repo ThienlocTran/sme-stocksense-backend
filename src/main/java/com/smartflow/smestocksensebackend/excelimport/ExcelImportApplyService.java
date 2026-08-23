@@ -8,16 +8,21 @@ import com.smartflow.smestocksensebackend.entity.ExcelImportStatus;
 import com.smartflow.smestocksensebackend.entity.InventoryLevel;
 import com.smartflow.smestocksensebackend.entity.InventoryTransaction;
 import com.smartflow.smestocksensebackend.entity.InventoryTransactionType;
+import com.smartflow.smestocksensebackend.entity.Partner;
+import com.smartflow.smestocksensebackend.entity.PartnerType;
 import com.smartflow.smestocksensebackend.entity.Product;
 import com.smartflow.smestocksensebackend.entity.ProductStatus;
+import com.smartflow.smestocksensebackend.entity.RoleCode;
 import com.smartflow.smestocksensebackend.entity.Warehouse;
 import com.smartflow.smestocksensebackend.exception.BadRequestException;
+import com.smartflow.smestocksensebackend.exception.MissingRoleException;
 import com.smartflow.smestocksensebackend.exception.NotFoundException;
 import com.smartflow.smestocksensebackend.repository.CategoryRepository;
 import com.smartflow.smestocksensebackend.repository.ExcelImportErrorRepository;
 import com.smartflow.smestocksensebackend.repository.ExcelImportRepository;
 import com.smartflow.smestocksensebackend.repository.InventoryLevelRepository;
 import com.smartflow.smestocksensebackend.repository.InventoryTransactionRepository;
+import com.smartflow.smestocksensebackend.repository.PartnerRepository;
 import com.smartflow.smestocksensebackend.repository.ProductRepository;
 import com.smartflow.smestocksensebackend.repository.WarehouseRepository;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +35,8 @@ import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.io.InputStream;
 import java.math.BigDecimal;
@@ -48,6 +55,7 @@ public class ExcelImportApplyService {
     private final ExcelImportChecksumService excelImportChecksumService;
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
+    private final PartnerRepository partnerRepository;
     private final WarehouseRepository warehouseRepository;
     private final InventoryLevelRepository inventoryLevelRepository;
     private final InventoryTransactionRepository inventoryTransactionRepository;
@@ -59,6 +67,7 @@ public class ExcelImportApplyService {
 
         validateApplyPreconditions(excelImport, file);
         ExcelImportMode mode = parseMode(excelImport.getImportType());
+        ensureCanImportProductMaster(mode);
         if (mode == ExcelImportMode.PRODUCT_WITH_OPENING_STOCK && excelImport.getCreatedBy() == null) {
             throw new BadRequestException("Lan import khong co nguoi tao de ghi nhan giao dich kho.");
         }
@@ -141,18 +150,51 @@ public class ExcelImportApplyService {
         Category category = categoryRepository.findByNormalizedCode(categoryCode)
                 .orElseThrow(() -> new BadRequestException("Danh muc khong ton tai."));
 
-        Product product = productRepository.findByCode(code).orElseGet(Product::new);
+        if (productRepository.existsByCodeIgnoreCase(code)) {
+            throw new BadRequestException("Ma san pham da ton tai.");
+        }
+
+        Product product = new Product();
         product.setCode(code);
         product.setName(requiredCell(row, 1, "ten_san_pham").trim());
         product.setSku(blankToNull(readCell(row, 2)));
         product.setBarcode(blankToNull(readCell(row, 3)));
         product.setUnit(requiredCell(row, 4, "don_vi_tinh").trim());
         product.setCategory(category);
-        product.setPrice(parseOptionalDecimal(readCell(row, 6)));
-        product.setUnitVolumeM3(parseOptionalDecimal(readCell(row, 7)));
-        product.setStatus(parseStatusOrDefault(readCell(row, 8)));
+        product.setPartner(resolveSupplier(readCell(row, 6)));
+        product.setPrice(parseOptionalDecimal(readCell(row, 7)));
+        product.setDefaultMinStock(parseRequiredInteger(readCell(row, 8), "ton_toi_thieu_mac_dinh"));
+        product.setUnitVolumeM3(parseOptionalDecimal(readCell(row, 9)));
+        product.setLeadTimeDays(parseLeadTimeOrDefault(readCell(row, 10)));
+        product.setStatus(parseStatusOrDefault(readCell(row, 11)));
 
         productRepository.saveAndFlush(product);
+    }
+
+    private void ensureCanImportProductMaster(ExcelImportMode mode) {
+        if (mode != ExcelImportMode.PRODUCT_ONLY) {
+            return;
+        }
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !(authentication.getPrincipal() instanceof com.smartflow.smestocksensebackend.entity.Employee employee)) {
+            return;
+        }
+        RoleCode role = employee.getRole() == null ? null : employee.getRole().getCode();
+        if (role != RoleCode.ADMIN && role != RoleCode.MANAGER) {
+            throw new MissingRoleException("Ban khong co quyen import danh muc san pham.");
+        }
+    }
+
+    private Partner resolveSupplier(String supplierCode) {
+        if (isBlank(supplierCode)) {
+            return null;
+        }
+        Partner partner = partnerRepository.findByCodeIgnoreCase(supplierCode.trim())
+                .orElseThrow(() -> new BadRequestException("Nha cung cap khong ton tai."));
+        if (partner.getType() != PartnerType.NHA_CUNG_CAP) {
+            throw new BadRequestException("Doi tac khong phai nha cung cap.");
+        }
+        return partner;
     }
 
     private void applyOpeningStock(Workbook workbook, ExcelImport excelImport) {
@@ -213,6 +255,13 @@ public class ExcelImportApplyService {
         } catch (IllegalArgumentException exception) {
             throw new BadRequestException("Trang thai san pham khong hop le.", exception);
         }
+    }
+
+    private Integer parseLeadTimeOrDefault(String value) {
+        if (isBlank(value)) {
+            return 1;
+        }
+        return parseRequiredInteger(value, "thoi_gian_giao_hang");
     }
 
     private BigDecimal parseOptionalDecimal(String value) {

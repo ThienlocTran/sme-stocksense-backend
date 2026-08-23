@@ -25,7 +25,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Import({SecurityConfig.class, JwtAuthenticationFilter.class, ApiExceptionHandler.class})
 class ReplenishmentSuggestionControllerTest {
     @Autowired MockMvc mockMvc;
-    @MockitoBean ReplenishmentSuggestionService service; @MockitoBean JwtService jwtService; @MockitoBean EmployeeRepository employeeRepository;
+    @MockitoBean ReplenishmentSuggestionService service;
+    @MockitoBean ForecastReplenishmentRecommendationService recommendationService;
+    @MockitoBean JwtService jwtService;
+    @MockitoBean EmployeeRepository employeeRepository;
 
     @ParameterizedTest @ValueSource(strings={"ADMIN","MANAGER","EMPLOYEE"})
     void allApprovedRoles_shouldAccess(String role) throws Exception {
@@ -35,6 +38,26 @@ class ReplenishmentSuggestionControllerTest {
     }
     @Test void anonymous_shouldBeUnauthorized() throws Exception { mockMvc.perform(get("/api/replenishment-suggestions")).andExpect(status().isUnauthorized()); }
     @Test void invalidPagination_shouldBeBadRequest() throws Exception { mockMvc.perform(get("/api/replenishment-suggestions?page=-1&size=0").with(user("u").roles("EMPLOYEE"))).andExpect(status().isBadRequest()); }
+
+    @Test
+    void recommendationEndpoint_shouldExposeRawAndCapacityFields() throws Exception {
+        when(recommendationService.getRecommendation(44L, 11L, (short) 7)).thenReturn(
+                new ForecastReplenishmentRecommendationResponse(44L, "SP001", "Laptop", 11L, "K001", "Kho",
+                        (short) 7, java.math.BigDecimal.valueOf(50), 20, 10, 40, 30, true, 10, 30,
+                        java.math.BigDecimal.valueOf(100), java.math.BigDecimal.valueOf(70),
+                        java.math.BigDecimal.valueOf(30), 99L, 2, null));
+
+        mockMvc.perform(get("/api/replenishment-suggestions/recommendation")
+                        .param("productId", "44")
+                        .param("warehouseId", "11")
+                        .param("horizonDays", "7")
+                        .with(user("u").roles("MANAGER")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.rawSuggestedQty").value(40))
+                .andExpect(jsonPath("$.suggestedQty").value(30))
+                .andExpect(jsonPath("$.capacityLimited").value(true))
+                .andExpect(jsonPath("$.modelMetadataId").value(99));
+    }
 
     private Page<ReplenishmentSuggestionResponse> page(){ return new PageImpl<>(List.of(new ReplenishmentSuggestionResponse(44L,"SP001","Laptop",11L,"K001","Kho",7,10,30,3,23,ReplenishmentReason.BELOW_MINIMUM,ReplenishmentPriority.HIGH,null)),PageRequest.of(0,20),1); }
 }

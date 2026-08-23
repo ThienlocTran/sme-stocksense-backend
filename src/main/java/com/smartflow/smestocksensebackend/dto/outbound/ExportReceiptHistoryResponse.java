@@ -8,6 +8,6 @@ public record ExportReceiptHistoryResponse(Long id, Long receiptId, String actor
     public static ExportReceiptHistoryResponse from(ExportReceiptHistory history) {
         return new ExportReceiptHistoryResponse(history.getId(), history.getDocument().getId(),
                 history.getActor() != null ? history.getActor().getFullName() : null,
-                history.getAction().name(), history.getNote(), history.getCreatedAt());
+                history.getAction(), history.getNote(), history.getCreatedAt());
     }
 }

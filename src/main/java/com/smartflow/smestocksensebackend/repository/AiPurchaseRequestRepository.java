@@ -17,9 +17,17 @@ public interface AiPurchaseRequestRepository extends JpaRepository<AiPurchaseReq
     boolean existsByCodeIgnoreCase(String code);
 
     @Override
-    @EntityGraph(attributePaths = {"product", "warehouse", "sender", "receiver", "modelMetadata", "importReceipt"})
+    @EntityGraph(attributePaths = {"product", "product.partner", "warehouse", "sender", "receiver", "modelMetadata",
+            "importReceipt"})
     Optional<AiPurchaseRequest> findById(Long id);
 
+    @Override
+    @EntityGraph(attributePaths = {"product", "product.partner", "warehouse", "sender", "receiver", "modelMetadata",
+            "importReceipt"})
+    Page<AiPurchaseRequest> findAll(Pageable pageable);
+
+    @EntityGraph(attributePaths = {"product", "product.partner", "warehouse", "sender", "receiver", "modelMetadata",
+            "importReceipt"})
     Page<AiPurchaseRequest> findByReceiverId(Long receiverId, Pageable pageable);
 
     List<AiPurchaseRequest> findByReceiverIdAndStatusOrderByCreatedAtDesc(Long receiverId, AiPurchaseRequestStatus status);

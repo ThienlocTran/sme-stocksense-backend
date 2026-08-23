@@ -4,11 +4,17 @@ import com.smartflow.smestocksensebackend.dto.aiassignment.CreateAiPurchaseAssig
 import com.smartflow.smestocksensebackend.dto.replenishment.ForecastReplenishmentRecommendationResponse;
 import com.smartflow.smestocksensebackend.entity.AiPurchaseRequest;
 import com.smartflow.smestocksensebackend.entity.AiPurchaseRequestEmailStatus;
+import com.smartflow.smestocksensebackend.entity.AiPurchaseRequestStatus;
 import com.smartflow.smestocksensebackend.entity.Employee;
+import com.smartflow.smestocksensebackend.entity.EmployeeStatus;
 import com.smartflow.smestocksensebackend.entity.ForecastModelMetadata;
+import com.smartflow.smestocksensebackend.entity.ImportReceipt;
+import com.smartflow.smestocksensebackend.entity.ImportReceiptStatus;
+import com.smartflow.smestocksensebackend.entity.Partner;
 import com.smartflow.smestocksensebackend.entity.Product;
 import com.smartflow.smestocksensebackend.entity.Role;
 import com.smartflow.smestocksensebackend.entity.RoleCode;
+import com.smartflow.smestocksensebackend.entity.SalesHistorySource;
 import com.smartflow.smestocksensebackend.entity.Warehouse;
 import com.smartflow.smestocksensebackend.exception.BadRequestException;
 import com.smartflow.smestocksensebackend.exception.ConflictException;
@@ -193,6 +199,25 @@ class AiPurchaseAssignmentServiceImplTest {
     }
 
     @Test
+    void receiverMustBeActive() {
+        Product product = product(10L);
+        Warehouse warehouse = warehouse(20L);
+        Employee sender = employee(1L, RoleCode.MANAGER);
+        Employee receiver = employee(2L, RoleCode.EMPLOYEE);
+        receiver.setStatus(EmployeeStatus.NGUNG_HOAT_DONG);
+        authenticate(sender);
+
+        when(employeeRepository.findById(1L)).thenReturn(Optional.of(sender));
+        when(productRepository.findById(10L)).thenReturn(Optional.of(product));
+        when(warehouseRepository.findById(20L)).thenReturn(Optional.of(warehouse));
+        when(employeeRepository.findById(2L)).thenReturn(Optional.of(receiver));
+
+        assertThrows(BadRequestException.class, () -> service.createAssignment(request()));
+
+        verify(aiPurchaseRequestRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
     void employeeSeesOwnAssignments() {
         Employee actor = employee(2L, RoleCode.EMPLOYEE);
         authenticate(actor);
@@ -203,6 +228,13 @@ class AiPurchaseAssignmentServiceImplTest {
         var page = service.listMyAssignments(PageRequest.of(0, 10));
 
         assertEquals(1, page.getTotalElements());
+        assertEquals(501L, page.getContent().getFirst().supplierId());
+        assertEquals("NCC Demo", page.getContent().getFirst().supplierName());
+        assertEquals("user2@example.com", page.getContent().getFirst().receiverEmail());
+        assertEquals(70, page.getContent().getFirst().aiSuggestedQuantity());
+        assertEquals(50, page.getContent().getFirst().requestedQuantity());
+        assertEquals(AiPurchaseRequestStatus.DA_GUI, page.getContent().getFirst().status());
+        assertEquals(AiPurchaseRequestEmailStatus.CHO_GUI, page.getContent().getFirst().emailStatus());
         verify(aiPurchaseRequestRepository).findByReceiverId(2L, PageRequest.of(0, 10));
     }
 
@@ -243,6 +275,28 @@ class AiPurchaseAssignmentServiceImplTest {
         assertEquals(50, response.requestedQuantity());
         assertEquals("SP001", response.productCode());
         assertEquals("Kho chinh", response.warehouseName());
+        assertEquals(501L, response.supplierId());
+        assertEquals("NCC Demo", response.supplierName());
+        assertEquals("user2@example.com", response.receiverEmail());
+        assertEquals(SalesHistorySource.EXTERNAL_STORE_ITEM, response.source());
+        assertEquals(2, response.modelVersion());
+        assertNull(response.importReceiptId());
+    }
+
+    @Test
+    void detailResponseShowsLinkedReceiptWhenPresent() {
+        Employee actor = employee(1L, RoleCode.ADMIN);
+        AiPurchaseRequest assignment = assignment(employee(2L, RoleCode.EMPLOYEE));
+        assignment.setImportReceipt(importReceipt());
+        authenticate(actor);
+        when(employeeRepository.findById(1L)).thenReturn(Optional.of(actor));
+        when(aiPurchaseRequestRepository.findById(99L)).thenReturn(Optional.of(assignment));
+
+        var response = service.getAssignment(99L);
+
+        assertEquals(700L, response.importReceiptId());
+        assertEquals("PNK-1", response.importReceiptCode());
+        assertEquals(ImportReceiptStatus.NHAP, response.importReceiptStatus());
     }
 
     @Test
@@ -272,6 +326,12 @@ class AiPurchaseAssignmentServiceImplTest {
     void failedAssignmentCanRetryAndUsesSameEmployee() {
         AiPurchaseRequest assignment = assignment(employee(2L, RoleCode.EMPLOYEE));
         assignment.setEmailStatus(AiPurchaseRequestEmailStatus.THAT_BAI);
+        Integer aiSuggestedQuantity = assignment.getAiSuggestedQuantity();
+        Integer requestedQuantity = assignment.getRequestedQuantity();
+        Long productId = assignment.getProduct().getId();
+        Long warehouseId = assignment.getWarehouse().getId();
+        Long receiverId = assignment.getReceiver().getId();
+        Long modelMetadataId = assignment.getModelMetadata().getId();
         Employee actor = employee(1L, RoleCode.MANAGER);
         authenticate(actor);
         when(employeeRepository.findById(1L)).thenReturn(Optional.of(actor));
@@ -283,6 +343,12 @@ class AiPurchaseAssignmentServiceImplTest {
 
         assertEquals(AiPurchaseRequestEmailStatus.DA_GUI, response.emailStatus());
         assertEquals(2L, response.receiverId());
+        assertEquals(aiSuggestedQuantity, assignment.getAiSuggestedQuantity());
+        assertEquals(requestedQuantity, assignment.getRequestedQuantity());
+        assertEquals(productId, assignment.getProduct().getId());
+        assertEquals(warehouseId, assignment.getWarehouse().getId());
+        assertEquals(receiverId, assignment.getReceiver().getId());
+        assertEquals(modelMetadataId, assignment.getModelMetadata().getId());
         verify(aiPurchaseAssignmentEmailService).sendAssignmentNotification(assignment);
         verify(aiPurchaseRequestRepository, times(1)).saveAndFlush(any(AiPurchaseRequest.class));
     }
@@ -413,6 +479,7 @@ class AiPurchaseAssignmentServiceImplTest {
         employee.setEmail("user" + id + "@example.com");
         employee.setPasswordHash("secret");
         employee.setRole(role);
+        employee.setStatus(EmployeeStatus.HOAT_DONG);
         return employee;
     }
 
@@ -421,7 +488,16 @@ class AiPurchaseAssignmentServiceImplTest {
         ReflectionTestUtils.setField(product, "id", id);
         product.setCode("SP001");
         product.setName("Laptop");
+        product.setPartner(partner());
         return product;
+    }
+
+    private Partner partner() {
+        Partner partner = new Partner();
+        ReflectionTestUtils.setField(partner, "id", 501L);
+        partner.setCode("NCC001");
+        partner.setName("NCC Demo");
+        return partner;
     }
 
     private Warehouse warehouse(Long id) {
@@ -437,7 +513,17 @@ class AiPurchaseAssignmentServiceImplTest {
         ReflectionTestUtils.setField(metadata, "id", id);
         metadata.setProduct(product);
         metadata.setWarehouse(warehouse);
+        metadata.setVersion(2);
+        metadata.setHistorySource(SalesHistorySource.EXTERNAL_STORE_ITEM);
         return metadata;
+    }
+
+    private ImportReceipt importReceipt() {
+        ImportReceipt receipt = new ImportReceipt();
+        ReflectionTestUtils.setField(receipt, "id", 700L);
+        receipt.setCode("PNK-1");
+        receipt.setStatus(ImportReceiptStatus.NHAP);
+        return receipt;
     }
 
     private AiPurchaseRequest assignment(Employee receiver) {

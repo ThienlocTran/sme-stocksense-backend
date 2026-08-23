@@ -7,6 +7,7 @@ import com.smartflow.smestocksensebackend.entity.AiPurchaseRequest;
 import com.smartflow.smestocksensebackend.entity.AiPurchaseRequestEmailStatus;
 import com.smartflow.smestocksensebackend.entity.AiPurchaseRequestStatus;
 import com.smartflow.smestocksensebackend.entity.Employee;
+import com.smartflow.smestocksensebackend.entity.EmployeeStatus;
 import com.smartflow.smestocksensebackend.entity.ForecastModelMetadata;
 import com.smartflow.smestocksensebackend.entity.Product;
 import com.smartflow.smestocksensebackend.entity.RoleCode;
@@ -83,6 +84,9 @@ public class AiPurchaseAssignmentServiceImpl implements AiPurchaseAssignmentServ
                 .orElseThrow(() -> new NotFoundException("Nhân viên nhận việc không tồn tại."));
         if (receiver.getRole() == null || receiver.getRole().getCode() != RoleCode.EMPLOYEE) {
             throw new BadRequestException("Người nhận phải là nhân viên.");
+        }
+        if (receiver.getStatus() != EmployeeStatus.HOAT_DONG) {
+            throw new BadRequestException("Người nhận không hoạt động.");
         }
 
         ForecastReplenishmentRecommendationResponse recommendation = recommendationService

@@ -18,7 +18,7 @@ public record ImportReceiptHistoryResponse(
                 history.getId(),
                 history.getDocument().getId(),
                 actorName,
-                history.getAction().name(),
+                history.getAction(),
                 history.getNote(),
                 history.getCreatedAt()
         );

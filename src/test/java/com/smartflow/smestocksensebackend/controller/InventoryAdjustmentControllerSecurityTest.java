@@ -27,4 +27,12 @@ class InventoryAdjustmentControllerSecurityTest {
                 .getAnnotation(PreAuthorize.class)
                 .value());
     }
+
+    @Test
+    void submit_shouldAllowOperationalRolesOnly() throws NoSuchMethodException {
+        assertEquals("hasAnyRole('ADMIN','EMPLOYEE')", InventoryAdjustmentController.class
+                .getDeclaredMethod("submit", Long.class)
+                .getAnnotation(PreAuthorize.class)
+                .value());
+    }
 }

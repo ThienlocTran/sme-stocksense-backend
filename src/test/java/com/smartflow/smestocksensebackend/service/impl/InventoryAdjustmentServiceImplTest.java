@@ -8,6 +8,8 @@ import com.smartflow.smestocksensebackend.entity.InventoryCount;
 import com.smartflow.smestocksensebackend.entity.InventoryCountDetail;
 import com.smartflow.smestocksensebackend.entity.InventoryCountStatus;
 import com.smartflow.smestocksensebackend.entity.Product;
+import com.smartflow.smestocksensebackend.entity.Role;
+import com.smartflow.smestocksensebackend.entity.RoleCode;
 import com.smartflow.smestocksensebackend.entity.Warehouse;
 import com.smartflow.smestocksensebackend.exception.BadRequestException;
 import com.smartflow.smestocksensebackend.exception.ConflictException;
@@ -22,6 +24,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 
@@ -53,6 +56,7 @@ class InventoryAdjustmentServiceImplTest {
     void setup() {
         service = new InventoryAdjustmentServiceImpl(adjustmentRepository, countRepository, detailRepository, codeGenerator);
         actor = new Employee(); actor.setId(1L); actor.setFullName("Toan");
+        actor.setRole(role(RoleCode.EMPLOYEE));
         SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(actor, null, List.of()));
         Warehouse warehouse = new Warehouse(); warehouse.setId(2L); warehouse.setName("Kho A");
         count = new InventoryCount(); count.setId(3L); count.setCode("KK-1"); count.setWarehouse(warehouse); count.setStatus(InventoryCountStatus.DANG_KIEM_KE); count.setCreatedBy(actor);
@@ -197,6 +201,96 @@ class InventoryAdjustmentServiceImplTest {
         assertTrue(response.details().stream().allMatch(line -> line.differenceQuantity() != 0));
     }
 
+    @Test
+    void submit_shouldMoveDraftToPendingApprovalAndPersistSubmitter() {
+        InventoryAdjustment adjustment = adjustment();
+        when(adjustmentRepository.findById(9L)).thenReturn(Optional.of(adjustment));
+        when(detailRepository.findByInventoryCountIdOrderByIdAsc(3L)).thenReturn(List.of(detail));
+        when(adjustmentRepository.saveAndFlush(adjustment)).thenReturn(adjustment);
+
+        InventoryAdjustmentResponse response = service.submit(9L);
+
+        assertEquals("CHO_DUYET", response.status());
+        assertEquals(actor, adjustment.getSubmittedBy());
+        assertEquals(1L, response.submittedById());
+        assertTrue(adjustment.getSubmittedAt() != null);
+        assertEquals(InventoryCountStatus.DANG_KIEM_KE, count.getStatus());
+    }
+
+    @Test
+    void submit_shouldRejectRepeatedSubmit() {
+        InventoryAdjustment adjustment = adjustment();
+        adjustment.setStatus(InventoryAdjustmentStatus.CHO_DUYET);
+        when(adjustmentRepository.findById(9L)).thenReturn(Optional.of(adjustment));
+
+        assertThrows(ConflictException.class, () -> service.submit(9L));
+    }
+
+    @Test
+    void submit_shouldRejectUnknownAdjustment() {
+        when(adjustmentRepository.findById(404L)).thenReturn(Optional.empty());
+
+        assertThrows(NotFoundException.class, () -> service.submit(404L));
+    }
+
+    @Test
+    void submit_shouldRejectNoDiscrepancy() {
+        detail.setActualQuantity(10); detail.setDifferenceQuantity(0);
+        when(adjustmentRepository.findById(9L)).thenReturn(Optional.of(adjustment()));
+        when(detailRepository.findByInventoryCountIdOrderByIdAsc(3L)).thenReturn(List.of(detail));
+
+        assertThrows(BadRequestException.class, () -> service.submit(9L));
+    }
+
+    @Test
+    void submit_shouldRejectIncompleteActualQuantity() {
+        detail.setActualQuantity(null); detail.setDifferenceQuantity(null);
+        when(adjustmentRepository.findById(9L)).thenReturn(Optional.of(adjustment()));
+        when(detailRepository.findByInventoryCountIdOrderByIdAsc(3L)).thenReturn(List.of(detail));
+
+        assertThrows(BadRequestException.class, () -> service.submit(9L));
+    }
+
+    @Test
+    void submit_shouldRejectMissingDiscrepancyReason() {
+        detail.setReason(" ");
+        when(adjustmentRepository.findById(9L)).thenReturn(Optional.of(adjustment()));
+        when(detailRepository.findByInventoryCountIdOrderByIdAsc(3L)).thenReturn(List.of(detail));
+
+        assertThrows(BadRequestException.class, () -> service.submit(9L));
+    }
+
+    @Test
+    void submit_shouldRejectUnauthorizedRole() {
+        actor.setRole(role(RoleCode.MANAGER));
+
+        assertThrows(AccessDeniedException.class, () -> service.submit(9L));
+    }
+
+    @Test
+    void submit_shouldRejectWrongOwner() {
+        InventoryAdjustment adjustment = adjustment();
+        Employee creator = new Employee();
+        creator.setId(1L);
+        adjustment.setCreatedBy(creator);
+        actor.setId(2L);
+        when(adjustmentRepository.findById(9L)).thenReturn(Optional.of(adjustment));
+
+        assertThrows(AccessDeniedException.class, () -> service.submit(9L));
+    }
+
+    @Test
+    void submit_adminCanSubmitOtherCreatorDraft() {
+        actor.setId(2L);
+        actor.setRole(role(RoleCode.ADMIN));
+        InventoryAdjustment adjustment = adjustment();
+        when(adjustmentRepository.findById(9L)).thenReturn(Optional.of(adjustment));
+        when(detailRepository.findByInventoryCountIdOrderByIdAsc(3L)).thenReturn(List.of(detail));
+        when(adjustmentRepository.saveAndFlush(adjustment)).thenReturn(adjustment);
+
+        assertEquals("CHO_DUYET", service.submit(9L).status());
+    }
+
     private InventoryAdjustment adjustment() {
         InventoryAdjustment adjustment = new InventoryAdjustment();
         adjustment.setId(9L);
@@ -206,5 +300,11 @@ class InventoryAdjustmentServiceImplTest {
         adjustment.setCreatedBy(actor);
         adjustment.setVersion(0L);
         return adjustment;
+    }
+
+    private Role role(RoleCode roleCode) {
+        Role role = new Role();
+        role.setCode(roleCode);
+        return role;
     }
 }

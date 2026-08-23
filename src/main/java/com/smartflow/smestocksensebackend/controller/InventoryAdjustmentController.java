@@ -39,4 +39,10 @@ public class InventoryAdjustmentController {
     public InventoryAdjustmentResponse get(@PathVariable @Positive Long id) {
         return service.get(id);
     }
+
+    @PostMapping("/api/inventory-adjustments/{id}/submit")
+    @PreAuthorize("hasAnyRole('ADMIN','EMPLOYEE')")
+    public InventoryAdjustmentResponse submit(@PathVariable @Positive Long id) {
+        return service.submit(id);
+    }
 }

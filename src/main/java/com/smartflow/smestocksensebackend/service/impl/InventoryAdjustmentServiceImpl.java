@@ -7,6 +7,7 @@ import com.smartflow.smestocksensebackend.entity.InventoryAdjustmentStatus;
 import com.smartflow.smestocksensebackend.entity.InventoryCount;
 import com.smartflow.smestocksensebackend.entity.InventoryCountDetail;
 import com.smartflow.smestocksensebackend.entity.InventoryCountStatus;
+import com.smartflow.smestocksensebackend.entity.RoleCode;
 import com.smartflow.smestocksensebackend.exception.BadRequestException;
 import com.smartflow.smestocksensebackend.exception.ConflictException;
 import com.smartflow.smestocksensebackend.exception.MissingRoleException;
@@ -18,12 +19,15 @@ import com.smartflow.smestocksensebackend.service.InventoryAdjustmentCodeGenerat
 import com.smartflow.smestocksensebackend.service.InventoryAdjustmentService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
@@ -58,6 +62,35 @@ public class InventoryAdjustmentServiceImpl implements InventoryAdjustmentServic
         InventoryAdjustment adjustment = adjustmentRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Phieu dieu chinh kiem ke khong ton tai."));
         return response(adjustment);
+    }
+
+    @Override
+    @Transactional
+    public InventoryAdjustmentResponse submit(Long id) {
+        Employee actor = actor();
+        ensureOperationalSubmitter(actor);
+        InventoryAdjustment adjustment = adjustmentRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException("Phieu dieu chinh kiem ke khong ton tai."));
+        ensureSubmitOwner(actor, adjustment);
+        if (adjustment.getStatus() != InventoryAdjustmentStatus.NHAP) {
+            throw new ConflictException("Chi duoc gui duyet phieu dieu chinh o trang thai NHAP.");
+        }
+
+        validateCount(adjustment.getInventoryCount());
+        List<InventoryCountDetail> details = detailRepository.findByInventoryCountIdOrderByIdAsc(
+                adjustment.getInventoryCount().getId()
+        );
+        validateDetails(details);
+        if (details.stream()
+                .filter(detail -> detail.getDifferenceQuantity() != null && detail.getDifferenceQuantity() != 0)
+                .anyMatch(detail -> detail.getReason() == null || detail.getReason().isBlank())) {
+            throw new BadRequestException("Ly do chenh lech la bat buoc.");
+        }
+
+        adjustment.setStatus(InventoryAdjustmentStatus.CHO_DUYET);
+        adjustment.setSubmittedBy(actor);
+        adjustment.setSubmittedAt(LocalDateTime.now());
+        return response(adjustmentRepository.saveAndFlush(adjustment));
     }
 
     private InventoryAdjustmentResponse createDraft(Long inventoryCountId) {
@@ -114,6 +147,23 @@ public class InventoryAdjustmentServiceImpl implements InventoryAdjustmentServic
                 adjustment.getInventoryCount().getId()
         );
         return InventoryAdjustmentResponse.from(adjustment, details);
+    }
+
+    private void ensureOperationalSubmitter(Employee actor) {
+        RoleCode role = actor.getRole() != null ? actor.getRole().getCode() : null;
+        if (role != RoleCode.ADMIN && role != RoleCode.EMPLOYEE) {
+            throw new AccessDeniedException("Khong co quyen gui duyet phieu dieu chinh kiem ke.");
+        }
+    }
+
+    private void ensureSubmitOwner(Employee actor, InventoryAdjustment adjustment) {
+        RoleCode role = actor.getRole() != null ? actor.getRole().getCode() : null;
+        if (role == RoleCode.ADMIN) {
+            return;
+        }
+        if (adjustment.getCreatedBy() == null || !Objects.equals(actor.getId(), adjustment.getCreatedBy().getId())) {
+            throw new AccessDeniedException("Chi nguoi tao moi duoc gui duyet phieu dieu chinh kiem ke.");
+        }
     }
 
     private Employee actor() {

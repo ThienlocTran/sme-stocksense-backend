@@ -20,6 +20,7 @@ import static org.mockito.Mockito.*;
 class InventoryCountServiceImplTest {
     @Mock InventoryCountRepository countRepository; @Mock InventoryCountDetailRepository detailRepository;
     @Mock InventoryLevelRepository inventoryRepository; @Mock WarehouseRepository warehouseRepository; @Mock ProductRepository productRepository;
+    @Mock InventoryAdjustmentRepository adjustmentRepository;
     @Mock InventoryTransactionService inventoryTransactionService;
     @InjectMocks InventoryCountServiceImpl service;
     Employee actor; Warehouse warehouse; Product product; InventoryCount count; InventoryCountDetail detail;
@@ -46,6 +47,7 @@ class InventoryCountServiceImplTest {
 
     @Test void recordActual_shouldCalculateDifferenceAndPersistReasonSeparatelyFromNote(){
         when(countRepository.findById(4L)).thenReturn(Optional.of(count)); when(detailRepository.findById(5L)).thenReturn(Optional.of(detail));
+        when(adjustmentRepository.findByInventoryCountId(4L)).thenReturn(Optional.empty());
         when(detailRepository.findByInventoryCountIdOrderByIdAsc(4L)).thenReturn(List.of(detail));
         InventoryCountResponse response = service.recordActual(4L,5L,new InventoryCountRequests.RecordActual(7,"Hang hong","Ghi chu rieng",0L));
         assertEquals(-3,detail.getDifferenceQuantity()); assertEquals(7,detail.getActualQuantity());
@@ -57,9 +59,25 @@ class InventoryCountServiceImplTest {
 
     @Test void recordActual_legacyRequestWithoutReason_shouldKeepNoteCompatible(){
         when(countRepository.findById(4L)).thenReturn(Optional.of(count)); when(detailRepository.findById(5L)).thenReturn(Optional.of(detail));
+        when(adjustmentRepository.findByInventoryCountId(4L)).thenReturn(Optional.empty());
         when(detailRepository.findByInventoryCountIdOrderByIdAsc(4L)).thenReturn(List.of(detail));
         service.recordActual(4L,5L,new InventoryCountRequests.RecordActual(7,"Legacy note",0L));
         assertNull(detail.getReason()); assertEquals("Legacy note", detail.getNote());
+    }
+
+    @Test void recordActual_shouldAllowDraftAdjustment(){
+        InventoryAdjustment adjustment = new InventoryAdjustment(); adjustment.setStatus(InventoryAdjustmentStatus.NHAP);
+        when(countRepository.findById(4L)).thenReturn(Optional.of(count)); when(adjustmentRepository.findByInventoryCountId(4L)).thenReturn(Optional.of(adjustment));
+        when(detailRepository.findById(5L)).thenReturn(Optional.of(detail)); when(detailRepository.findByInventoryCountIdOrderByIdAsc(4L)).thenReturn(List.of(detail));
+        service.recordActual(4L,5L,new InventoryCountRequests.RecordActual(7,"Hang hong","Ghi chu",0L));
+        assertEquals(7, detail.getActualQuantity());
+    }
+
+    @Test void recordActual_shouldRejectSubmittedAdjustment(){
+        InventoryAdjustment adjustment = new InventoryAdjustment(); adjustment.setStatus(InventoryAdjustmentStatus.CHO_DUYET);
+        when(countRepository.findById(4L)).thenReturn(Optional.of(count)); when(adjustmentRepository.findByInventoryCountId(4L)).thenReturn(Optional.of(adjustment));
+        assertThrows(ConflictException.class,()->service.recordActual(4L,5L,new InventoryCountRequests.RecordActual(7,"Hang hong","Ghi chu",0L)));
+        verify(detailRepository, never()).saveAndFlush(any());
     }
 
     @Test void finalize_shouldRejectMissingActualQuantity(){

@@ -20,7 +20,7 @@ public class AiPurchaseAssignmentEmailServiceImpl implements AiPurchaseAssignmen
     @Value("${spring.mail.username}")
     private String fromEmail;
 
-    @Value("${app.frontend-url:http://localhost:5173}")
+    @Value("${app.frontend-url:${APP_FRONTEND_URL:http://localhost:5173}}")
     private String frontendUrl;
 
     @Override
@@ -71,7 +71,7 @@ public class AiPurchaseAssignmentEmailServiceImpl implements AiPurchaseAssignmen
                 value(assignment.getContent())
         );
 
-        String createReceiptUrl = frontendUrl + "/stock-in/create?aiPurchaseRequestId=" + assignment.getId();
+        String createReceiptUrl = frontendUrl.replaceAll("/+$", "") + "/stock-in/create?aiPurchaseRequestId=" + assignment.getId();
 
         return buildEmailTemplate(title, subtitle, detailsCardHtml, createReceiptUrl);
     }

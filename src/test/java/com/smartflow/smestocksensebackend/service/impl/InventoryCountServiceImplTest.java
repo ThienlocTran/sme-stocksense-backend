@@ -44,11 +44,22 @@ class InventoryCountServiceImplTest {
         verify(inventoryRepository,never()).save(any());
     }
 
-    @Test void recordActual_shouldCalculateDifference(){
+    @Test void recordActual_shouldCalculateDifferenceAndPersistReasonSeparatelyFromNote(){
         when(countRepository.findById(4L)).thenReturn(Optional.of(count)); when(detailRepository.findById(5L)).thenReturn(Optional.of(detail));
         when(detailRepository.findByInventoryCountIdOrderByIdAsc(4L)).thenReturn(List.of(detail));
-        service.recordActual(4L,5L,new InventoryCountRequests.RecordActual(7,"Thieu",0L));
+        InventoryCountResponse response = service.recordActual(4L,5L,new InventoryCountRequests.RecordActual(7,"Hang hong","Ghi chu rieng",0L));
         assertEquals(-3,detail.getDifferenceQuantity()); assertEquals(7,detail.getActualQuantity());
+        assertEquals("Hang hong", detail.getReason()); assertEquals("Ghi chu rieng", detail.getNote());
+        assertEquals("Hang hong", response.details().getFirst().reason()); assertEquals("Ghi chu rieng", response.details().getFirst().note());
+        verify(inventoryRepository, never()).save(any());
+        verify(inventoryTransactionService, never()).recordTransaction(any(),any(),any(),any(),any(),any(),any(),any());
+    }
+
+    @Test void recordActual_legacyRequestWithoutReason_shouldKeepNoteCompatible(){
+        when(countRepository.findById(4L)).thenReturn(Optional.of(count)); when(detailRepository.findById(5L)).thenReturn(Optional.of(detail));
+        when(detailRepository.findByInventoryCountIdOrderByIdAsc(4L)).thenReturn(List.of(detail));
+        service.recordActual(4L,5L,new InventoryCountRequests.RecordActual(7,"Legacy note",0L));
+        assertNull(detail.getReason()); assertEquals("Legacy note", detail.getNote());
     }
 
     @Test void finalize_shouldRejectMissingActualQuantity(){

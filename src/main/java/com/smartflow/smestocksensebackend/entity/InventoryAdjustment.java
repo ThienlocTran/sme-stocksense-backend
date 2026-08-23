@@ -1,6 +1,5 @@
 package com.smartflow.smestocksensebackend.entity;
 
-import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -11,7 +10,6 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
-import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import lombok.Getter;
@@ -21,8 +19,6 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
 
 @Getter
 @Setter
@@ -72,9 +68,6 @@ public class InventoryAdjustment {
 
     @Column(name = "ly_do_tu_choi", length = 500)
     private String rejectionReason;
-
-    @OneToMany(mappedBy = "adjustment", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<InventoryAdjustmentLine> lines = new ArrayList<>();
 
     @CreationTimestamp
     @Column(name = "ngay_tao", updatable = false)

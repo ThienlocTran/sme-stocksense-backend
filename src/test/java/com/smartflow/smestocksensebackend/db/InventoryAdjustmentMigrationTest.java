@@ -11,13 +11,16 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class InventoryAdjustmentMigrationTest {
 
-    private static final Path MIGRATION = Path.of(
+    private static final Path V51 = Path.of(
             "src/main/resources/db/migration/V51__create_inventory_adjustment_tables.sql"
+    );
+    private static final Path V52 = Path.of(
+            "src/main/resources/db/migration/V52__normalize_inventory_adjustment_domain.sql"
     );
 
     @Test
-    void migration_shouldCreateHeaderAndLineTables() throws IOException {
-        String sql = Files.readString(MIGRATION);
+    void v51_shouldRemainHistoricalHeaderAndLineTableMigration() throws IOException {
+        String sql = Files.readString(V51);
 
         assertTrue(sql.contains("CREATE TABLE phieu_dieu_chinh_kiem_ke"));
         assertTrue(sql.contains("CREATE TABLE chi_tiet_dieu_chinh_kiem_ke"));
@@ -27,8 +30,8 @@ class InventoryAdjustmentMigrationTest {
     }
 
     @Test
-    void migration_shouldPersistLifecycleAndHistoricalStatuses() throws IOException {
-        String sql = Files.readString(MIGRATION);
+    void v51_shouldPersistLifecycleAndActivePartialUniqueIndex() throws IOException {
+        String sql = Files.readString(V51);
 
         assertTrue(sql.contains("'NHAP','CHO_DUYET','DA_DUYET','TU_CHOI','DA_AP_DUNG'"));
         assertTrue(sql.contains("WHERE trang_thai IN ('NHAP','CHO_DUYET','DA_DUYET')"));
@@ -37,13 +40,14 @@ class InventoryAdjustmentMigrationTest {
     }
 
     @Test
-    void migration_shouldSnapshotDiscrepancyAndAvoidStockMutationTables() throws IOException {
-        String sql = Files.readString(MIGRATION);
+    void v52_shouldAddReasonAndHeaderOneToOneWithoutDroppingLineTable() throws IOException {
+        String sql = Files.readString(V52);
 
-        assertTrue(sql.contains("so_luong_he_thong INTEGER NOT NULL"));
-        assertTrue(sql.contains("so_luong_thuc_te INTEGER NOT NULL"));
-        assertTrue(sql.contains("chenh_lech INTEGER NOT NULL"));
-        assertTrue(sql.contains("CHECK (chenh_lech = so_luong_thuc_te - so_luong_he_thong)"));
+        assertTrue(sql.contains("ADD COLUMN IF NOT EXISTS ly_do_chenh_lech VARCHAR(255)"));
+        assertTrue(sql.contains("CREATE UNIQUE INDEX IF NOT EXISTS uk_phieu_dieu_chinh_kiem_ke_dot"));
+        assertTrue(sql.contains("ON phieu_dieu_chinh_kiem_ke(dot_kiem_ke_id)"));
+        assertFalse(sql.contains("DROP TABLE"));
+        assertFalse(sql.contains("chi_tiet_dieu_chinh_kiem_ke"));
         assertFalse(sql.contains("ton_kho"));
         assertFalse(sql.contains("giao_dich_kho"));
     }

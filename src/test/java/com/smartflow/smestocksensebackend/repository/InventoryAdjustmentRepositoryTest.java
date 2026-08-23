@@ -8,7 +8,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -20,55 +19,33 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class InventoryAdjustmentRepositoryTest {
 
-    private static final List<InventoryAdjustmentStatus> ACTIVE_STATUSES = List.of(
-            InventoryAdjustmentStatus.NHAP,
-            InventoryAdjustmentStatus.CHO_DUYET,
-            InventoryAdjustmentStatus.DA_DUYET
-    );
-
     @Mock
     private InventoryAdjustmentRepository repository;
 
     @Test
-    @DisplayName("findByInventoryCountIdOrderByIdAsc trả về phiếu theo đợt kiểm kê")
-    void findByInventoryCountId_shouldReturnAdjustments() {
+    @DisplayName("findByInventoryCountId trả về header theo đợt kiểm kê")
+    void findByInventoryCountId_shouldReturnHeader() {
         InventoryAdjustment adjustment = new InventoryAdjustment();
         adjustment.setId(1L);
+        adjustment.setStatus(InventoryAdjustmentStatus.NHAP);
 
-        when(repository.findByInventoryCountIdOrderByIdAsc(10L)).thenReturn(List.of(adjustment));
+        when(repository.findByInventoryCountId(10L)).thenReturn(Optional.of(adjustment));
 
-        List<InventoryAdjustment> result = repository.findByInventoryCountIdOrderByIdAsc(10L);
-
-        assertEquals(1, result.size());
-        assertEquals(1L, result.get(0).getId());
-    }
-
-    @Test
-    @DisplayName("active query dùng NHAP, CHO_DUYET, DA_DUYET")
-    void activeQuery_shouldUseActiveStatusesOnly() {
-        InventoryAdjustment adjustment = new InventoryAdjustment();
-        adjustment.setStatus(InventoryAdjustmentStatus.CHO_DUYET);
-
-        when(repository.findFirstByInventoryCountIdAndStatusInOrderByIdAsc(eq(10L), eq(ACTIVE_STATUSES)))
-                .thenReturn(Optional.of(adjustment));
-
-        Optional<InventoryAdjustment> result = repository.findFirstByInventoryCountIdAndStatusInOrderByIdAsc(
-                10L,
-                ACTIVE_STATUSES
-        );
+        Optional<InventoryAdjustment> result = repository.findByInventoryCountId(10L);
 
         assertTrue(result.isPresent());
-        assertEquals(InventoryAdjustmentStatus.CHO_DUYET, result.get().getStatus());
+        assertEquals(1L, result.get().getId());
+        assertEquals(InventoryAdjustmentStatus.NHAP, result.get().getStatus());
     }
 
     @Test
-    @DisplayName("duplicate guard không xem TU_CHOI hoặc DA_AP_DUNG là active")
-    void duplicateGuard_shouldIgnoreHistoricalStatuses() {
-        when(repository.existsByInventoryCountIdAndStatusIn(eq(10L), eq(ACTIVE_STATUSES))).thenReturn(false);
+    @DisplayName("duplicate guard dùng một header cho một đợt kiểm kê")
+    void duplicateGuard_shouldUseInventoryCountId() {
+        when(repository.existsByInventoryCountId(eq(10L))).thenReturn(true);
 
-        boolean exists = repository.existsByInventoryCountIdAndStatusIn(10L, ACTIVE_STATUSES);
+        boolean exists = repository.existsByInventoryCountId(10L);
 
-        assertTrue(!exists);
-        verify(repository).existsByInventoryCountIdAndStatusIn(10L, ACTIVE_STATUSES);
+        assertTrue(exists);
+        verify(repository).existsByInventoryCountId(10L);
     }
 }

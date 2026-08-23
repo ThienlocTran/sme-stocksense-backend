@@ -4,7 +4,6 @@ import jakarta.persistence.Column;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.JoinColumn;
-import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import org.junit.jupiter.api.Test;
@@ -14,6 +13,7 @@ import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 class InventoryAdjustmentMappingTest {
@@ -46,30 +46,16 @@ class InventoryAdjustmentMappingTest {
     }
 
     @Test
-    void lineMapping_shouldSnapshotDiscrepancyValues() throws NoSuchFieldException {
-        assertEquals("chi_tiet_dieu_chinh_kiem_ke",
-                InventoryAdjustmentLine.class.getAnnotation(Table.class).name());
-
-        assertEquals("phieu_dieu_chinh_id",
-                InventoryAdjustmentLine.class.getDeclaredField("adjustment").getAnnotation(JoinColumn.class).name());
-        assertEquals("san_pham_id",
-                InventoryAdjustmentLine.class.getDeclaredField("product").getAnnotation(JoinColumn.class).name());
-
-        assertColumn("systemQuantity", "so_luong_he_thong");
-        assertColumn("actualQuantity", "so_luong_thuc_te");
-        assertColumn("differenceQuantity", "chenh_lech");
-        assertColumn("reason", "ly_do");
-        assertColumn("note", "ghi_chu");
-
-        assertNotNull(InventoryAdjustmentLine.class.getDeclaredField("version").getAnnotation(Version.class));
+    void header_shouldNotExposeDuplicatedLineRelationship() {
+        assertThrows(NoSuchFieldException.class, () -> InventoryAdjustment.class.getDeclaredField("lines"));
     }
 
     @Test
-    void lines_shouldCascadeWithHeaderOnly() throws NoSuchFieldException {
-        OneToMany lines = InventoryAdjustment.class.getDeclaredField("lines").getAnnotation(OneToMany.class);
-
-        assertNotNull(lines);
-        assertEquals("adjustment", lines.mappedBy());
+    void countDetail_shouldPersistReasonSeparatelyFromNote() throws NoSuchFieldException {
+        assertEquals("ly_do_chenh_lech",
+                InventoryCountDetail.class.getDeclaredField("reason").getAnnotation(Column.class).name());
+        assertEquals("ghi_chu",
+                InventoryCountDetail.class.getDeclaredField("note").getAnnotation(Column.class).name());
     }
 
     private void assertJoinColumn(String fieldName, String columnName) throws NoSuchFieldException {
@@ -77,8 +63,4 @@ class InventoryAdjustmentMappingTest {
                 InventoryAdjustment.class.getDeclaredField(fieldName).getAnnotation(JoinColumn.class).name());
     }
 
-    private void assertColumn(String fieldName, String columnName) throws NoSuchFieldException {
-        assertEquals(columnName,
-                InventoryAdjustmentLine.class.getDeclaredField(fieldName).getAnnotation(Column.class).name());
-    }
 }

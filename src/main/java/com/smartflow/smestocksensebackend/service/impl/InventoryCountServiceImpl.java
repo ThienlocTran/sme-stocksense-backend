@@ -67,7 +67,7 @@ public class InventoryCountServiceImpl implements InventoryCountService {
         InventoryCount c=find(id); ensureOpen(c); InventoryCountDetail d=detailRepository.findById(detailId).orElseThrow(() -> new NotFoundException("Dong kiem ke khong ton tai."));
         if (!d.getInventoryCount().getId().equals(id)) throw new NotFoundException("Dong kiem ke khong thuoc dot nay.");
         if (!Objects.equals(d.getVersion(),request.version())) throw new ConflictException("Dong kiem ke da duoc cap nhat.");
-        d.setActualQuantity(request.actualQuantity()); d.setDifferenceQuantity(request.actualQuantity()-d.getSystemQuantity()); d.setNote(request.note()); detailRepository.saveAndFlush(d); return response(c);
+        d.setActualQuantity(request.actualQuantity()); d.setDifferenceQuantity(request.actualQuantity()-d.getSystemQuantity()); d.setReason(request.reason()); d.setNote(request.note()); detailRepository.saveAndFlush(d); return response(c);
     }
     @Override @Transactional
     public InventoryCountResponse finalizeCount(Long id, InventoryCountRequests.Finalize request) {

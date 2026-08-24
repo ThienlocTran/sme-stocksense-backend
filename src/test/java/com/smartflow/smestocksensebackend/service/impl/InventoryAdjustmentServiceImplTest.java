@@ -8,6 +8,7 @@ import com.smartflow.smestocksensebackend.entity.InventoryAdjustmentStatus;
 import com.smartflow.smestocksensebackend.entity.InventoryCount;
 import com.smartflow.smestocksensebackend.entity.InventoryCountDetail;
 import com.smartflow.smestocksensebackend.entity.InventoryCountStatus;
+import com.smartflow.smestocksensebackend.entity.InventoryLevel;
 import com.smartflow.smestocksensebackend.entity.Product;
 import com.smartflow.smestocksensebackend.entity.Role;
 import com.smartflow.smestocksensebackend.entity.RoleCode;
@@ -18,12 +19,16 @@ import com.smartflow.smestocksensebackend.exception.NotFoundException;
 import com.smartflow.smestocksensebackend.repository.InventoryAdjustmentRepository;
 import com.smartflow.smestocksensebackend.repository.InventoryCountDetailRepository;
 import com.smartflow.smestocksensebackend.repository.InventoryCountRepository;
+import com.smartflow.smestocksensebackend.repository.InventoryLevelRepository;
 import com.smartflow.smestocksensebackend.service.InventoryAdjustmentCodeGenerator;
+import com.smartflow.smestocksensebackend.service.InventoryTransactionService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.mockito.ArgumentMatchers;
+import org.mockito.MockitoAnnotations;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -39,23 +44,27 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-
 @ExtendWith(MockitoExtension.class)
 class InventoryAdjustmentServiceImplTest {
 
     @Mock InventoryAdjustmentRepository adjustmentRepository;
     @Mock InventoryCountRepository countRepository;
     @Mock InventoryCountDetailRepository detailRepository;
+    @Mock InventoryLevelRepository inventoryRepository;
+    @Mock InventoryTransactionService inventoryTransactionService;
     @Mock InventoryAdjustmentCodeGenerator codeGenerator;
 
     InventoryAdjustmentServiceImpl service;
     Employee actor;
     InventoryCount count;
     InventoryCountDetail detail;
+    AutoCloseable mocks;
 
     @BeforeEach
     void setup() {
-        service = new InventoryAdjustmentServiceImpl(adjustmentRepository, countRepository, detailRepository, codeGenerator);
+        mocks = MockitoAnnotations.openMocks(this);
+        service = new InventoryAdjustmentServiceImpl(adjustmentRepository, countRepository, detailRepository,
+                inventoryRepository, inventoryTransactionService, codeGenerator);
         actor = new Employee(); actor.setId(1L); actor.setFullName("Toan");
         actor.setRole(role(RoleCode.EMPLOYEE));
         SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(actor, null, List.of()));
@@ -68,8 +77,9 @@ class InventoryAdjustmentServiceImplTest {
     }
 
     @AfterEach
-    void clear() {
+    void clear() throws Exception {
         SecurityContextHolder.clearContext();
+        mocks.close();
     }
 
     @Test
@@ -386,6 +396,125 @@ class InventoryAdjustmentServiceImplTest {
         assertThrows(ConflictException.class, () -> service.reject(9L, new RejectInventoryAdjustmentRequest("Ly do.")));
     }
 
+    @Test
+    void apply_shouldMoveApprovedToAppliedCloseCountAndUseCurrentStockPlusDifference() {
+        actor = employee(2L, RoleCode.MANAGER);
+        authenticate(actor);
+        InventoryAdjustment adjustment = approvedAdjustment();
+        detail.setDifferenceQuantity(-3);
+        InventoryLevel stock = stock(20);
+        when(adjustmentRepository.findByIdForUpdate(9L)).thenReturn(Optional.of(adjustment));
+        when(countRepository.findByIdForUpdate(3L)).thenReturn(Optional.of(count));
+        when(detailRepository.findByInventoryCountIdOrderByIdAsc(3L)).thenReturn(List.of(detail));
+        when(inventoryRepository.findByProductIdAndWarehouseIdForUpdate(4L, 2L)).thenReturn(Optional.of(stock));
+        when(countRepository.saveAndFlush(count)).thenReturn(count);
+        when(adjustmentRepository.saveAndFlush(adjustment)).thenReturn(adjustment);
+
+        InventoryAdjustmentResponse response = service.apply(9L);
+
+        assertEquals("DA_AP_DUNG", response.status());
+        assertEquals("DA_CHOT", response.inventoryCount().status());
+        assertEquals(17, stock.getQuantity());
+        assertEquals(actor, count.getFinalizedBy());
+        assertTrue(adjustment.getAppliedAt() != null);
+        verify(inventoryTransactionService).recordTransaction(ArgumentMatchers.eq(4L), ArgumentMatchers.eq(2L), ArgumentMatchers.eq(com.smartflow.smestocksensebackend.entity.InventoryTransactionType.DIEU_CHINH_GIAM), ArgumentMatchers.eq(3), ArgumentMatchers.eq(20), ArgumentMatchers.eq(17), ArgumentMatchers.isNull(), ArgumentMatchers.eq("Dieu chinh kiem ke KK-1"));
+    }
+
+    @Test
+    void apply_positiveDifferenceShouldUseIncreaseTransaction() {
+        actor = employee(2L, RoleCode.ADMIN);
+        authenticate(actor);
+        InventoryAdjustment adjustment = approvedAdjustment();
+        detail.setActualQuantity(13); detail.setDifferenceQuantity(3);
+        InventoryLevel stock = stock(20);
+        when(adjustmentRepository.findByIdForUpdate(9L)).thenReturn(Optional.of(adjustment));
+        when(countRepository.findByIdForUpdate(3L)).thenReturn(Optional.of(count));
+        when(detailRepository.findByInventoryCountIdOrderByIdAsc(3L)).thenReturn(List.of(detail));
+        when(inventoryRepository.findByProductIdAndWarehouseIdForUpdate(4L, 2L)).thenReturn(Optional.of(stock));
+        when(countRepository.saveAndFlush(count)).thenReturn(count);
+        when(adjustmentRepository.saveAndFlush(adjustment)).thenReturn(adjustment);
+
+        service.apply(9L);
+
+        assertEquals(23, stock.getQuantity());
+        verify(inventoryTransactionService).recordTransaction(ArgumentMatchers.eq(4L), ArgumentMatchers.eq(2L), ArgumentMatchers.eq(com.smartflow.smestocksensebackend.entity.InventoryTransactionType.DIEU_CHINH_TANG), ArgumentMatchers.eq(3), ArgumentMatchers.eq(20), ArgumentMatchers.eq(23), ArgumentMatchers.isNull(), any());
+    }
+
+    @Test
+    void apply_zeroLineShouldNotCreateTransactionForThatLine() {
+        actor = employee(2L, RoleCode.MANAGER);
+        authenticate(actor);
+        InventoryAdjustment adjustment = approvedAdjustment();
+        InventoryCountDetail zero = detail(6L, 10, 10, 0);
+        when(adjustmentRepository.findByIdForUpdate(9L)).thenReturn(Optional.of(adjustment));
+        when(countRepository.findByIdForUpdate(3L)).thenReturn(Optional.of(count));
+        when(detailRepository.findByInventoryCountIdOrderByIdAsc(3L)).thenReturn(List.of(detail, zero));
+        when(inventoryRepository.findByProductIdAndWarehouseIdForUpdate(4L, 2L)).thenReturn(Optional.of(stock(20)));
+        when(countRepository.saveAndFlush(count)).thenReturn(count);
+        when(adjustmentRepository.saveAndFlush(adjustment)).thenReturn(adjustment);
+
+        service.apply(9L);
+
+        verify(inventoryTransactionService).recordTransaction(any(), any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void apply_shouldRejectInvalidStatesAndUnknownId() {
+        actor = employee(2L, RoleCode.MANAGER);
+        authenticate(actor);
+        when(adjustmentRepository.findByIdForUpdate(404L)).thenReturn(Optional.empty());
+        assertThrows(NotFoundException.class, () -> service.apply(404L));
+
+        for (InventoryAdjustmentStatus status : List.of(InventoryAdjustmentStatus.NHAP, InventoryAdjustmentStatus.CHO_DUYET,
+                InventoryAdjustmentStatus.TU_CHOI, InventoryAdjustmentStatus.DA_AP_DUNG)) {
+            InventoryAdjustment adjustment = approvedAdjustment();
+            adjustment.setStatus(status);
+            when(adjustmentRepository.findByIdForUpdate(9L)).thenReturn(Optional.of(adjustment));
+            assertThrows(ConflictException.class, () -> service.apply(9L));
+        }
+    }
+
+    @Test
+    void apply_shouldRejectEmployeeRoleWithoutMutation() {
+        assertThrows(AccessDeniedException.class, () -> service.apply(9L));
+        verify(adjustmentRepository, never()).findByIdForUpdate(any());
+    }
+
+    @Test
+    void apply_shouldRejectClosedCountBeforeMutation() {
+        actor = employee(2L, RoleCode.MANAGER);
+        authenticate(actor);
+        InventoryAdjustment adjustment = approvedAdjustment();
+        count.setStatus(InventoryCountStatus.DA_CHOT);
+        when(adjustmentRepository.findByIdForUpdate(9L)).thenReturn(Optional.of(adjustment));
+        when(countRepository.findByIdForUpdate(3L)).thenReturn(Optional.of(count));
+
+        assertThrows(ConflictException.class, () -> service.apply(9L));
+        verify(inventoryRepository, never()).saveAndFlush(any());
+        assertEquals(InventoryAdjustmentStatus.DA_DUYET, adjustment.getStatus());
+    }
+
+    @Test
+    void apply_shouldRejectNegativeResultBeforePersisting() {
+        actor = employee(2L, RoleCode.MANAGER);
+        authenticate(actor);
+        InventoryAdjustment adjustment = approvedAdjustment();
+        detail.setDifferenceQuantity(-30);
+        InventoryLevel stock = stock(20);
+        when(adjustmentRepository.findByIdForUpdate(9L)).thenReturn(Optional.of(adjustment));
+        when(countRepository.findByIdForUpdate(3L)).thenReturn(Optional.of(count));
+        when(detailRepository.findByInventoryCountIdOrderByIdAsc(3L)).thenReturn(List.of(detail));
+        when(inventoryRepository.findByProductIdAndWarehouseIdForUpdate(4L, 2L)).thenReturn(Optional.of(stock));
+
+        assertThrows(ConflictException.class, () -> service.apply(9L));
+
+        assertEquals(20, stock.getQuantity());
+        assertEquals(InventoryAdjustmentStatus.DA_DUYET, adjustment.getStatus());
+        assertEquals(InventoryCountStatus.DANG_KIEM_KE, count.getStatus());
+        verify(inventoryRepository, never()).saveAndFlush(any());
+        verify(inventoryTransactionService, never()).recordTransaction(any(), any(), any(), any(), any(), any(), any(), any());
+    }
+
     private InventoryAdjustment adjustment() {
         InventoryAdjustment adjustment = new InventoryAdjustment();
         adjustment.setId(9L);
@@ -404,6 +533,34 @@ class InventoryAdjustmentServiceImplTest {
         adjustment.setSubmittedBy(creator);
         adjustment.setStatus(InventoryAdjustmentStatus.CHO_DUYET);
         return adjustment;
+    }
+
+    private InventoryAdjustment approvedAdjustment() {
+        InventoryAdjustment adjustment = pendingAdjustment();
+        adjustment.setStatus(InventoryAdjustmentStatus.DA_DUYET);
+        adjustment.setApprovedBy(employee(2L, RoleCode.MANAGER));
+        adjustment.setApprovedAt(java.time.LocalDateTime.now().minusHours(1));
+        return adjustment;
+    }
+
+    private InventoryLevel stock(int quantity) {
+        InventoryLevel stock = new InventoryLevel();
+        stock.setProduct(detail.getProduct());
+        stock.setWarehouse(count.getWarehouse());
+        stock.setQuantity(quantity);
+        return stock;
+    }
+
+    private InventoryCountDetail detail(Long id, int system, int actual, int difference) {
+        InventoryCountDetail line = new InventoryCountDetail();
+        line.setId(id);
+        line.setInventoryCount(count);
+        line.setProduct(detail.getProduct());
+        line.setSystemQuantity(system);
+        line.setActualQuantity(actual);
+        line.setDifferenceQuantity(difference);
+        line.setReason("Khong lech");
+        return line;
     }
 
     private Employee employee(Long id, RoleCode roleCode) {

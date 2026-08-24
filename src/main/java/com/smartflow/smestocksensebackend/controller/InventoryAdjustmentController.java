@@ -63,4 +63,10 @@ public class InventoryAdjustmentController {
     ) {
         return service.reject(id, request);
     }
+
+    @PostMapping("/api/inventory-adjustments/{id}/apply")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
+    public InventoryAdjustmentResponse apply(@PathVariable @Positive Long id) {
+        return service.apply(id);
+    }
 }

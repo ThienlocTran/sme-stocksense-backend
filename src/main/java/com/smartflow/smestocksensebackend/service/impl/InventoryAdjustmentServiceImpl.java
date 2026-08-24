@@ -8,6 +8,8 @@ import com.smartflow.smestocksensebackend.entity.InventoryAdjustmentStatus;
 import com.smartflow.smestocksensebackend.entity.InventoryCount;
 import com.smartflow.smestocksensebackend.entity.InventoryCountDetail;
 import com.smartflow.smestocksensebackend.entity.InventoryCountStatus;
+import com.smartflow.smestocksensebackend.entity.InventoryLevel;
+import com.smartflow.smestocksensebackend.entity.InventoryTransactionType;
 import com.smartflow.smestocksensebackend.entity.RoleCode;
 import com.smartflow.smestocksensebackend.exception.BadRequestException;
 import com.smartflow.smestocksensebackend.exception.ConflictException;
@@ -16,8 +18,10 @@ import com.smartflow.smestocksensebackend.exception.NotFoundException;
 import com.smartflow.smestocksensebackend.repository.InventoryAdjustmentRepository;
 import com.smartflow.smestocksensebackend.repository.InventoryCountDetailRepository;
 import com.smartflow.smestocksensebackend.repository.InventoryCountRepository;
+import com.smartflow.smestocksensebackend.repository.InventoryLevelRepository;
 import com.smartflow.smestocksensebackend.service.InventoryAdjustmentCodeGenerator;
 import com.smartflow.smestocksensebackend.service.InventoryAdjustmentService;
+import com.smartflow.smestocksensebackend.service.InventoryTransactionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.access.AccessDeniedException;
@@ -39,6 +43,8 @@ public class InventoryAdjustmentServiceImpl implements InventoryAdjustmentServic
     private final InventoryAdjustmentRepository adjustmentRepository;
     private final InventoryCountRepository countRepository;
     private final InventoryCountDetailRepository detailRepository;
+    private final InventoryLevelRepository inventoryRepository;
+    private final InventoryTransactionService inventoryTransactionService;
     private final InventoryAdjustmentCodeGenerator codeGenerator;
 
     @Override
@@ -112,6 +118,73 @@ public class InventoryAdjustmentServiceImpl implements InventoryAdjustmentServic
         adjustment.setApprovedBy(actor);
         adjustment.setApprovedAt(LocalDateTime.now());
         adjustment.setRejectionReason(request.rejectionReason().trim());
+        return response(adjustmentRepository.saveAndFlush(adjustment));
+    }
+
+    @Override
+    @Transactional
+    public InventoryAdjustmentResponse apply(Long id) {
+        Employee actor = actor();
+        ensureApprovalActor(actor);
+        InventoryAdjustment adjustment = adjustmentRepository.findByIdForUpdate(id)
+                .orElseThrow(() -> new NotFoundException("Phieu dieu chinh kiem ke khong ton tai."));
+        if (adjustment.getStatus() != InventoryAdjustmentStatus.DA_DUYET) {
+            throw new ConflictException("Chi duoc ap dung phieu dieu chinh o trang thai DA_DUYET.");
+        }
+        if (adjustment.getSubmittedBy() == null || adjustment.getApprovedBy() == null || adjustment.getApprovedAt() == null) {
+            throw new ConflictException("Phieu dieu chinh chua du thong tin phe duyet.");
+        }
+
+        InventoryCount count = countRepository.findByIdForUpdate(adjustment.getInventoryCount().getId())
+                .orElseThrow(() -> new NotFoundException("Dot kiem ke khong ton tai."));
+        if (count.getStatus() != InventoryCountStatus.DANG_KIEM_KE) {
+            throw new ConflictException("Chi duoc ap dung cho dot kiem ke dang thuc hien.");
+        }
+        adjustment.setInventoryCount(count);
+
+        List<InventoryCountDetail> details = detailRepository.findByInventoryCountIdOrderByIdAsc(count.getId());
+        validateDetails(details);
+        if (details.stream()
+                .filter(detail -> detail.getDifferenceQuantity() != null && detail.getDifferenceQuantity() != 0)
+                .anyMatch(detail -> detail.getReason() == null || detail.getReason().isBlank())) {
+            throw new BadRequestException("Ly do chenh lech la bat buoc.");
+        }
+
+        Long warehouseId = count.getWarehouse().getId();
+        for (InventoryCountDetail detail : details) {
+            int diff = detail.getDifferenceQuantity() != null
+                    ? detail.getDifferenceQuantity()
+                    : detail.getActualQuantity() - detail.getSystemQuantity();
+            detail.setDifferenceQuantity(diff);
+            if (diff == 0) continue;
+
+            InventoryLevel stock = inventoryRepository.findByProductIdAndWarehouseIdForUpdate(detail.getProduct().getId(), warehouseId)
+                    .orElseThrow(() -> new NotFoundException("Ton kho khong ton tai de dieu chinh kiem ke."));
+            int before = stock.getQuantity() != null ? stock.getQuantity() : 0;
+            int after = addInventoryDelta(before, diff);
+            if (after < 0) {
+                throw new ConflictException("So luong ton kho sau dieu chinh khong duoc am.");
+            }
+            stock.setQuantity(after);
+            inventoryRepository.saveAndFlush(stock);
+            inventoryTransactionService.recordTransaction(
+                    detail.getProduct().getId(),
+                    warehouseId,
+                    diff > 0 ? InventoryTransactionType.DIEU_CHINH_TANG : InventoryTransactionType.DIEU_CHINH_GIAM,
+                    Math.abs(diff),
+                    before,
+                    after,
+                    null,
+                    "Dieu chinh kiem ke " + count.getCode());
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        adjustment.setStatus(InventoryAdjustmentStatus.DA_AP_DUNG);
+        adjustment.setAppliedAt(now);
+        count.setStatus(InventoryCountStatus.DA_CHOT);
+        count.setFinalizedBy(actor);
+        count.setFinalizedAt(now);
+        countRepository.saveAndFlush(count);
         return response(adjustmentRepository.saveAndFlush(adjustment));
     }
 
@@ -230,6 +303,14 @@ public class InventoryAdjustmentServiceImpl implements InventoryAdjustmentServic
         }
         if (Objects.equals(actorId, adjustment.getSubmittedBy().getId())) {
             throw new BadRequestException("Nguoi duyet phai khac nguoi gui duyet.");
+        }
+    }
+
+    private int addInventoryDelta(int current, int delta) {
+        try {
+            return Math.addExact(current, delta);
+        } catch (ArithmeticException exception) {
+            throw new BadRequestException("Tong so luong ton kho vuot gioi han cho phep.");
         }
     }
 

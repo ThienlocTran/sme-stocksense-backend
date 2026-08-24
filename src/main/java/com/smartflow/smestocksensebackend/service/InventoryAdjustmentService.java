@@ -10,4 +10,5 @@ public interface InventoryAdjustmentService {
     InventoryAdjustmentResponse submit(Long id);
     InventoryAdjustmentResponse approve(Long id);
     InventoryAdjustmentResponse reject(Long id, RejectInventoryAdjustmentRequest request);
+    InventoryAdjustmentResponse apply(Long id);
 }

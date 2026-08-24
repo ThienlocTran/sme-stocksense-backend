@@ -31,7 +31,7 @@ public record InventoryAdjustmentResponse(
         Long version,
         List<Detail> details
 ) {
-    public record CountInfo(Long id, String code, Long warehouseId, String warehouseName) {}
+    public record CountInfo(Long id, String code, Long warehouseId, String warehouseName, String status) {}
 
     public record Detail(
             Long id,
@@ -73,7 +73,7 @@ public record InventoryAdjustmentResponse(
                 adjustment.getId(),
                 adjustment.getCode(),
                 adjustment.getStatus().name(),
-                new CountInfo(count.getId(), count.getCode(), count.getWarehouse().getId(), count.getWarehouse().getName()),
+                new CountInfo(count.getId(), count.getCode(), count.getWarehouse().getId(), count.getWarehouse().getName(), count.getStatus().name()),
                 count.getCode(),
                 count.getWarehouse().getId(),
                 count.getWarehouse().getName(),

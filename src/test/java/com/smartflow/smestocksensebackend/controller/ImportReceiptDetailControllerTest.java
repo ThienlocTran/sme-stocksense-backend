@@ -109,6 +109,7 @@ class ImportReceiptDetailControllerTest {
                 .thenReturn(List.of(new ImportReceiptHistoryResponse(
                         1L,
                         123L,
+                        2L,
                         "Tran Thi Quan Ly",
                         "DUYET_CAP_2",
                         null,

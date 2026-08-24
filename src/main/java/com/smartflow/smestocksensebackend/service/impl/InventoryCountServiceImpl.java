@@ -23,6 +23,7 @@ public class InventoryCountServiceImpl implements InventoryCountService {
     private final WarehouseRepository warehouseRepository;
     private final ProductRepository productRepository;
     private final InventoryTransactionService inventoryTransactionService;
+    private final InventoryAdjustmentRepository adjustmentRepository;
 
     @Override @Transactional
     public InventoryCountResponse create(InventoryCountRequests.Create request) {
@@ -64,36 +65,20 @@ public class InventoryCountServiceImpl implements InventoryCountService {
 
     @Override @Transactional
     public InventoryCountResponse recordActual(Long id, Long detailId, InventoryCountRequests.RecordActual request) {
-        InventoryCount c=find(id); ensureOpen(c); InventoryCountDetail d=detailRepository.findById(detailId).orElseThrow(() -> new NotFoundException("Dong kiem ke khong ton tai."));
+        InventoryCount c=find(id); ensureOpen(c); ensureAdjustmentEditable(id); InventoryCountDetail d=detailRepository.findById(detailId).orElseThrow(() -> new NotFoundException("Dong kiem ke khong ton tai."));
         if (!d.getInventoryCount().getId().equals(id)) throw new NotFoundException("Dong kiem ke khong thuoc dot nay.");
         if (!Objects.equals(d.getVersion(),request.version())) throw new ConflictException("Dong kiem ke da duoc cap nhat.");
-        d.setActualQuantity(request.actualQuantity()); d.setDifferenceQuantity(request.actualQuantity()-d.getSystemQuantity()); d.setNote(request.note()); detailRepository.saveAndFlush(d); return response(c);
+        d.setActualQuantity(request.actualQuantity()); d.setDifferenceQuantity(request.actualQuantity()-d.getSystemQuantity()); d.setReason(request.reason()); d.setNote(request.note()); detailRepository.saveAndFlush(d); return response(c);
     }
     @Override @Transactional
     public InventoryCountResponse finalizeCount(Long id, InventoryCountRequests.Finalize request) {
         InventoryCount c=find(id); ensureOpen(c); checkVersion(c,request.version()); List<InventoryCountDetail> lines=detailRepository.findByInventoryCountIdOrderByIdAsc(id);
         if (lines.stream().anyMatch(d -> d.getActualQuantity()==null)) throw new ConflictException("Phai nhap so luong thuc te cho tat ca san pham.");
-        Warehouse warehouse = c.getWarehouse();
         for (InventoryCountDetail d : lines) {
-            int before = d.getSystemQuantity();
-            int after = d.getActualQuantity();
-            int diff = after - before;
+            int diff = d.getActualQuantity() - d.getSystemQuantity();
             d.setDifferenceQuantity(diff);
-            if (diff == 0) continue;
-            InventoryLevel stock = inventoryRepository.findByProductIdAndWarehouseIdForUpdate(d.getProduct().getId(), warehouse.getId())
-                    .orElseThrow(() -> new NotFoundException("Ton kho khong ton tai de dieu chinh kiem ke."));
-            stock.setQuantity(after);
-            inventoryRepository.saveAndFlush(stock);
-            inventoryTransactionService.recordTransaction(
-                    d.getProduct().getId(),
-                    warehouse.getId(),
-                    diff > 0 ? InventoryTransactionType.DIEU_CHINH_TANG : InventoryTransactionType.DIEU_CHINH_GIAM,
-                    Math.abs(diff),
-                    before,
-                    after,
-                    null,
-                    "Dieu chinh kiem ke " + c.getCode());
         }
+        if (lines.stream().anyMatch(d -> d.getDifferenceQuantity()!=null&&d.getDifferenceQuantity()!=0)) throw new ConflictException("Dot kiem ke co chenh lech phai duoc ap dung qua phieu dieu chinh da duyet.");
         c.setStatus(InventoryCountStatus.DA_CHOT); c.setFinalizedBy(actor()); c.setFinalizedAt(LocalDateTime.now()); countRepository.saveAndFlush(c); return InventoryCountResponse.from(c,lines);
     }
     @Override @Transactional
@@ -103,6 +88,7 @@ public class InventoryCountServiceImpl implements InventoryCountService {
     private InventoryCountResponse response(InventoryCount c){ return InventoryCountResponse.from(c,detailRepository.findByInventoryCountIdOrderByIdAsc(c.getId())); }
     private InventoryCount find(Long id){ return countRepository.findById(id).orElseThrow(() -> new NotFoundException("Dot kiem ke khong ton tai.")); }
     private void ensureOpen(InventoryCount c){ if(c.getStatus()!=InventoryCountStatus.DANG_KIEM_KE) throw new ConflictException("Dot kiem ke da chot hoac da huy."); }
+    private void ensureAdjustmentEditable(Long countId){ adjustmentRepository.findByInventoryCountId(countId).ifPresent(a -> { if(a.getStatus()!=InventoryAdjustmentStatus.NHAP&&a.getStatus()!=InventoryAdjustmentStatus.TU_CHOI) throw new ConflictException("Chi tiet kiem ke da khoa do phieu dieu chinh da gui duyet."); }); }
     private void checkVersion(InventoryCount c,Long v){ if(!Objects.equals(c.getVersion(),v)) throw new ConflictException("Dot kiem ke da duoc cap nhat."); }
     private InventoryCountStatus parse(String s){ if(s==null||s.isBlank()) return null; try{return InventoryCountStatus.valueOf(s);}catch(Exception e){throw new BadRequestException("Trang thai kiem ke khong hop le.");} }
     private Employee actor(){ Authentication a=SecurityContextHolder.getContext().getAuthentication(); if(a!=null&&a.getPrincipal() instanceof Employee e) return e; throw new MissingRoleException("Khong xac dinh duoc nguoi dung."); }

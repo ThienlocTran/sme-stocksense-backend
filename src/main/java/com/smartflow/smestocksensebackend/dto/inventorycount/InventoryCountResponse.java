@@ -8,10 +8,10 @@ public record InventoryCountResponse(Long id, String code, Long warehouseId, Str
         String note, Long createdById, String createdByName, LocalDateTime createdAt, LocalDateTime finalizedAt,
         LocalDateTime cancelledAt, String cancellationReason, Long version, List<Detail> details) {
     public record Detail(Long id, Long productId, String productCode, String productName, Integer systemQuantity,
-            Integer actualQuantity, Integer differenceQuantity, String note, Long version) {
+            Integer actualQuantity, Integer differenceQuantity, String reason, String note, Long version) {
         public static Detail from(InventoryCountDetail d) { return new Detail(d.getId(), d.getProduct().getId(),
                 d.getProduct().getCode(), d.getProduct().getName(), d.getSystemQuantity(), d.getActualQuantity(),
-                d.getDifferenceQuantity(), d.getNote(), d.getVersion()); }
+                d.getDifferenceQuantity(), d.getReason(), d.getNote(), d.getVersion()); }
     }
     public static InventoryCountResponse from(InventoryCount c, List<InventoryCountDetail> lines) {
         return new InventoryCountResponse(c.getId(), c.getCode(), c.getWarehouse().getId(), c.getWarehouse().getName(),

@@ -20,6 +20,7 @@ import static org.mockito.Mockito.*;
 class InventoryCountServiceImplTest {
     @Mock InventoryCountRepository countRepository; @Mock InventoryCountDetailRepository detailRepository;
     @Mock InventoryLevelRepository inventoryRepository; @Mock WarehouseRepository warehouseRepository; @Mock ProductRepository productRepository;
+    @Mock InventoryAdjustmentRepository adjustmentRepository;
     @Mock InventoryTransactionService inventoryTransactionService;
     @InjectMocks InventoryCountServiceImpl service;
     Employee actor; Warehouse warehouse; Product product; InventoryCount count; InventoryCountDetail detail;
@@ -44,11 +45,54 @@ class InventoryCountServiceImplTest {
         verify(inventoryRepository,never()).save(any());
     }
 
-    @Test void recordActual_shouldCalculateDifference(){
+    @Test void recordActual_shouldCalculateDifferenceAndPersistReasonSeparatelyFromNote(){
         when(countRepository.findById(4L)).thenReturn(Optional.of(count)); when(detailRepository.findById(5L)).thenReturn(Optional.of(detail));
+        when(adjustmentRepository.findByInventoryCountId(4L)).thenReturn(Optional.empty());
         when(detailRepository.findByInventoryCountIdOrderByIdAsc(4L)).thenReturn(List.of(detail));
-        service.recordActual(4L,5L,new InventoryCountRequests.RecordActual(7,"Thieu",0L));
+        InventoryCountResponse response = service.recordActual(4L,5L,new InventoryCountRequests.RecordActual(7,"Hang hong","Ghi chu rieng",0L));
         assertEquals(-3,detail.getDifferenceQuantity()); assertEquals(7,detail.getActualQuantity());
+        assertEquals("Hang hong", detail.getReason()); assertEquals("Ghi chu rieng", detail.getNote());
+        assertEquals("Hang hong", response.details().getFirst().reason()); assertEquals("Ghi chu rieng", response.details().getFirst().note());
+        verify(inventoryRepository, never()).save(any());
+        verify(inventoryTransactionService, never()).recordTransaction(any(),any(),any(),any(),any(),any(),any(),any());
+    }
+
+    @Test void recordActual_legacyRequestWithoutReason_shouldKeepNoteCompatible(){
+        when(countRepository.findById(4L)).thenReturn(Optional.of(count)); when(detailRepository.findById(5L)).thenReturn(Optional.of(detail));
+        when(adjustmentRepository.findByInventoryCountId(4L)).thenReturn(Optional.empty());
+        when(detailRepository.findByInventoryCountIdOrderByIdAsc(4L)).thenReturn(List.of(detail));
+        service.recordActual(4L,5L,new InventoryCountRequests.RecordActual(7,"Legacy note",0L));
+        assertNull(detail.getReason()); assertEquals("Legacy note", detail.getNote());
+    }
+
+    @Test void recordActual_shouldAllowDraftAdjustment(){
+        InventoryAdjustment adjustment = new InventoryAdjustment(); adjustment.setStatus(InventoryAdjustmentStatus.NHAP);
+        when(countRepository.findById(4L)).thenReturn(Optional.of(count)); when(adjustmentRepository.findByInventoryCountId(4L)).thenReturn(Optional.of(adjustment));
+        when(detailRepository.findById(5L)).thenReturn(Optional.of(detail)); when(detailRepository.findByInventoryCountIdOrderByIdAsc(4L)).thenReturn(List.of(detail));
+        service.recordActual(4L,5L,new InventoryCountRequests.RecordActual(7,"Hang hong","Ghi chu",0L));
+        assertEquals(7, detail.getActualQuantity());
+    }
+
+    @Test void recordActual_shouldRejectSubmittedAdjustment(){
+        InventoryAdjustment adjustment = new InventoryAdjustment(); adjustment.setStatus(InventoryAdjustmentStatus.CHO_DUYET);
+        when(countRepository.findById(4L)).thenReturn(Optional.of(count)); when(adjustmentRepository.findByInventoryCountId(4L)).thenReturn(Optional.of(adjustment));
+        assertThrows(ConflictException.class,()->service.recordActual(4L,5L,new InventoryCountRequests.RecordActual(7,"Hang hong","Ghi chu",0L)));
+        verify(detailRepository, never()).saveAndFlush(any());
+    }
+
+    @Test void recordActual_shouldAllowRejectedAdjustment(){
+        InventoryAdjustment adjustment = new InventoryAdjustment(); adjustment.setStatus(InventoryAdjustmentStatus.TU_CHOI);
+        when(countRepository.findById(4L)).thenReturn(Optional.of(count)); when(adjustmentRepository.findByInventoryCountId(4L)).thenReturn(Optional.of(adjustment));
+        when(detailRepository.findById(5L)).thenReturn(Optional.of(detail)); when(detailRepository.findByInventoryCountIdOrderByIdAsc(4L)).thenReturn(List.of(detail));
+        service.recordActual(4L,5L,new InventoryCountRequests.RecordActual(7,"Hang hong","Ghi chu",0L));
+        assertEquals(7, detail.getActualQuantity());
+    }
+
+    @Test void recordActual_shouldRejectApprovedAdjustment(){
+        InventoryAdjustment adjustment = new InventoryAdjustment(); adjustment.setStatus(InventoryAdjustmentStatus.DA_DUYET);
+        when(countRepository.findById(4L)).thenReturn(Optional.of(count)); when(adjustmentRepository.findByInventoryCountId(4L)).thenReturn(Optional.of(adjustment));
+        assertThrows(ConflictException.class,()->service.recordActual(4L,5L,new InventoryCountRequests.RecordActual(7,"Hang hong","Ghi chu",0L)));
+        verify(detailRepository, never()).saveAndFlush(any());
     }
 
     @Test void finalize_shouldRejectMissingActualQuantity(){
@@ -64,14 +108,23 @@ class InventoryCountServiceImplTest {
         assertEquals("DA_CHOT",response.status()); verify(inventoryRepository,never()).save(any()); verify(inventoryTransactionService,never()).recordTransaction(any(),any(),any(),any(),any(),any(),any(),any());
     }
 
-    @Test void finalize_withDifferenceShouldUpdateInventoryAndWriteTransaction(){
+    @Test void finalize_withDifferenceShouldRequireApprovedAdjustmentApply(){
         detail.setActualQuantity(7); detail.setDifferenceQuantity(-3);
-        InventoryLevel stock=new InventoryLevel(); stock.setWarehouse(warehouse); stock.setProduct(product); stock.setQuantity(10);
-        when(countRepository.findById(4L)).thenReturn(Optional.of(count)); when(detailRepository.findByInventoryCountIdOrderByIdAsc(4L)).thenReturn(List.of(detail)); when(inventoryRepository.findByProductIdAndWarehouseIdForUpdate(3L,2L)).thenReturn(Optional.of(stock)); when(countRepository.saveAndFlush(count)).thenReturn(count);
-        InventoryCountResponse response=service.finalizeCount(4L,new InventoryCountRequests.Finalize(0L));
-        assertEquals("DA_CHOT",response.status()); assertEquals(7,stock.getQuantity());
-        verify(inventoryRepository).saveAndFlush(stock);
-        verify(inventoryTransactionService).recordTransaction(eq(3L),eq(2L),eq(InventoryTransactionType.DIEU_CHINH_GIAM),eq(3),eq(10),eq(7),isNull(),eq("Dieu chinh kiem ke KK-1"));
+        when(countRepository.findById(4L)).thenReturn(Optional.of(count)); when(detailRepository.findByInventoryCountIdOrderByIdAsc(4L)).thenReturn(List.of(detail));
+        assertThrows(ConflictException.class,()->service.finalizeCount(4L,new InventoryCountRequests.Finalize(0L)));
+        assertEquals(InventoryCountStatus.DANG_KIEM_KE, count.getStatus());
+        verify(inventoryRepository,never()).saveAndFlush(any());
+        verify(inventoryTransactionService,never()).recordTransaction(any(),any(),any(),any(),any(),any(),any(),any());
+    }
+
+    @Test void finalize_nonZeroWithAdjustmentStatusesShouldRejectDirectFinalize(){
+        detail.setActualQuantity(7); detail.setDifferenceQuantity(-3);
+        for(InventoryAdjustmentStatus status: List.of(InventoryAdjustmentStatus.NHAP,InventoryAdjustmentStatus.CHO_DUYET,InventoryAdjustmentStatus.TU_CHOI,InventoryAdjustmentStatus.DA_DUYET)){
+            count.setStatus(InventoryCountStatus.DANG_KIEM_KE);
+            when(countRepository.findById(4L)).thenReturn(Optional.of(count)); when(detailRepository.findByInventoryCountIdOrderByIdAsc(4L)).thenReturn(List.of(detail));
+            assertThrows(ConflictException.class,()->service.finalizeCount(4L,new InventoryCountRequests.Finalize(0L)));
+        }
+        verify(inventoryTransactionService,never()).recordTransaction(any(),any(),any(),any(),any(),any(),any(),any());
     }
 
     @Test void cancelledCount_shouldNotAllowFurtherEditing(){

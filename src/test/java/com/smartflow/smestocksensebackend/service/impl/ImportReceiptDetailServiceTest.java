@@ -1,6 +1,7 @@
 package com.smartflow.smestocksensebackend.service.impl;
 
 import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptDraftResponse;
+import com.smartflow.smestocksensebackend.dto.inbound.ImportReceiptHistoryResponse;
 import com.smartflow.smestocksensebackend.dto.inbound.InspectImportReceiptRequest;
 import com.smartflow.smestocksensebackend.dto.inbound.InspectImportReceiptItemRequest;
 import com.smartflow.smestocksensebackend.entity.Employee;
@@ -40,7 +41,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.test.util.ReflectionTestUtils;
 
+import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Collections;
@@ -211,6 +214,35 @@ class ImportReceiptDetailServiceTest {
         assertThat(response).hasSize(1);
         assertThat(response.getFirst().receiptId()).isEqualTo(100L);
         assertThat(response.getFirst().action()).isEqualTo("DUYET_CAP_2");
+    }
+
+    @Test
+    void getHistory_shouldReturnLegacyPersistedActions() {
+        Employee manager = createEmployee(1L, RoleCode.MANAGER, EmployeeStatus.HOAT_DONG);
+        authenticateAs(manager);
+        Employee owner = createEmployee(2L, RoleCode.EMPLOYEE, EmployeeStatus.HOAT_DONG);
+        ImportReceipt receipt = createReceipt(100L, ImportReceiptStatus.HOAN_THANH, owner);
+        ImportReceiptHistory created = createHistory(1L, receipt, null);
+        ImportReceiptHistory oldCreated = createHistory(2L, receipt, manager);
+        setPersistedAction(created, "TAO_PHIEU");
+        setPersistedAction(oldCreated, "TAO");
+        when(importReceiptRepository.findById(100L)).thenReturn(Optional.of(receipt));
+        when(importReceiptHistoryRepository.findByDocumentIdOrderByCreatedAtDesc(100L))
+                .thenReturn(List.of(created, oldCreated));
+
+        List<ImportReceiptHistoryResponse> response = importReceiptService.getHistory(100L);
+
+        assertThat(response).extracting(ImportReceiptHistoryResponse::action)
+                .containsExactly("TAO_PHIEU", "TAO");
+        assertThat(response.getFirst().actorName()).isNull();
+    }
+
+    @Test
+    void importReceiptHistory_shouldNotExposeRawStringActionSetter() {
+        assertThat(ImportReceiptHistory.class.getMethods())
+                .noneMatch((Method method) -> method.getName().equals("setAction")
+                        && method.getParameterCount() == 1
+                        && method.getParameterTypes()[0].equals(String.class));
     }
 
     @Test
@@ -688,6 +720,10 @@ class ImportReceiptDetailServiceTest {
         history.setAction(ImportReceiptAction.DUYET_CAP_2);
         history.setCreatedAt(LocalDateTime.of(2026, 6, 18, 10, 0));
         return history;
+    }
+
+    private void setPersistedAction(ImportReceiptHistory history, String action) {
+        ReflectionTestUtils.setField(history, "action", action);
     }
 
     private void authenticateAs(Employee employee) {

@@ -74,27 +74,11 @@ public class InventoryCountServiceImpl implements InventoryCountService {
     public InventoryCountResponse finalizeCount(Long id, InventoryCountRequests.Finalize request) {
         InventoryCount c=find(id); ensureOpen(c); checkVersion(c,request.version()); List<InventoryCountDetail> lines=detailRepository.findByInventoryCountIdOrderByIdAsc(id);
         if (lines.stream().anyMatch(d -> d.getActualQuantity()==null)) throw new ConflictException("Phai nhap so luong thuc te cho tat ca san pham.");
-        Warehouse warehouse = c.getWarehouse();
         for (InventoryCountDetail d : lines) {
-            int before = d.getSystemQuantity();
-            int after = d.getActualQuantity();
-            int diff = after - before;
+            int diff = d.getActualQuantity() - d.getSystemQuantity();
             d.setDifferenceQuantity(diff);
-            if (diff == 0) continue;
-            InventoryLevel stock = inventoryRepository.findByProductIdAndWarehouseIdForUpdate(d.getProduct().getId(), warehouse.getId())
-                    .orElseThrow(() -> new NotFoundException("Ton kho khong ton tai de dieu chinh kiem ke."));
-            stock.setQuantity(after);
-            inventoryRepository.saveAndFlush(stock);
-            inventoryTransactionService.recordTransaction(
-                    d.getProduct().getId(),
-                    warehouse.getId(),
-                    diff > 0 ? InventoryTransactionType.DIEU_CHINH_TANG : InventoryTransactionType.DIEU_CHINH_GIAM,
-                    Math.abs(diff),
-                    before,
-                    after,
-                    null,
-                    "Dieu chinh kiem ke " + c.getCode());
         }
+        if (lines.stream().anyMatch(d -> d.getDifferenceQuantity()!=null&&d.getDifferenceQuantity()!=0)) throw new ConflictException("Dot kiem ke co chenh lech phai duoc ap dung qua phieu dieu chinh da duyet.");
         c.setStatus(InventoryCountStatus.DA_CHOT); c.setFinalizedBy(actor()); c.setFinalizedAt(LocalDateTime.now()); countRepository.saveAndFlush(c); return InventoryCountResponse.from(c,lines);
     }
     @Override @Transactional

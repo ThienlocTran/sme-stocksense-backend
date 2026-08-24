@@ -48,4 +48,12 @@ class InventoryAdjustmentControllerSecurityTest {
                 .getAnnotation(PreAuthorize.class)
                 .value());
     }
+
+    @Test
+    void apply_shouldAllowApprovalRolesOnly() throws NoSuchMethodException {
+        assertEquals("hasAnyRole('ADMIN','MANAGER')", InventoryAdjustmentController.class
+                .getDeclaredMethod("apply", Long.class)
+                .getAnnotation(PreAuthorize.class)
+                .value());
+    }
 }

@@ -108,14 +108,23 @@ class InventoryCountServiceImplTest {
         assertEquals("DA_CHOT",response.status()); verify(inventoryRepository,never()).save(any()); verify(inventoryTransactionService,never()).recordTransaction(any(),any(),any(),any(),any(),any(),any(),any());
     }
 
-    @Test void finalize_withDifferenceShouldUpdateInventoryAndWriteTransaction(){
+    @Test void finalize_withDifferenceShouldRequireApprovedAdjustmentApply(){
         detail.setActualQuantity(7); detail.setDifferenceQuantity(-3);
-        InventoryLevel stock=new InventoryLevel(); stock.setWarehouse(warehouse); stock.setProduct(product); stock.setQuantity(10);
-        when(countRepository.findById(4L)).thenReturn(Optional.of(count)); when(detailRepository.findByInventoryCountIdOrderByIdAsc(4L)).thenReturn(List.of(detail)); when(inventoryRepository.findByProductIdAndWarehouseIdForUpdate(3L,2L)).thenReturn(Optional.of(stock)); when(countRepository.saveAndFlush(count)).thenReturn(count);
-        InventoryCountResponse response=service.finalizeCount(4L,new InventoryCountRequests.Finalize(0L));
-        assertEquals("DA_CHOT",response.status()); assertEquals(7,stock.getQuantity());
-        verify(inventoryRepository).saveAndFlush(stock);
-        verify(inventoryTransactionService).recordTransaction(eq(3L),eq(2L),eq(InventoryTransactionType.DIEU_CHINH_GIAM),eq(3),eq(10),eq(7),isNull(),eq("Dieu chinh kiem ke KK-1"));
+        when(countRepository.findById(4L)).thenReturn(Optional.of(count)); when(detailRepository.findByInventoryCountIdOrderByIdAsc(4L)).thenReturn(List.of(detail));
+        assertThrows(ConflictException.class,()->service.finalizeCount(4L,new InventoryCountRequests.Finalize(0L)));
+        assertEquals(InventoryCountStatus.DANG_KIEM_KE, count.getStatus());
+        verify(inventoryRepository,never()).saveAndFlush(any());
+        verify(inventoryTransactionService,never()).recordTransaction(any(),any(),any(),any(),any(),any(),any(),any());
+    }
+
+    @Test void finalize_nonZeroWithAdjustmentStatusesShouldRejectDirectFinalize(){
+        detail.setActualQuantity(7); detail.setDifferenceQuantity(-3);
+        for(InventoryAdjustmentStatus status: List.of(InventoryAdjustmentStatus.NHAP,InventoryAdjustmentStatus.CHO_DUYET,InventoryAdjustmentStatus.TU_CHOI,InventoryAdjustmentStatus.DA_DUYET)){
+            count.setStatus(InventoryCountStatus.DANG_KIEM_KE);
+            when(countRepository.findById(4L)).thenReturn(Optional.of(count)); when(detailRepository.findByInventoryCountIdOrderByIdAsc(4L)).thenReturn(List.of(detail));
+            assertThrows(ConflictException.class,()->service.finalizeCount(4L,new InventoryCountRequests.Finalize(0L)));
+        }
+        verify(inventoryTransactionService,never()).recordTransaction(any(),any(),any(),any(),any(),any(),any(),any());
     }
 
     @Test void cancelledCount_shouldNotAllowFurtherEditing(){

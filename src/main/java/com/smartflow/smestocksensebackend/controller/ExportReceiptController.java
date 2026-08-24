@@ -44,7 +44,7 @@ public class ExportReceiptController {
         PageRequest pageable = PageRequest.of(
                 page,
                 size,
-                Sort.by(Sort.Order.asc("submittedAt"), Sort.Order.asc("id")));
+                Sort.by(Sort.Order.desc("submittedAt"), Sort.Order.desc("id")));
         return exportReceiptService.listPendingApproval(status, pageable);
     }
 

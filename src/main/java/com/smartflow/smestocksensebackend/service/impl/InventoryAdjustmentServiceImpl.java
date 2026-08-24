@@ -1,6 +1,7 @@
 package com.smartflow.smestocksensebackend.service.impl;
 
 import com.smartflow.smestocksensebackend.dto.inventoryadjustment.InventoryAdjustmentResponse;
+import com.smartflow.smestocksensebackend.dto.inventoryadjustment.RejectInventoryAdjustmentRequest;
 import com.smartflow.smestocksensebackend.entity.Employee;
 import com.smartflow.smestocksensebackend.entity.InventoryAdjustment;
 import com.smartflow.smestocksensebackend.entity.InventoryAdjustmentStatus;
@@ -72,24 +73,45 @@ public class InventoryAdjustmentServiceImpl implements InventoryAdjustmentServic
         InventoryAdjustment adjustment = adjustmentRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Phieu dieu chinh kiem ke khong ton tai."));
         ensureSubmitOwner(actor, adjustment);
-        if (adjustment.getStatus() != InventoryAdjustmentStatus.NHAP) {
-            throw new ConflictException("Chi duoc gui duyet phieu dieu chinh o trang thai NHAP.");
+        if (adjustment.getStatus() != InventoryAdjustmentStatus.NHAP
+                && adjustment.getStatus() != InventoryAdjustmentStatus.TU_CHOI) {
+            throw new ConflictException("Chi duoc gui duyet phieu dieu chinh o trang thai NHAP hoac TU_CHOI.");
         }
 
-        validateCount(adjustment.getInventoryCount());
-        List<InventoryCountDetail> details = detailRepository.findByInventoryCountIdOrderByIdAsc(
-                adjustment.getInventoryCount().getId()
-        );
-        validateDetails(details);
-        if (details.stream()
-                .filter(detail -> detail.getDifferenceQuantity() != null && detail.getDifferenceQuantity() != 0)
-                .anyMatch(detail -> detail.getReason() == null || detail.getReason().isBlank())) {
-            throw new BadRequestException("Ly do chenh lech la bat buoc.");
-        }
+        validateSubmittable(adjustment);
 
         adjustment.setStatus(InventoryAdjustmentStatus.CHO_DUYET);
         adjustment.setSubmittedBy(actor);
         adjustment.setSubmittedAt(LocalDateTime.now());
+        adjustment.setApprovedBy(null);
+        adjustment.setApprovedAt(null);
+        adjustment.setRejectionReason(null);
+        return response(adjustmentRepository.saveAndFlush(adjustment));
+    }
+
+    @Override
+    @Transactional
+    public InventoryAdjustmentResponse approve(Long id) {
+        Employee actor = actor();
+        InventoryAdjustment adjustment = pendingDecision(id, actor);
+        adjustment.setStatus(InventoryAdjustmentStatus.DA_DUYET);
+        adjustment.setApprovedBy(actor);
+        adjustment.setApprovedAt(LocalDateTime.now());
+        return response(adjustmentRepository.saveAndFlush(adjustment));
+    }
+
+    @Override
+    @Transactional
+    public InventoryAdjustmentResponse reject(Long id, RejectInventoryAdjustmentRequest request) {
+        if (request == null || request.rejectionReason() == null || request.rejectionReason().isBlank()) {
+            throw new BadRequestException("Ly do tu choi khong duoc de trong.");
+        }
+        Employee actor = actor();
+        InventoryAdjustment adjustment = pendingDecision(id, actor);
+        adjustment.setStatus(InventoryAdjustmentStatus.TU_CHOI);
+        adjustment.setApprovedBy(actor);
+        adjustment.setApprovedAt(LocalDateTime.now());
+        adjustment.setRejectionReason(request.rejectionReason().trim());
         return response(adjustmentRepository.saveAndFlush(adjustment));
     }
 
@@ -142,6 +164,34 @@ public class InventoryAdjustmentServiceImpl implements InventoryAdjustmentServic
         }
     }
 
+    private void validateSubmittable(InventoryAdjustment adjustment) {
+        validateCount(adjustment.getInventoryCount());
+        List<InventoryCountDetail> details = detailRepository.findByInventoryCountIdOrderByIdAsc(
+                adjustment.getInventoryCount().getId()
+        );
+        validateDetails(details);
+        if (details.stream()
+                .filter(detail -> detail.getDifferenceQuantity() != null && detail.getDifferenceQuantity() != 0)
+                .anyMatch(detail -> detail.getReason() == null || detail.getReason().isBlank())) {
+            throw new BadRequestException("Ly do chenh lech la bat buoc.");
+        }
+    }
+
+    private InventoryAdjustment pendingDecision(Long id, Employee actor) {
+        ensureApprovalActor(actor);
+        InventoryAdjustment adjustment = adjustmentRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException("Phieu dieu chinh kiem ke khong ton tai."));
+        if (adjustment.getStatus() != InventoryAdjustmentStatus.CHO_DUYET) {
+            throw new ConflictException("Chi duoc xu ly phieu dieu chinh o trang thai CHO_DUYET.");
+        }
+        if (adjustment.getSubmittedBy() == null) {
+            throw new ConflictException("Phieu dieu chinh chua co nguoi gui duyet.");
+        }
+        ensureDifferentDecisionActor(actor, adjustment);
+        validateSubmittable(adjustment);
+        return adjustment;
+    }
+
     private InventoryAdjustmentResponse response(InventoryAdjustment adjustment) {
         List<InventoryCountDetail> details = detailRepository.findByInventoryCountIdOrderByIdAsc(
                 adjustment.getInventoryCount().getId()
@@ -163,6 +213,23 @@ public class InventoryAdjustmentServiceImpl implements InventoryAdjustmentServic
         }
         if (adjustment.getCreatedBy() == null || !Objects.equals(actor.getId(), adjustment.getCreatedBy().getId())) {
             throw new AccessDeniedException("Chi nguoi tao moi duoc gui duyet phieu dieu chinh kiem ke.");
+        }
+    }
+
+    private void ensureApprovalActor(Employee actor) {
+        RoleCode role = actor.getRole() != null ? actor.getRole().getCode() : null;
+        if (role != RoleCode.ADMIN && role != RoleCode.MANAGER) {
+            throw new AccessDeniedException("Khong co quyen duyet phieu dieu chinh kiem ke.");
+        }
+    }
+
+    private void ensureDifferentDecisionActor(Employee actor, InventoryAdjustment adjustment) {
+        Long actorId = actor.getId();
+        if (adjustment.getCreatedBy() != null && Objects.equals(actorId, adjustment.getCreatedBy().getId())) {
+            throw new BadRequestException("Nguoi duyet phai khac nguoi tao phieu.");
+        }
+        if (Objects.equals(actorId, adjustment.getSubmittedBy().getId())) {
+            throw new BadRequestException("Nguoi duyet phai khac nguoi gui duyet.");
         }
     }
 

@@ -1,6 +1,7 @@
 package com.smartflow.smestocksensebackend.service.impl;
 
 import com.smartflow.smestocksensebackend.dto.inventoryadjustment.InventoryAdjustmentResponse;
+import com.smartflow.smestocksensebackend.dto.inventoryadjustment.RejectInventoryAdjustmentRequest;
 import com.smartflow.smestocksensebackend.entity.Employee;
 import com.smartflow.smestocksensebackend.entity.InventoryAdjustment;
 import com.smartflow.smestocksensebackend.entity.InventoryAdjustmentStatus;
@@ -227,6 +228,27 @@ class InventoryAdjustmentServiceImplTest {
     }
 
     @Test
+    void submit_shouldResubmitRejectedAndClearDecisionFields() {
+        InventoryAdjustment adjustment = adjustment();
+        Employee manager = employee(2L, RoleCode.MANAGER);
+        adjustment.setStatus(InventoryAdjustmentStatus.TU_CHOI);
+        adjustment.setApprovedBy(manager);
+        adjustment.setApprovedAt(java.time.LocalDateTime.now().minusDays(1));
+        adjustment.setRejectionReason("Sai ly do.");
+        when(adjustmentRepository.findById(9L)).thenReturn(Optional.of(adjustment));
+        when(detailRepository.findByInventoryCountIdOrderByIdAsc(3L)).thenReturn(List.of(detail));
+        when(adjustmentRepository.saveAndFlush(adjustment)).thenReturn(adjustment);
+
+        InventoryAdjustmentResponse response = service.submit(9L);
+
+        assertEquals("CHO_DUYET", response.status());
+        assertEquals(actor, adjustment.getSubmittedBy());
+        assertEquals(null, adjustment.getApprovedBy());
+        assertEquals(null, adjustment.getApprovedAt());
+        assertEquals(null, adjustment.getRejectionReason());
+    }
+
+    @Test
     void submit_shouldRejectUnknownAdjustment() {
         when(adjustmentRepository.findById(404L)).thenReturn(Optional.empty());
 
@@ -291,6 +313,79 @@ class InventoryAdjustmentServiceImplTest {
         assertEquals("CHO_DUYET", service.submit(9L).status());
     }
 
+    @Test
+    void approve_shouldMovePendingToApprovedAndPersistDecisionActor() {
+        actor = employee(2L, RoleCode.MANAGER);
+        authenticate(actor);
+        InventoryAdjustment adjustment = pendingAdjustment();
+        when(adjustmentRepository.findById(9L)).thenReturn(Optional.of(adjustment));
+        when(detailRepository.findByInventoryCountIdOrderByIdAsc(3L)).thenReturn(List.of(detail));
+        when(adjustmentRepository.saveAndFlush(adjustment)).thenReturn(adjustment);
+
+        InventoryAdjustmentResponse response = service.approve(9L);
+
+        assertEquals("DA_DUYET", response.status());
+        assertEquals(actor, adjustment.getApprovedBy());
+        assertTrue(adjustment.getApprovedAt() != null);
+        assertEquals(InventoryCountStatus.DANG_KIEM_KE, count.getStatus());
+    }
+
+    @Test
+    void approve_shouldRejectEmployeeRole() {
+        assertThrows(AccessDeniedException.class, () -> service.approve(9L));
+    }
+
+    @Test
+    void approve_shouldRejectWrongStatusOrUnknownId() {
+        actor.setRole(role(RoleCode.MANAGER));
+        InventoryAdjustment adjustment = adjustment();
+        when(adjustmentRepository.findById(9L)).thenReturn(Optional.of(adjustment));
+        assertThrows(ConflictException.class, () -> service.approve(9L));
+
+        when(adjustmentRepository.findById(404L)).thenReturn(Optional.empty());
+        assertThrows(NotFoundException.class, () -> service.approve(404L));
+    }
+
+    @Test
+    void approve_shouldRejectCreatorOrSubmitterDecisionActor() {
+        actor.setRole(role(RoleCode.ADMIN));
+        InventoryAdjustment adjustment = pendingAdjustment();
+        adjustment.setCreatedBy(actor);
+        adjustment.setSubmittedBy(actor);
+        when(adjustmentRepository.findById(9L)).thenReturn(Optional.of(adjustment));
+
+        assertThrows(BadRequestException.class, () -> service.approve(9L));
+    }
+
+    @Test
+    void reject_shouldMovePendingToRejectedWithTrimmedReason() {
+        actor = employee(2L, RoleCode.MANAGER);
+        authenticate(actor);
+        InventoryAdjustment adjustment = pendingAdjustment();
+        when(adjustmentRepository.findById(9L)).thenReturn(Optional.of(adjustment));
+        when(detailRepository.findByInventoryCountIdOrderByIdAsc(3L)).thenReturn(List.of(detail));
+        when(adjustmentRepository.saveAndFlush(adjustment)).thenReturn(adjustment);
+
+        InventoryAdjustmentResponse response = service.reject(9L, new RejectInventoryAdjustmentRequest("  Sai so lieu  "));
+
+        assertEquals("TU_CHOI", response.status());
+        assertEquals("Sai so lieu", adjustment.getRejectionReason());
+        assertEquals(actor, adjustment.getApprovedBy());
+        assertTrue(adjustment.getApprovedAt() != null);
+    }
+
+    @Test
+    void reject_shouldRequireReasonAndRejectDuplicateReject() {
+        assertThrows(BadRequestException.class, () -> service.reject(9L, new RejectInventoryAdjustmentRequest(" ")));
+
+        actor = employee(2L, RoleCode.MANAGER);
+        authenticate(actor);
+        InventoryAdjustment adjustment = pendingAdjustment();
+        adjustment.setStatus(InventoryAdjustmentStatus.TU_CHOI);
+        when(adjustmentRepository.findById(9L)).thenReturn(Optional.of(adjustment));
+        assertThrows(ConflictException.class, () -> service.reject(9L, new RejectInventoryAdjustmentRequest("Ly do.")));
+    }
+
     private InventoryAdjustment adjustment() {
         InventoryAdjustment adjustment = new InventoryAdjustment();
         adjustment.setId(9L);
@@ -300,6 +395,27 @@ class InventoryAdjustmentServiceImplTest {
         adjustment.setCreatedBy(actor);
         adjustment.setVersion(0L);
         return adjustment;
+    }
+
+    private InventoryAdjustment pendingAdjustment() {
+        Employee creator = employee(1L, RoleCode.EMPLOYEE);
+        InventoryAdjustment adjustment = adjustment();
+        adjustment.setCreatedBy(creator);
+        adjustment.setSubmittedBy(creator);
+        adjustment.setStatus(InventoryAdjustmentStatus.CHO_DUYET);
+        return adjustment;
+    }
+
+    private Employee employee(Long id, RoleCode roleCode) {
+        Employee employee = new Employee();
+        employee.setId(id);
+        employee.setFullName("User " + id);
+        employee.setRole(role(roleCode));
+        return employee;
+    }
+
+    private void authenticate(Employee employee) {
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(employee, null, List.of()));
     }
 
     private Role role(RoleCode roleCode) {

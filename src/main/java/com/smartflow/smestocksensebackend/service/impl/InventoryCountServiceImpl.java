@@ -104,7 +104,7 @@ public class InventoryCountServiceImpl implements InventoryCountService {
     private InventoryCountResponse response(InventoryCount c){ return InventoryCountResponse.from(c,detailRepository.findByInventoryCountIdOrderByIdAsc(c.getId())); }
     private InventoryCount find(Long id){ return countRepository.findById(id).orElseThrow(() -> new NotFoundException("Dot kiem ke khong ton tai.")); }
     private void ensureOpen(InventoryCount c){ if(c.getStatus()!=InventoryCountStatus.DANG_KIEM_KE) throw new ConflictException("Dot kiem ke da chot hoac da huy."); }
-    private void ensureAdjustmentEditable(Long countId){ adjustmentRepository.findByInventoryCountId(countId).ifPresent(a -> { if(a.getStatus()!=InventoryAdjustmentStatus.NHAP) throw new ConflictException("Chi tiet kiem ke da khoa do phieu dieu chinh da gui duyet."); }); }
+    private void ensureAdjustmentEditable(Long countId){ adjustmentRepository.findByInventoryCountId(countId).ifPresent(a -> { if(a.getStatus()!=InventoryAdjustmentStatus.NHAP&&a.getStatus()!=InventoryAdjustmentStatus.TU_CHOI) throw new ConflictException("Chi tiet kiem ke da khoa do phieu dieu chinh da gui duyet."); }); }
     private void checkVersion(InventoryCount c,Long v){ if(!Objects.equals(c.getVersion(),v)) throw new ConflictException("Dot kiem ke da duoc cap nhat."); }
     private InventoryCountStatus parse(String s){ if(s==null||s.isBlank()) return null; try{return InventoryCountStatus.valueOf(s);}catch(Exception e){throw new BadRequestException("Trang thai kiem ke khong hop le.");} }
     private Employee actor(){ Authentication a=SecurityContextHolder.getContext().getAuthentication(); if(a!=null&&a.getPrincipal() instanceof Employee e) return e; throw new MissingRoleException("Khong xac dinh duoc nguoi dung."); }

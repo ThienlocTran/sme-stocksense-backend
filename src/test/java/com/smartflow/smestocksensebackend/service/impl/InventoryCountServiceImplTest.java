@@ -80,6 +80,21 @@ class InventoryCountServiceImplTest {
         verify(detailRepository, never()).saveAndFlush(any());
     }
 
+    @Test void recordActual_shouldAllowRejectedAdjustment(){
+        InventoryAdjustment adjustment = new InventoryAdjustment(); adjustment.setStatus(InventoryAdjustmentStatus.TU_CHOI);
+        when(countRepository.findById(4L)).thenReturn(Optional.of(count)); when(adjustmentRepository.findByInventoryCountId(4L)).thenReturn(Optional.of(adjustment));
+        when(detailRepository.findById(5L)).thenReturn(Optional.of(detail)); when(detailRepository.findByInventoryCountIdOrderByIdAsc(4L)).thenReturn(List.of(detail));
+        service.recordActual(4L,5L,new InventoryCountRequests.RecordActual(7,"Hang hong","Ghi chu",0L));
+        assertEquals(7, detail.getActualQuantity());
+    }
+
+    @Test void recordActual_shouldRejectApprovedAdjustment(){
+        InventoryAdjustment adjustment = new InventoryAdjustment(); adjustment.setStatus(InventoryAdjustmentStatus.DA_DUYET);
+        when(countRepository.findById(4L)).thenReturn(Optional.of(count)); when(adjustmentRepository.findByInventoryCountId(4L)).thenReturn(Optional.of(adjustment));
+        assertThrows(ConflictException.class,()->service.recordActual(4L,5L,new InventoryCountRequests.RecordActual(7,"Hang hong","Ghi chu",0L)));
+        verify(detailRepository, never()).saveAndFlush(any());
+    }
+
     @Test void finalize_shouldRejectMissingActualQuantity(){
         when(countRepository.findById(4L)).thenReturn(Optional.of(count)); when(detailRepository.findByInventoryCountIdOrderByIdAsc(4L)).thenReturn(List.of(detail));
         assertThrows(ConflictException.class,()->service.finalizeCount(4L,new InventoryCountRequests.Finalize(0L)));

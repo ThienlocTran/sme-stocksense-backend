@@ -1,5 +1,6 @@
 package com.smartflow.smestocksensebackend.controller;
 
+import com.smartflow.smestocksensebackend.dto.inventoryadjustment.RejectInventoryAdjustmentRequest;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.access.prepost.PreAuthorize;
 
@@ -32,6 +33,18 @@ class InventoryAdjustmentControllerSecurityTest {
     void submit_shouldAllowOperationalRolesOnly() throws NoSuchMethodException {
         assertEquals("hasAnyRole('ADMIN','EMPLOYEE')", InventoryAdjustmentController.class
                 .getDeclaredMethod("submit", Long.class)
+                .getAnnotation(PreAuthorize.class)
+                .value());
+    }
+
+    @Test
+    void approveAndReject_shouldAllowApprovalRolesOnly() throws NoSuchMethodException {
+        assertEquals("hasAnyRole('ADMIN','MANAGER')", InventoryAdjustmentController.class
+                .getDeclaredMethod("approve", Long.class)
+                .getAnnotation(PreAuthorize.class)
+                .value());
+        assertEquals("hasAnyRole('ADMIN','MANAGER')", InventoryAdjustmentController.class
+                .getDeclaredMethod("reject", Long.class, RejectInventoryAdjustmentRequest.class)
                 .getAnnotation(PreAuthorize.class)
                 .value());
     }

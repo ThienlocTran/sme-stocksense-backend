@@ -13,9 +13,14 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
+import org.springframework.core.env.MapPropertySource;
 import org.springframework.mail.MailSendException;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.test.util.ReflectionTestUtils;
+
+import java.util.HashMap;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -63,6 +68,23 @@ class AiPurchaseAssignmentEmailServiceImplTest {
     }
 
     @Test
+    void springInjectionUsesAppFrontendUrlEnvironmentValue() throws Exception {
+        String content = sendWithSpringProperties(Map.of(
+                "APP_FRONTEND_URL", "https://smestocksense.io.vn/"
+        ));
+
+        assertTrue(content.contains("https://smestocksense.io.vn/stock-in/create?aiPurchaseRequestId=17"));
+        assertFalse(content.contains("http://localhost:5173"));
+    }
+
+    @Test
+    void springInjectionKeepsDevelopmentFallbackWhenFrontendConfigAbsent() throws Exception {
+        String content = sendWithSpringProperties(Map.of());
+
+        assertTrue(content.contains("http://localhost:5173/stock-in/create?aiPurchaseRequestId=17"));
+    }
+
+    @Test
     void missingRecipientEmailBlocked() {
         AiPurchaseRequest assignment = assignment();
         assignment.getReceiver().setEmail(" ");
@@ -99,6 +121,7 @@ class AiPurchaseAssignmentEmailServiceImplTest {
         warehouse.setName("Kho chinh");
 
         AiPurchaseRequest assignment = new AiPurchaseRequest();
+        assignment.setId(17L);
         assignment.setCode("YCAI-1");
         assignment.setReceiver(receiver);
         assignment.setProduct(product);
@@ -108,5 +131,23 @@ class AiPurchaseAssignmentEmailServiceImplTest {
         assignment.setRequestedQuantity(50);
         assignment.setContent("Mo StockSense va tao phieu nhap.");
         return assignment;
+    }
+
+    private String sendWithSpringProperties(Map<String, Object> properties) throws Exception {
+        MimeMessage mimeMessage = new MimeMessage((jakarta.mail.Session) null);
+        when(mailSender.createMimeMessage()).thenReturn(mimeMessage);
+
+        try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
+            context.getBeanFactory().registerSingleton("mailSender", mailSender);
+            Map<String, Object> source = new HashMap<>(properties);
+            source.put("spring.mail.username", "stocksense@example.com");
+            context.getEnvironment().getPropertySources().addFirst(new MapPropertySource("test", source));
+            context.register(AiPurchaseAssignmentEmailServiceImpl.class);
+            context.refresh();
+
+            context.getBean(AiPurchaseAssignmentEmailServiceImpl.class).sendAssignmentNotification(assignment());
+        }
+
+        return sentMessage().getContent().toString();
     }
 }

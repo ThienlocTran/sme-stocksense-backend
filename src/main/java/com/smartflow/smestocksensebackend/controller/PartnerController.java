@@ -44,6 +44,15 @@ public class PartnerController {
         return partnerService.getActiveSuppliers();
     }
 
+    /**
+     * API: GET /api/partners/dropdown/customers
+     * Trả về danh sách đối tác đang hoạt động thuộc loại KHÁCH HÀNG hoặc CẢ HAI để dùng cho phiếu xuất kho.
+     */
+    @GetMapping("/dropdown/customers")
+    public List<PartnerDropdownResponse> getCustomerDropdown() {
+        return partnerService.getActiveCustomers();
+    }
+
     @GetMapping
     public List<PartnerResponse> getPartners(
             @RequestParam(required = false) String keyword,

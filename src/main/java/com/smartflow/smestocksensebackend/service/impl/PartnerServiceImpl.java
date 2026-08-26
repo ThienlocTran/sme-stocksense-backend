@@ -220,7 +220,19 @@ public class PartnerServiceImpl implements PartnerService {
     @Transactional(readOnly = true)
     public List<PartnerDropdownResponse> getActiveSuppliers() {
         return partnerRepository
-                .findByTypeAndStatusOrderByNameAsc(PartnerType.NHA_CUNG_CAP, PartnerStatus.HOAT_DONG)
+                .findByTypeInAndStatusOrderByNameAsc(
+                        List.of(PartnerType.NHA_CUNG_CAP, PartnerType.CA_HAI), PartnerStatus.HOAT_DONG)
+                .stream()
+                .map(PartnerDropdownResponse::from)
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<PartnerDropdownResponse> getActiveCustomers() {
+        return partnerRepository
+                .findByTypeInAndStatusOrderByNameAsc(
+                        List.of(PartnerType.KHACH_HANG, PartnerType.CA_HAI), PartnerStatus.HOAT_DONG)
                 .stream()
                 .map(PartnerDropdownResponse::from)
                 .toList();

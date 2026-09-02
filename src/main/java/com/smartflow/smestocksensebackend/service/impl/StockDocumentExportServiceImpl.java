@@ -123,7 +123,7 @@ public class StockDocumentExportServiceImpl implements StockDocumentExportServic
 
         return new ReceiptDocument(
                 value(receipt.code()),
-                firstDate(receipt.actualArrivalDate(), receipt.updatedAt()),
+                receipt.createdAt() != null ? receipt.createdAt() : firstDate(receipt.actualArrivalDate(), receipt.updatedAt()),
                 value(receipt.warehouseName()),
                 warehouseAddress(receipt.warehouseId()),
                 value(receipt.supplierName()),

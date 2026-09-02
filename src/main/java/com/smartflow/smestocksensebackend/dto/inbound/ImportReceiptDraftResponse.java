@@ -30,6 +30,7 @@ public record ImportReceiptDraftResponse(
         String rejectionReason,
         List<ImportReceiptItemResponse> details,
         Integer detailCount,
+        LocalDateTime createdAt,
         LocalDateTime updatedAt,
         Long version
 ) {
@@ -69,6 +70,7 @@ public record ImportReceiptDraftResponse(
                 null,
                 details,
                 detailCount,
+                null,
                 updatedAt,
                 version
         );
@@ -113,6 +115,7 @@ public record ImportReceiptDraftResponse(
                 null,
                 details,
                 detailCount,
+                null,
                 updatedAt,
                 version
         );
@@ -155,6 +158,7 @@ public record ImportReceiptDraftResponse(
                 rejectionReason,
                 details,
                 detailCount,
+                null,
                 updatedAt,
                 version
         );
@@ -200,6 +204,54 @@ public record ImportReceiptDraftResponse(
                 null,
                 details,
                 detailCount,
+                null,
+                updatedAt,
+                version
+        );
+    }
+
+    public ImportReceiptDraftResponse(
+            Long id,
+            String code,
+            Long warehouseId,
+            String warehouseName,
+            Long supplierId,
+            String supplierName,
+            Long createdById,
+            String createdByName,
+            Long submittedById,
+            String submittedByName,
+            LocalDateTime submittedAt,
+            LocalDateTime actualArrivalDate,
+            String status,
+            BigDecimal totalAmount,
+            String note,
+            String rejectionReason,
+            List<ImportReceiptItemResponse> details,
+            Integer detailCount,
+            LocalDateTime updatedAt,
+            Long version
+    ) {
+        this(
+                id,
+                code,
+                warehouseId,
+                warehouseName,
+                supplierId,
+                supplierName,
+                createdById,
+                createdByName,
+                submittedById,
+                submittedByName,
+                submittedAt,
+                actualArrivalDate,
+                status,
+                totalAmount,
+                note,
+                rejectionReason,
+                details,
+                detailCount,
+                null,
                 updatedAt,
                 version
         );
@@ -233,6 +285,7 @@ public record ImportReceiptDraftResponse(
                 rejectionReason(receipt),
                 itemResponses,
                 itemResponses.size(),
+                receipt.getCreatedAt(),
                 receipt.getUpdatedAt(),
                 receipt.getVersion()
         );

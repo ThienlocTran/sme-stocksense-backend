@@ -10,6 +10,8 @@ spring:
           auth: true
           starttls:
             enable: true
+  jackson:
+    time-zone: Asia/Ho_Chi_Minh
   application:
     name: sme-stocksense-backend
   profiles:

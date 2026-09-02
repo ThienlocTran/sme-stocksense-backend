@@ -16,4 +16,6 @@ public interface PartnerService {
     PartnerResponse updatePartner(Long id, UpdatePartnerRequest request);
 
     List<PartnerDropdownResponse> getActiveSuppliers();
+
+    List<PartnerDropdownResponse> getActiveCustomers();
 }
